@@ -61,3 +61,5 @@ dist/
 .env
 *.log
 .DS_Store
+frontend/dist/assets_old/
+frontend/dist-old-backup-*/
