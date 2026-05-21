@@ -71,6 +71,7 @@
 import { ref, reactive, onMounted, h } from 'vue'
 import { useMessage } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
+import { NTag, NButton } from 'naive-ui'
 
 const message = useMessage()
 const loading = ref(false)
@@ -81,7 +82,15 @@ const filterStatus = ref(null)
 const detailDrawer = ref(false)
 const currentCase = ref(null)
 
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const pagination = {
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 
 const severityOptions = [
   { label: '严重', value: 'critical' },
@@ -101,13 +110,13 @@ const columns = [
   { title: 'ID', key: 'id', width: 70 },
   { title: '标题', key: 'title', ellipsis: { tooltip: true }, render: (row) => h('a', { href: 'javascript:void(0)', style: 'color:#18a058', onClick: () => showDetail(row) }, row.title) },
   { title: '严重程度', key: 'severity', width: 90,
-    render: (row) => h('n-tag', { type: getSeverityType(row.severity), size: 'small' }, () => row.severity || '-') },
+    render: (row) => h(NTag, { type: getSeverityType(row.severity), size: 'small' }, () => row.severity || '-') },
   { title: '状态', key: 'status', width: 90,
-    render: (row) => h('n-tag', { type: getStatusType(row.status), size: 'small' }, () => row.status || '-') },
+    render: (row) => h(NTag, { type: getStatusType(row.status), size: 'small' }, () => row.status || '-') },
   { title: '关键词', key: 'keywords', width: 160, ellipsis: { tooltip: true } },
   { title: '发生时间', key: 'occurred_at', width: 170 },
   { title: '操作', key: 'actions', width: 80,
-    render: (row) => h('button', { style: 'color:#18a058;background:none;border:none;cursor:pointer', onClick: () => showDetail(row) }, '查看') },
+    render: (row) => h(NButton, { size: 'small', quaternary: true, type: 'info', onClick: () => showDetail(row) }, () => '查看') },
 ]
 
 function getSeverityType(s) {

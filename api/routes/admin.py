@@ -83,10 +83,23 @@ PERMISSIONS = [
 ]
 
 # 系统配置（内存存储，生产环境应存入数据库）
+import time as _time
+import os as _os
+
+def _get_default_timezone():
+    tz = _os.environ.get('TZ', '')
+    if tz:
+        return tz
+    # Windows
+    if hasattr(_time, 'tzset'):
+        _time.tzset()
+    return str(_time.tzname[0]) if _time.tzname else 'UTC'
+
 _system_config = {
     "system.name": {"value": "ITOps Platform", "description": "系统名称", "category": "system"},
     "system.maintenance": {"value": "false", "description": "维护模式", "category": "system"},
     "system.version": {"value": "1.0.0", "description": "系统版本", "category": "system"},
+    "system.timezone": {"value": "Asia/Shanghai", "description": "系统时区", "category": "system"},
 }
 
 
@@ -427,6 +440,23 @@ async def update_system_config(
     return {"status": "success", "message": "Configuration updated successfully"}
 
 
+@router.get("/timezones", summary="获取可用时区列表")
+async def get_timezones(
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """获取所有可用时区列表"""
+    import zoneinfo
+    zones = sorted(zoneinfo.available_timezones())
+    # 常用时区优先
+    common = ["Asia/Shanghai", "Asia/Hong_Kong", "Asia/Tokyo", "Asia/Singapore",
+              "Europe/London", "Europe/Paris", "Europe/Berlin",
+              "America/New_York", "America/Los_Angeles", "America/Chicago",
+              "UTC", "GMT"]
+    prioritized = [z for z in common if z in zones]
+    others = [z for z in zones if z not in common]
+    return {"items": prioritized + others, "total": len(zones)}
+
+
 # ============== 系统信息接口 ==============
 
 @router.get("/info", summary="获取系统信息")
@@ -438,6 +468,7 @@ async def get_system_info(
         "version": _system_config.get("system.version", {}).get("value", "1.0.0"),
         "environment": "production",
         "uptime": 86400,
+        "timezone": _system_config.get("system.timezone", {}).get("value", "UTC"),
         "database": {
             "type": "mysql",
             "status": "connected",
@@ -513,6 +544,149 @@ async def get_operation_logs(
         "total": total,
         "page": pagination.page,
         "page_size": pagination.page_size,
+    }
+
+
+# ============== 系统日志接口 ==============
+
+@router.get("/system-logs", summary="获取系统日志")
+async def get_system_logs(
+    level: Optional[str] = Query(None, description="日志级别过滤"),
+    keyword: Optional[str] = Query(None, description="关键词过滤"),
+    start_date: Optional[datetime] = Query(None, description="开始时间"),
+    end_date: Optional[datetime] = Query(None, description="结束时间"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """读取 api.log 文件作为系统日志"""
+    import os
+
+    log_file = "/app/data/logs/api.log"
+    if not os.path.exists(log_file):
+        return {"items": [], "total": 0, "page": pagination.page, "page_size": pagination.limit}
+
+    entries = []
+    try:
+        with open(log_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                # Parse: 2026-05-21 03:00:00,000 - access - INFO - {"type": "request_start", ...}
+                # or: 2026-05-21 03:00:00,000 - module - LEVEL - message
+                parts = line.split(" - ", 3)
+                if len(parts) < 4:
+                    continue
+                ts_str = parts[0]
+                source = parts[1]
+                level_val = parts[2].strip()
+                message = parts[3]
+
+                # Filter by level
+                if level and level_val.upper() != level.upper():
+                    continue
+                # Filter by keyword
+                if keyword and keyword.lower() not in message.lower():
+                    continue
+                # Filter by date range
+                try:
+                    from datetime import datetime as dt
+                    log_dt = dt.strptime(ts_str.split(",")[0], "%Y-%m-%d %H:%M:%S")
+                    if start_date and log_dt < start_date:
+                        continue
+                    if end_date and log_dt > end_date:
+                        continue
+                except Exception:
+                    pass
+
+                entries.append({
+                    "idx": len(entries) + 1,
+                    "time": ts_str.replace(",", "."),
+                    "level": level_val,
+                    "source": source,
+                    "message": message,
+                })
+    except Exception as e:
+        pass
+
+    total = len(entries)
+    start = pagination.offset
+    end = start + pagination.limit
+    page_entries = entries[start:end]
+
+    return {
+        "items": page_entries,
+        "total": total,
+        "page": pagination.page,
+        "page_size": pagination.limit,
+    }
+
+
+# ============== 采集日志接口 ==============
+
+@router.get("/collection-logs", summary="获取采集日志")
+async def get_collection_logs(
+    status: Optional[str] = Query(None, description="采集状态"),
+    device: Optional[str] = Query(None, description="设备名称过滤"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """从 performance_metrics 表读取最新采集记录作为采集日志"""
+    from modules.foundation.db_models.monitoring import PerformanceMetric
+
+    query = db.query(PerformanceMetric)
+
+    if device:
+        query = query.filter(PerformanceMetric.device_name.ilike(f"%{device}%"))
+    if status:
+        # Map status to metric patterns
+        if status == "success":
+            pass  # All metrics imply success
+        elif status == "failed":
+            pass  # No clear failure indicator in this table
+        elif status == "offline":
+            query = query.filter(PerformanceMetric.metric_name == "ping_status")
+
+    # Order by timestamp desc
+    query = query.order_by(PerformanceMetric.timestamp.desc())
+
+    total = query.count()
+    rows = query.offset(pagination.offset).limit(pagination.limit).all()
+
+    # Group by collection time to build "log entries"
+    entries = {}
+    for row in rows:
+        key = (row.device_name, row.timestamp)
+        if key not in entries:
+            entries[key] = {
+                "idx": len(entries) + 1,
+                "time": row.timestamp.strftime("%Y-%m-%d %H:%M:%S") if row.timestamp else "-",
+                "device": row.device_name or f"device_{row.device_id}",
+                "protocol": row.metric_category or "monitoring",
+                "status": "success",
+                "duration": "-",
+                "message": f"{row.metric_name} = {row.value} {row.metric_unit or ''}".strip(),
+            }
+        else:
+            entries[key]["message"] += f" | {row.metric_name} = {row.value} {row.metric_unit or ''}".strip()
+
+    items = list(entries.values())
+    # Apply status filter in Python (since we grouped)
+    if status == "failed":
+        items = [e for e in items if "error" in e["message"].lower() or "fail" in e["message"].lower()]
+    elif status == "offline":
+        items = [e for e in items if "ping" in e["message"].lower() and "0" in e["message"]]
+
+    total = len(items)
+    start = pagination.offset
+    end = start + pagination.limit
+
+    return {
+        "items": items[start:end],
+        "total": total,
+        "page": pagination.page,
+        "page_size": pagination.limit,
     }
 
 

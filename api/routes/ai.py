@@ -1,6 +1,6 @@
 """
-AI助手API路由
-提供智能问答、故障诊断、建议生成等AI功能
+AI Assistant API Router
+Provides intelligent Q&A, fault diagnosis, and suggestion generation
 """
 
 from typing import Optional, List, Dict
@@ -26,7 +26,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# ============== 消息持久化辅助函数 ==============
+# ============== Message persistence helper functions ==============
 
 def _save_chat_messages(
     db: Session,
@@ -40,18 +40,18 @@ def _save_chat_messages(
     error_message: Optional[str] = None,
 ):
     """
-    保存对话消息到数据库（用户消息和AI回复）
-    如果会话不存在则创建
+    Save dialog messages to database (user messages and AI responses)
+    Create session if not exists
     """
     from modules.foundation.db_models.ai import AIConversation, AIMessage
     
-    # 查找或创建会话
+    # Find or create session
     conversation = db.query(AIConversation).filter(
         AIConversation.conversation_id == conversation_id
     ).first()
     
     if not conversation:
-        # 创建新会话
+        # Create new session
         conversation = AIConversation(
             conversation_id=conversation_id,
             user_id=current_user.user_id,
@@ -63,7 +63,7 @@ def _save_chat_messages(
     
     now = datetime.now()
     
-    # 保存用户消息
+    # Save user message
     user_msg = AIMessage(
         conversation_id=conversation_id,
         user_id=current_user.user_id,
@@ -73,7 +73,7 @@ def _save_chat_messages(
     )
     db.add(user_msg)
     
-    # 保存AI回复
+    # Save AI reply
     assistant_msg = AIMessage(
         conversation_id=conversation_id,
         user_id=current_user.user_id,
@@ -86,29 +86,74 @@ def _save_chat_messages(
     )
     db.add(assistant_msg)
     
-    # 更新会话统计
+    # Update session stats
     conversation.message_count = (conversation.message_count or 0) + 2
     conversation.last_message_at = now
     conversation.updated_at = now
     
-    # 如果是用户第一条消息，设置标题
+    # Set title if first user message
     if conversation.message_count <= 2 and user_message:
         conversation.title = user_message[:50] + ("..." if len(user_message) > 50 else "")
     
     db.commit()
 
 
-# ============== 模块级流式生成器 ==============
+# ============== Platform context fetch ==============
+
+async def _fetch_platform_context(db: Session) -> str:
+    """
+    Get ITOps platform real-time context for LLM system prompt.
+    Uses raw SQL to avoid broken module import chains.
+    """
+    try:
+        from sqlalchemy import text
+
+        # Device stats
+        stats_row = db.execute(text(""" 
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'ONLINE' THEN 1 ELSE 0 END) as online_count,
+                SUM(CASE WHEN status = 'OFFLINE' THEN 1 ELSE 0 END) as offline_count,
+                SUM(CASE WHEN status = 'MAINTENANCE' THEN 1 ELSE 0 END) as maint_count
+            FROM devices
+        """)).fetchone()
+        total_devices = stats_row.total if stats_row and stats_row.total else 0
+        online_count = stats_row.online_count if stats_row and stats_row.online_count else 0
+        offline_count = stats_row.offline_count if stats_row and stats_row.offline_count else 0
+        maint_count = stats_row.maint_count if stats_row and stats_row.maint_count else 0
+
+        # Active alerts
+        alert_row = db.execute(text("SELECT COUNT(*) FROM alerts WHERE status = 'active'")).scalar()
+        active_alerts = alert_row or 0
+
+        ctx = (
+            f"Platform data: {total_devices} devices total, "
+            f"{online_count} online, {offline_count} offline, {maint_count} maintenance. "
+            f"{active_alerts} active alerts. "
+            f"You are an IT operations assistant. Answer in Chinese. "
+            f"For questions about platform devices, alerts, and monitoring, "
+            f"answer directly based on the data above. Do not say you cannot provide information."
+        )
+        return ctx
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        logger.warning(f"Failed to fetch platform context: {e}")
+        return "You are an IT operations assistant. Answer in Chinese."
+
+
+# ============== Module-level streaming generator ==============
 
 async def _llm_stream_generator(
     base_url: str,
     model: str,
     messages: List[dict],
     conversation_id: str,
-    timeout: float = 120.0,
+    timeout: float = 300.0,
 ):
     """
-    模块级流式响应生成器（避免Python 3.13嵌套async def的闭包问题）
+    Module-level streaming response generator.
+    Used for LLM CPU inference at approximately 4 tokens per second.
     """
     import httpx
     import asyncio
@@ -117,13 +162,14 @@ async def _llm_stream_generator(
         "messages": messages,
         "model": model,
         "stream": True,
-        "temperature": 0.7,
-        "max_tokens": 1024,
+        "temperature": 0.0,
+        "max_tokens": 100,
     }
 
     full_content = ""
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
+        # connect=10s (jointimeout), read=300s (streaming读timeout足够大), default=300s兜底
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
             async with client.stream("POST", f"{base_url}/v1/chat/completions", json=payload) as resp:
                 buffer = ""
                 depth = 0
@@ -150,16 +196,25 @@ async def _llm_stream_generator(
                                     buffer = ""
                                     try:
                                         data = json.loads(json_str)
-                                        if "message" in data:
+                                        # llama.cpp / Qwen format: choices[0].delta.content
+                                        if "choices" in data and len(data["choices"]) > 0:
+                                            delta = data["choices"][0].get("delta", {})
+                                            content = delta.get("content", "")
+                                            if content:
+                                                full_content += content
+                                                yield f"data: {json.dumps({'type': 'content', 'content': content}, ensure_ascii=False)}\n\n"
+                                        # Legacy format compatibility: message.content
+                                        elif "message" in data:
                                             content = data["message"].get("content", "")
-                                            full_content += content
-                                            yield f"data: {json.dumps({'type': 'content', 'content': content}, ensure_ascii=False)}\n\n"
-                                        if data.get("done", False):
-                                            break
+                                            if content:
+                                                full_content += content
+                                                yield f"data: {json.dumps({'type': 'content', 'content': content}, ensure_ascii=False)}\n\n"
+                                        if data.get("done", False) or data.get("choices", [{}])[0].get("finish_reason"):
+                                            # Exit both loops: return from generator
+                                            return
                                     except json.JSONDecodeError:
                                         pass
-        yield f"data: {json.dumps({'type': 'done', 'conversation_id': conversation_id, 'content': full_content}, ensure_ascii=False)}\n\n"
-        yield "data: [DONE]\n\n"
+        # Stream completed normally (llama.cpp sends done, we exit via return above)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -167,10 +222,10 @@ async def _llm_stream_generator(
         yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
 
 
-# ============== 枚举定义 ==============
+# ============== Enum definitions ==============
 
 class ConversationType(str, Enum):
-    """对话类型"""
+    """Dialog type"""
     CHAT = "chat"
     TROUBLESHOOTING = "troubleshooting"
     SUGGESTION = "suggestion"
@@ -178,32 +233,32 @@ class ConversationType(str, Enum):
 
 
 class MessageRole(str, Enum):
-    """消息角色"""
+    """Message role"""
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
 
 
-# ============== 请求/响应模型 ==============
+# ============== Request/Response models ==============
 
 class ChatMessage(BaseModel):
-    """聊天消息"""
+    """Chat message"""
     role: str = Field(..., description="角色: user, assistant, system")
-    content: str = Field(..., description="消息内容")
+    content: str = Field(..., description="message内容")
     timestamp: Optional[datetime] = None
 
 
 class ChatRequest(BaseModel):
-    """聊天请求"""
-    message: str = Field(..., description="用户消息")
-    conversation_id: Optional[str] = Field(None, description="会话ID")
-    conversation_type: str = Field("chat", description="对话类型")
-    context: Optional[dict] = Field(None, description="上下文信息")
-    stream: bool = Field(False, description="是否启用流式输出")
+    """Chat request"""
+    message: str = Field(..., description="usermessage")
+    conversation_id: Optional[str] = Field(None, description="sessionID")
+    conversation_type: str = Field("chat", description="Dialog type")
+    context: Optional[dict] = Field(None, description="contextinformation")
+    stream: bool = Field(False, description="是否启用streaming输出")
 
 
 class ChatResponse(BaseModel):
-    """聊天响应"""
+    """Chat response"""
     conversation_id: str
     message: str
     suggestions: Optional[List[str]] = None
@@ -212,51 +267,51 @@ class ChatResponse(BaseModel):
 
 
 class TroubleshootingRequest(BaseModel):
-    """故障排查请求"""
-    symptom: str = Field(..., description="故障现象")
-    device_id: Optional[int] = Field(None, description="设备ID")
-    device_name: Optional[str] = Field(None, description="设备名称")
-    device_ip: Optional[str] = Field(None, description="设备IP")
-    error_logs: Optional[str] = Field(None, description="错误日志")
-    metrics: Optional[dict] = Field(None, description="相关指标")
+    """Troubleshooting request"""
+    symptom: str = Field(..., description="fault现象")
+    device_id: Optional[int] = Field(None, description="deviceID")
+    device_name: Optional[str] = Field(None, description="device名称")
+    device_ip: Optional[str] = Field(None, description="deviceIP")
+    error_logs: Optional[str] = Field(None, description="errorlog")
+    metrics: Optional[dict] = Field(None, description="相关metric")
 
 
 class TroubleshootingResponse(BaseModel):
-    """故障排查响应"""
+    """fault排查response"""
     diagnosis: str = Field(..., description="诊断结果")
     confidence: float = Field(..., description="置信度 0-1")
     possible_causes: List[str] = Field(..., description="可能原因")
-    suggested_steps: List[dict] = Field(..., description="建议步骤")
+    suggested_steps: List[dict] = Field(..., description="建议step")
     related_cases: Optional[List[dict]] = Field(None, description="相关案例")
     related_docs: Optional[List[dict]] = Field(None, description="相关文档")
 
 
 class SuggestionRequest(BaseModel):
-    """建议生成请求"""
-    type: str = Field(..., description="建议类型: performance, security, capacity, optimization")
+    """建议生成request"""
+    type: str = Field(..., description="建议class型: performance, security, capacity, optimization")
     target: str = Field(..., description="目标: host, service, system")
     target_id: Optional[int] = Field(None, description="目标ID")
-    metrics: Optional[dict] = Field(None, description="当前指标数据")
+    metrics: Optional[dict] = Field(None, description="currentmetricdata")
 
 
-# ============== 故障案例查询 ==============
+# ============== fault案例query ==============
 
 def _find_related_cases(symptom: str, keyword: str = None, limit: int = 5) -> List[dict]:
-    """从数据库查找相关故障案例"""
+    """Find related fault cases from database"""
     from api.dependencies import get_db
     
-    # 这个函数需要db session，我们返回一个查询构建器方式
-    # 实际调用时传入db
+    # 这个function需要db session,We return a query builder approach
+    # 实际调用h传入db
     return []
 
 
 # ============== 对话接口 ==============
 
-@router.post("/chat/_debug", summary="调试流式接口")
+@router.post("/chat/_debug", summary="debugstreaming接口")
 async def chat_debug(
     request: ChatRequest,
 ):
-    """无依赖的最小化流式测试端点"""
+    """Minimal streaming test endpoint without dependencies"""
     import httpx
     import json
 
@@ -265,16 +320,28 @@ async def chat_debug(
             "messages": [{"role": "user", "content": request.message}],
             "model": "qwen3.5-9b-deepseek-v4-flash-q8_0",
             "stream": True,
+            "temperature": 0.0,
+            "max_tokens": 100,
         }
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
                 async with client.stream("POST", "http://host.docker.internal:11435/v1/chat/completions", json=payload) as resp:
                     async for line in resp.aiter_lines():
                         if line:
                             try:
                                 data = json.loads(line)
-                                content = data.get("message", {}).get("content", "")
-                                yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
+                                # llama.cpp / Qwen format: choices[0].delta.content
+                                if "choices" in data and len(data["choices"]) > 0:
+                                    delta = data["choices"][0].get("delta", {})
+                                    content = delta.get("content", "")
+                                    if content:
+                                        yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
+                                    if data["choices"][0].get("finish_reason"):
+                                        break
+                                elif "message" in data:
+                                    content = data.get("message", {}).get("content", "")
+                                    if content:
+                                        yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
                                 if data.get("done", False):
                                     break
                             except json.JSONDecodeError:
@@ -296,27 +363,27 @@ async def chat_debug(
     )
 
 
-@router.post("/chat", summary="发送消息")
+@router.post("/chat", summary="发送message")
 async def chat(
     request: ChatRequest,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    发送消息给AI助手
+    发送message给AI助手
     """
     conversation_id = request.conversation_id or f"conv-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-    # 尝试获取全局 LLM 客户端
+    # 尝试get全局 LLM client
     from api.start import get_llm_client
     llm_client = get_llm_client()
 
     if llm_client is None:
-        # LLM 未初始化，降级到意图检测
-        suggestions = ["进行故障排查", "生成优化建议", "搜索知识库", "分析日志"]
-        response_message = "AI服务暂不可用，请检查LLM服务是否启动。"
+        # LLM 未initialize,degradation到意graph检测
+        suggestions = ["进行fault排查", "生成优化建议", "searchknowledge_base", "analysislog"]
+        response_message = "AIservice暂不可用,请检查LLMservice是否start."
         
-        # 保存用户消息和AI回复（降级模式）
+        # Save user and AI messages (fallback mode)
         _save_chat_messages(
             db=db,
             current_user=current_user,
@@ -338,14 +405,16 @@ async def chat(
             },
         }
 
-    # 构建消息
+    # Get platform real-time context,注入 system prompt
+    platform_context = await _fetch_platform_context(db)
+
     messages = [
-        {"role": "system", "content": "你是一个专业的IT运维AI助手。请用中文简洁回答运维相关问题。"},
+        {"role": "system", "content": platform_context},
         {"role": "user", "content": request.message},
     ]
 
     if request.stream:
-        # 流式响应：使用模块级生成器（避免Python 3.13嵌套async def闭包bug）
+        # Streaming response: use module-level generator (avoid Python 3.13 nested async def closure bug)
         base_url = llm_client.base_url or "http://127.0.0.1:11435"
         model = llm_client._default_model or "qwen3.5-9b-deepseek-v4-flash-q8_0"
         return StreamingResponse(
@@ -358,20 +427,22 @@ async def chat(
             }
         )
 
-    # 非流式响应
+    # 非streamingresponse
+    # Qwen 0.8B 模型太小，temperature=0.7 容易产生幻觉（编造数字）
+    # temperature=0.0 保证确定性输出，max_tokens=100 防止模型生成时"走神"
     result = await llm_client.chat(
         messages=messages,
         model=None,
-        temperature=0.7,
-        max_tokens=2048,
+        temperature=0.0,
+        max_tokens=100,
     )
 
     if result.get("done") and result.get("content"):
         response_message = result["content"]
         model_name = result.get("model", "qwen3.5-9b-deepseek-v4-flash-q8_0")
-        suggestions = ["继续对话", "进入故障排查", "生成优化建议"]
+        suggestions = ["resume对话", "进入fault排查", "生成优化建议"]
         
-        # 保存用户消息和AI回复
+        # Save user message和ai_reply
         _save_chat_messages(
             db=db,
             current_user=current_user,
@@ -395,10 +466,10 @@ async def chat(
             },
         }
     else:
-        error_message = "AI回复生成失败，请重试。"
-        suggestions = ["重试", "进入故障排查", "生成优化建议"]
+        error_message = "ai_reply生成failed,请retry."
+        suggestions = ["retry", "进入fault排查", "生成优化建议"]
         
-        # 保存错误信息
+        # saveerrorinformation
         _save_chat_messages(
             db=db,
             current_user=current_user,
@@ -419,28 +490,28 @@ async def chat(
         }
 
 
-@router.get("/conversation/{conversation_id}", summary="获取会话历史")
+@router.get("/conversation/{conversation_id}", summary="Get conversation history")
 async def get_conversation(
     conversation_id: str,
-    limit: int = Query(50, le=100, description="返回消息数量"),
+    limit: int = Query(50, le=100, description="返回message数量"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    获取指定会话的消息历史
+    Get messages for a specific conversation
     """
     from modules.foundation.db_models.ai import AIConversation, AIMessage
 
-    # 查找会话
+    # findsession
     conversation = db.query(AIConversation).filter(
         AIConversation.conversation_id == conversation_id,
         AIConversation.is_deleted == False
     ).first()
 
     if not conversation:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise HTTPException(status_code=404, detail="session不存在")
 
-    # 获取消息列表
+    # getmessagelist
     messages = db.query(AIMessage).filter(
         AIMessage.conversation_id == conversation_id
     ).order_by(AIMessage.created_at.asc()).limit(limit).all()
@@ -456,16 +527,16 @@ async def get_conversation(
     }
 
 
-@router.get("/conversations", summary="获取会话列表")
+@router.get("/conversations", summary="Get conversation list")
 async def get_conversations(
-    conversation_type: Optional[str] = Query(None, description="对话类型过滤"),
-    is_pinned: Optional[bool] = Query(None, description="置顶状态过滤"),
-    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    conversation_type: Optional[str] = Query(None, description="Dialog typefilter"),
+    is_pinned: Optional[bool] = Query(None, description="置顶statefilter"),
+    keyword: Optional[str] = Query(None, description="关键词search"),
     limit: int = Query(20, le=50, description="返回数量限制"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """获取用户的会话列表"""
+    """getuser的sessionlist"""
     from modules.foundation.db_models.ai import AIConversation
 
     query = db.query(AIConversation).filter(
@@ -506,13 +577,13 @@ async def get_conversations(
     }
 
 
-@router.delete("/conversation/{conversation_id}", summary="删除会话")
+@router.delete("/conversation/{conversation_id}", summary="Delete conversation")
 async def delete_conversation(
     conversation_id: str,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """删除指定的会话（软删除）"""
+    """Delete specified conversation (soft delete)"""
     from modules.foundation.db_models.ai import AIConversation, AIMessage
 
     conversation = db.query(AIConversation).filter(
@@ -521,9 +592,9 @@ async def delete_conversation(
     ).first()
 
     if not conversation:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise HTTPException(status_code=404, detail="session不存在")
 
-    # 软删除会话
+    # 软Delete conversation
     conversation.is_deleted = True
     conversation.updated_at = datetime.now()
 
@@ -535,14 +606,14 @@ async def delete_conversation(
     }
 
 
-@router.put("/conversation/{conversation_id}/pin", summary="置顶/取消置顶会话")
+@router.put("/conversation/{conversation_id}/pin", summary="置顶/cancel置顶session")
 async def pin_conversation(
     conversation_id: str,
     is_pinned: bool = Query(..., description="是否置顶"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """置顶或取消置顶会话"""
+    """置顶或cancel置顶session"""
     from modules.foundation.db_models.ai import AIConversation
 
     conversation = db.query(AIConversation).filter(
@@ -551,7 +622,7 @@ async def pin_conversation(
     ).first()
 
     if not conversation:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        raise HTTPException(status_code=404, detail="session不存在")
 
     conversation.is_pinned = is_pinned
     conversation.updated_at = datetime.now()
@@ -560,34 +631,34 @@ async def pin_conversation(
 
     return {
         "status": "success",
-        "message": f"会话已{'置顶' if is_pinned else '取消置顶'}"
+        "message": f"session已{'置顶' if is_pinned else 'cancel置顶'}"
     }
 
 
-@router.post("/conversation/{conversation_id}/messages", summary="保存消息到会话")
+@router.post("/conversation/{conversation_id}/messages", summary="savemessage到session")
 async def save_message_to_conversation(
     conversation_id: str,
-    role: str = Query(..., description="消息角色: user, assistant, system"),
-    content: str = Query(..., description="消息内容"),
+    role: str = Query(..., description="Message role: user, assistant, system"),
+    content: str = Query(..., description="message内容"),
     model: Optional[str] = Query(None, description="使用的模型"),
-    suggestions: Optional[List[str]] = Query(None, description="建议列表"),
+    suggestions: Optional[List[str]] = Query(None, description="建议list"),
     references: Optional[str] = Query(None, description="参考资料(JSON)"),
     token_count: Optional[int] = Query(None, description="Token数量"),
-    error_message: Optional[str] = Query(None, description="错误信息"),
+    error_message: Optional[str] = Query(None, description="errorinformation"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """保存消息到指定会话（用于对话历史持久化）"""
+    """Save message to specified session(For dialog history persistence)"""
     from modules.foundation.db_models.ai import AIConversation, AIMessage
     import json
 
-    # 查找或创建会话
+    # Find or create session
     conversation = db.query(AIConversation).filter(
         AIConversation.conversation_id == conversation_id
     ).first()
 
     if not conversation:
-        # 创建新会话
+        # Create new session
         conversation = AIConversation(
             conversation_id=conversation_id,
             user_id=current_user.user_id,
@@ -597,7 +668,7 @@ async def save_message_to_conversation(
         )
         db.add(conversation)
 
-    # 创建消息
+    # createmessage
     message = AIMessage(
         conversation_id=conversation_id,
         user_id=current_user.user_id,
@@ -611,12 +682,12 @@ async def save_message_to_conversation(
     )
     db.add(message)
 
-    # 更新会话统计
+    # Update session stats
     conversation.message_count = (conversation.message_count or 0) + 1
     conversation.last_message_at = datetime.now()
     conversation.updated_at = datetime.now()
 
-    # 如果是用户第一条消息，设置标题
+    # Set title if first user message
     if conversation.message_count == 1 and role == "user":
         conversation.title = content[:50] + ("..." if len(content) > 50 else "")
 
@@ -631,25 +702,25 @@ async def save_message_to_conversation(
     }
 
 
-# ============== 故障排查接口 ==============
+# ============== fault排查接口 ==============
 
-@router.post("/troubleshoot", summary="智能故障排查")
+@router.post("/troubleshoot", summary="智能fault排查")
 async def troubleshoot(
     request: TroubleshootingRequest,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    智能故障排查
-    根据故障现象分析可能的原因并给出处理建议
+    智能fault排查
+    Analyze possible causes based on fault symptoms and provide handling suggestions
     """
-    # 从数据库查找相关故障案例
+    # Find related fault cases from database
     related_cases_query = db.query(FaultCase).filter(
         FaultCase.is_deleted == False,
         FaultCase.fault_status.in_([FaultStatus.RESOLVED, FaultStatus.CLOSED])
     )
     
-    # 按关键词匹配
+    # 按关键词match
     search_term = request.symptom
     related_cases_query = related_cases_query.filter(
         (FaultCase.title.ilike(f"%{search_term}%")) |
@@ -672,135 +743,135 @@ async def troubleshoot(
         for c in related_cases_db
     ]
     
-    # 根据关键词分析可能的原因
+    # Analyze possible causes by keywords
     symptom_lower = request.symptom.lower()
     possible_causes = []
     suggested_steps = []
     
-    # 关键词匹配分析
+    # 关键词matchanalysis
     if any(kw in symptom_lower for kw in ['cpu', '负载', 'load', '占用高']):
         possible_causes.extend([
-            "CPU密集型任务占用资源",
+            "CPU密集型task占用资源",
             "恶意软件或挖矿程序",
-            "系统更新或后台任务",
-            "异常进程或死循环"
+            "系统update或后台task",
+            "exceptionprocess或死iteration"
         ])
         suggested_steps.append({
             "order": 1,
-            "action": "查看CPU使用情况",
+            "action": "viewCPU使用情况",
             "command": "top -bn1 | head -20",
-            "description": "检查当前CPU占用最高的进程"
+            "description": "检查currentCPU占用最高的process"
         })
         suggested_steps.append({
             "order": 2,
-            "action": "检查定时任务",
+            "action": "检查定htask",
             "command": "crontab -l",
-            "description": "查看是否有异常的定时任务"
+            "description": "Check for abnormal scheduled tasks"
         })
         suggested_steps.append({
             "order": 3,
-            "action": "查看系统负载",
+            "action": "view系统负载",
             "command": "uptime",
-            "description": "检查系统1/5/15分钟平均负载"
+            "description": "检查系统1/5/15min钟average负载"
         })
     
-    if any(kw in symptom_lower for kw in ['内存', 'memory', 'oom', '溢出']):
+    if any(kw in symptom_lower for kw in ['memory', 'memory', 'oom', '溢出']):
         possible_causes.extend([
-            "内存泄漏导致可用内存不足",
-            "大内存操作导致OOM",
-            "缓存未释放"
+            "Memory leak causes insufficient available memory",
+            "大memoryoperation导致OOM",
+            "cache未释放"
         ])
         suggested_steps.append({
             "order": 1,
-            "action": "查看内存使用",
+            "action": "viewmemory使用",
             "command": "free -h",
-            "description": "检查内存使用情况和可用空间"
+            "description": "Check memory usage and available space"
         })
         suggested_steps.append({
             "order": 2,
-            "action": "查看内存占用最高的进程",
+            "action": "View processes with highest memory usage",
             "command": "ps aux --sort=-%mem | head -10",
-            "description": "找出占用内存最多的进程"
+            "description": "Find process consuming most memory"
         })
     
-    if any(kw in symptom_lower for kw in ['磁盘', 'disk', '空间', '满']):
+    if any(kw in symptom_lower for kw in ['disk', 'disk', 'null间', '满']):
         possible_causes.extend([
-            "磁盘空间不足",
-            "日志文件过大",
-            "临时文件未清理",
-            "大文件占用空间"
+            "disknull间不足",
+            "log文件过大",
+            "临h文件未清理",
+            "大文件占用null间"
         ])
         suggested_steps.append({
             "order": 1,
-            "action": "查看磁盘使用",
+            "action": "viewdisk使用",
             "command": "df -h",
-            "description": "检查各分区磁盘使用情况"
+            "description": "Check disk usage of each partition"
         })
         suggested_steps.append({
             "order": 2,
-            "action": "查找大文件",
+            "action": "find大文件",
             "command": "du -sh /* | sort -rh | head -10",
-            "description": "查找占用空间最大的目录"
+            "description": "Find directory consuming most space"
         })
     
-    if any(kw in symptom_lower for kw in ['网络', 'network', '连接', '不通']):
+    if any(kw in symptom_lower for kw in ['network', 'network', 'join', '不通']):
         possible_causes.extend([
-            "网络连接故障",
+            "networkjoinfault",
             "防火墙阻断",
             "DNS解析问题",
-            "端口不通"
+            "port不通"
         ])
         suggested_steps.append({
             "order": 1,
-            "action": "检查网络连通性",
+            "action": "检查network连通性",
             "command": "ping -c 4 8.8.8.8",
-            "description": "测试网络连接"
+            "description": "testnetworkjoin"
         })
         suggested_steps.append({
             "order": 2,
-            "action": "检查端口监听",
+            "action": "检查port监听",
             "command": "ss -tlnp",
-            "description": "查看监听端口状态"
+            "description": "view监听portstate"
         })
     
-    if any(kw in symptom_lower for kw in ['服务', 'service', '启动', '运行']):
+    if any(kw in symptom_lower for kw in ['service', 'service', 'start', 'run']):
         possible_causes.extend([
-            "服务未启动",
-            "服务配置错误",
-            "依赖服务异常",
-            "端口被占用"
+            "service未start",
+            "serviceconfigurationerror",
+            "依赖serviceexception",
+            "port被占用"
         ])
         suggested_steps.append({
             "order": 1,
-            "action": "检查服务状态",
+            "action": "检查servicestate",
             "command": "systemctl status <service_name>",
-            "description": "查看服务运行状态"
+            "description": "viewservicerunstate"
         })
         suggested_steps.append({
             "order": 2,
-            "action": "查看服务日志",
+            "action": "viewservicelog",
             "command": "journalctl -u <service_name> -n 50",
-            "description": "查看服务日志"
+            "description": "viewservicelog"
         })
     
-    # 如果没有匹配到关键词，返回通用分析
+    # 如果没有match到关键词,返回通用analysis
     if not possible_causes:
         possible_causes = [
             "系统资源不足",
-            "应用程序异常",
-            "配置错误",
-            "外部依赖故障"
+            "应用程序exception",
+            "configurationerror",
+            "外部依赖fault"
         ]
         suggested_steps = [
-            {"order": 1, "action": "检查系统资源", "command": "top -bn1 && free -h && df -h", "description": "查看CPU、内存、磁盘使用情况"},
-            {"order": 2, "action": "检查系统日志", "command": "tail -100 /var/log/messages", "description": "查看系统日志"},
-            {"order": 3, "action": "查看服务状态", "command": "systemctl status <service>", "description": "检查相关服务状态"}
+            {"order": 1, "action": "检查系统资源", "command": "top -bn1 && free -h && df -h", "description": "viewCPU,memory,disk使用情况"},
+            {"order": 2, "action": "检查系统log", "command": "tail -100 /var/log/messages", "description": "view系统log"},
+            {"order": 3, "action": "viewservicestate", "command": "systemctl status <service>", "description": "检查相关servicestate"}
         ]
     
-    # 查找相关文档
+    # find相关文档
     related_docs = []
     if related_cases:
-        # 使用故障案例作为参考文档
+        # Use fault cases as reference document
         for case in related_cases[:2]:
             related_docs.append({
                 "id": case['id'],
@@ -810,7 +881,7 @@ async def troubleshoot(
             })
     
     return {
-        "diagnosis": f"根据您描述的「{request.symptom}」，可能由以下原因导致",
+        "diagnosis": f"根据您描述的「{request.symptom}」,可能由以下原因导致",
         "confidence": 0.75 if related_cases else 0.6,
         "possible_causes": possible_causes[:5],
         "suggested_steps": suggested_steps[:5],
@@ -819,40 +890,40 @@ async def troubleshoot(
     }
 
 
-@router.post("/troubleshoot/auto", summary="自动故障诊断")
+@router.post("/troubleshoot/auto", summary="自动fault诊断")
 async def auto_troubleshoot(
-    device_id: int = Query(..., description="设备ID"),
-    symptom: str = Query(..., description="故障现象描述"),
+    device_id: int = Query(..., description="deviceID"),
+    symptom: str = Query(..., description="fault现象描述"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    自动故障诊断
-    采集设备指标和日志，综合分析故障原因
+    自动fault诊断
+    采集devicemetric和log,综合analysisfault原因
     """
     from modules.foundation.db_models.device import Device
     
-    # 获取设备信息
+    # getdeviceinformation
     device = db.query(Device).filter(Device.id == device_id).first()
     if not device:
-        raise HTTPException(status_code=404, detail="设备不存在")
+        raise HTTPException(status_code=404, detail="device不存在")
     
     try:
-        # 采集设备指标
+        # 采集devicemetric
         manager = DeviceManager()
         result = await manager.collect_device(device.hostname or device.name)
         
         if result and result.status.value == 'online':
             metrics = result.metrics
             
-            # 根据指标数据做进一步分析
+            # Further analysis based on metric data
             diagnosis_points = []
             
             if 'cpu' in metrics:
                 cpu = metrics.get('cpu', {})
                 usage = cpu.get('usage', 0)
                 if usage > 80:
-                    diagnosis_points.append(f"CPU使用率过高: {usage}%")
+                    diagnosis_points.append(f"CPUusage过高: {usage}%")
                 if cpu.get('load_avg_1m', 0) > cpu.get('cores', 8):
                     diagnosis_points.append(f"系统负载过高: {cpu.get('load_avg_1m')}")
             
@@ -860,12 +931,12 @@ async def auto_troubleshoot(
                 mem = metrics.get('memory', {})
                 usage = mem.get('usage_percent', 0)
                 if usage > 85:
-                    diagnosis_points.append(f"内存使用率过高: {usage}%")
+                    diagnosis_points.append(f"memoryusage过高: {usage}%")
             
             if 'disks' in metrics:
                 for disk in metrics.get('disks', []):
                     if float(disk.get('usage_percent', 0)) > 90:
-                        diagnosis_points.append(f"磁盘 {disk.get('mounted_on')} 使用率超过90%")
+                        diagnosis_points.append(f"disk {disk.get('mounted_on')} usage超过90%")
             
             return {
                 "status": "completed",
@@ -874,20 +945,20 @@ async def auto_troubleshoot(
                 "device_name": device.name,
                 "symptom": symptom,
                 "metrics_collected": True,
-                "diagnosis_points": diagnosis_points if diagnosis_points else ["未发现明显异常"],
-                "message": "故障诊断完成"
+                "diagnosis_points": diagnosis_points if diagnosis_points else ["未发现明显exception"],
+                "message": "fault诊断完成"
             }
         else:
             return {
                 "status": "error",
                 "task_id": f"task-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                "message": f"设备采集失败: {result.error if result else '未知错误'}"
+                "message": f"device采集failed: {result.error if result else 'unknownerror'}"
             }
     except Exception as e:
         return {
             "status": "error",
             "task_id": f"task-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "message": f"诊断异常: {str(e)}"
+            "message": f"诊断exception: {str(e)}"
         }
 
 
@@ -901,84 +972,84 @@ async def generate_suggestion(
 ):
     """
     生成优化建议
-    根据当前状态生成性能、安全、容量等优化建议
+    根据currentstate生成performance,安全,capacity等优化建议
     """
     suggestions = []
     summary = ""
     
     if request.type == "performance":
-        # 基于指标的优化建议
+        # 基于metric的优化建议
         if request.metrics:
             metrics = request.metrics
             
             if 'cpu_usage' in metrics and metrics['cpu_usage'] > 80:
                 suggestions.append({
                     "priority": "high",
-                    "title": "CPU使用率过高",
-                    "description": f"当前CPU使用率{metrics['cpu_usage']}%，建议优化或扩容",
-                    "impact": "提高系统响应速度",
+                    "title": "CPUusage过高",
+                    "description": f"currentCPUusage{metrics['cpu_usage']}%,建议优化或扩容",
+                    "impact": "提高系统response速度",
                     "effort": "medium"
                 })
             
             if 'memory_usage' in metrics and metrics['memory_usage'] > 85:
                 suggestions.append({
                     "priority": "high",
-                    "title": "内存使用率过高",
-                    "description": f"当前内存使用率{metrics['memory_usage']}%，建议扩容或优化",
-                    "impact": "避免OOM和提高稳定性",
+                    "title": "memoryusage过高",
+                    "description": f"currentmemoryusage{metrics['memory_usage']}%,建议扩容或优化",
+                    "impact": "避免OOM和提高stable性",
                     "effort": "medium"
                 })
             
             if 'disk_usage' in metrics and metrics['disk_usage'] > 90:
                 suggestions.append({
                     "priority": "critical",
-                    "title": "磁盘空间不足",
-                    "description": f"当前磁盘使用率{metrics['disk_usage']}%，需要立即清理",
-                    "impact": "避免服务中断",
+                    "title": "disknull间不足",
+                    "description": f"currentdiskusage{metrics['disk_usage']}%,需要立即清理",
+                    "impact": "避免service中断",
                     "effort": "low"
                 })
         
-        # 通用性能优化建议
+        # 通用performance优化建议
         if not suggestions:
             suggestions.extend([
                 {
                     "priority": "medium",
-                    "title": "启用缓存",
-                    "description": "使用Redis等缓存减少数据库压力",
-                    "impact": "提高响应速度",
+                    "title": "启用cache",
+                    "description": "使用Redis等cache减少data库压力",
+                    "impact": "提高response速度",
                     "effort": "medium"
                 },
                 {
                     "priority": "medium",
-                    "title": "优化数据库索引",
-                    "description": "检查并优化慢查询和缺失索引",
-                    "impact": "提高查询性能",
+                    "title": "优化data库index",
+                    "description": "Check and optimize slow queries and missing indexes",
+                    "impact": "提高queryperformance",
                     "effort": "medium"
                 }
             ])
         
-        summary = f"基于{request.target}的性能分析，生成了{len(suggestions)}条优化建议"
+        summary = f"基于{request.target}的performanceanalysis,生成了{len(suggestions)}条优化建议"
     
     elif request.type == "security":
         suggestions = [
             {
                 "priority": "high",
-                "title": "更新系统补丁",
-                "description": "定期更新系统安全补丁",
+                "title": "update系统补丁",
+                "description": "定期update系统安全补丁",
                 "impact": "减少安全漏洞",
                 "effort": "low"
             },
             {
                 "priority": "high",
-                "title": "配置防火墙",
-                "description": "仅开放必要的端口",
+                "title": "configuration防火墙",
+                "description": "仅开放必要的port",
                 "impact": "减少攻击面",
                 "effort": "medium"
             },
             {
                 "priority": "medium",
-                "title": "启用日志审计",
-                "description": "开启登录和操作审计",
+                "title": "启用log审计",
+                "description": "开启login和operation审计",
                 "impact": "提高安全可追溯性",
                 "effort": "low"
             }
@@ -989,20 +1060,20 @@ async def generate_suggestion(
         suggestions = [
             {
                 "priority": "medium",
-                "title": "监控容量趋势",
-                "description": "建立容量监控和预测模型",
+                "title": "monitoringcapacity趋势",
+                "description": "Establish capacity monitoring and prediction model",
                 "impact": "提前规划扩容",
                 "effort": "medium"
             },
             {
                 "priority": "low",
-                "title": "归档历史数据",
-                "description": "将历史数据归档减少存储压力",
-                "impact": "降低存储成本",
+                "title": "archive历史data",
+                "description": "Archive historical data to reduce storage pressure",
+                "impact": "降低storage成本",
                 "effort": "low"
             }
         ]
-        summary = "容量规划建议已完成"
+        summary = "capacity规划建议已完成"
     
     else:  # optimization
         suggestions = [
@@ -1010,13 +1081,13 @@ async def generate_suggestion(
                 "priority": "medium",
                 "title": "定期巡检",
                 "description": "建立定期巡检机制",
-                "impact": "及时发现问题",
+                "impact": "及h发现问题",
                 "effort": "low"
             },
             {
                 "priority": "medium",
                 "title": "自动化运维",
-                "description": "使用脚本自动化常见操作",
+                "description": "Use scripts to automate common operations",
                 "impact": "提高运维效率",
                 "effort": "medium"
             }
@@ -1030,7 +1101,7 @@ async def generate_suggestion(
     }
 
 
-# ============== 报告解读接口 ==============
+# ============== report解读接口 ==============
 
 @router.post("/interpret/report", summary="解读报表")
 async def interpret_report(
@@ -1041,17 +1112,17 @@ async def interpret_report(
 ):
     """
     解读报表
-    AI自动分析报表内容，提取关键信息和异常
+    AI自动analysis报表内容,提取关键information和exception
     """
     from modules.foundation.db_models.report_template import Report
     
-    # 获取报表数据
+    # get报表data
     report = db.query(Report).filter(Report.id == report_id).first()
     
     if not report:
         raise HTTPException(status_code=404, detail="报表不存在")
     
-    # 简化实现：基于报表数据进行分析
+    # 简化实现:基于报表data进行analysis
     findings = []
     recommendations = []
     
@@ -1059,14 +1130,14 @@ async def interpret_report(
         try:
             data = json.loads(report.report_data) if isinstance(report.report_data, str) else report.report_data
             
-            # 分析报表数据中的异常
+            # analysis报表data中的exception
             if 'alerts' in data:
                 alert_count = len(data['alerts'])
                 if alert_count > 0:
                     findings.append({
-                        "area": "告警",
+                        "area": "alert",
                         "status": "warning",
-                        "detail": f"共{alert_count}条告警记录"
+                        "detail": f"Total: {alert_count}条alertrecord"
                     })
             
             if 'availability' in data:
@@ -1075,13 +1146,13 @@ async def interpret_report(
                     findings.append({
                         "area": "可用性",
                         "status": "warning",
-                        "detail": f"系统可用性{avail}%，未达到99.9%目标"
+                        "detail": f"系统可用性{avail}%,未达到99.9%目标"
                     })
                 else:
                     findings.append({
                         "area": "可用性",
                         "status": "normal",
-                        "detail": f"系统可用性{avail}%，符合SLA要求"
+                        "detail": f"系统可用性{avail}%,符合SLA要求"
                     })
         except Exception:
             pass
@@ -1090,31 +1161,31 @@ async def interpret_report(
         findings.append({
             "area": "总体",
             "status": "normal",
-            "detail": "未发现重大异常"
+            "detail": "未发现重大exception"
         })
-        recommendations.append("继续保持当前运维状态")
+        recommendations.append("resume保持current运维state")
         recommendations.append("建议定期进行系统巡检")
     
     return {
         "report_id": report_id,
         "report_name": report.name,
-        "summary": f"报表解读完成，共发现{len(findings)}个关注点",
+        "summary": f"报表解读完成,Total: 发现{len(findings)}个关注点",
         "key_findings": findings,
         "recommendations": recommendations,
     }
 
 
-# ============== 日志分析接口 ==============
+# ============== loganalysis接口 ==============
 
-@router.post("/analyze/logs", summary="分析日志")
+@router.post("/analyze/logs", summary="analysislog")
 async def analyze_logs(
-    logs: str = Query(..., description="日志内容"),
-    context: Optional[str] = Query(None, description="上下文信息"),
+    logs: str = Query(..., description="log内容"),
+    context: Optional[str] = Query(None, description="contextinformation"),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """
-    智能日志分析
-    分析日志内容，提取错误、异常和关键事件
+    智能loganalysis
+    analysislog内容,提取error,exception和关键event
     """
     lines = logs.strip().split('\n') if logs else []
     
@@ -1131,7 +1202,7 @@ async def analyze_logs(
         if any(kw in line_lower for kw in error_keywords):
             errors.append({
                 "line": line[:200],
-                "possible_cause": "需要检查服务状态和网络连接"
+                "possible_cause": "需要Check service status and network connections"
             })
         
         if any(kw in line_lower for kw in warning_keywords):
@@ -1139,7 +1210,7 @@ async def analyze_logs(
                 "line": line[:200]
             })
         
-        # 尝试提取时间戳
+        # 尝试提取time戳
         import re
         time_match = re.search(r'(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', line)
         if time_match:
@@ -1165,8 +1236,8 @@ async def analyze_logs(
             seen_warnings.add(key)
             unique_warnings.append(w)
     
-    # 生成分析摘要
-    summary = f"共分析了{len(lines)}行日志，发现{len(unique_errors)}个错误，{len(unique_warnings)}个警告"
+    # 生成analysisdigest
+    summary = f"Total: analysis了{len(lines)}行log,发现{len(unique_errors)}个error,{len(unique_warnings)}个warning"
     
     return {
         "summary": summary,
@@ -1183,18 +1254,18 @@ async def analyze_logs(
 @router.post("/qa", summary="知识问答")
 async def question_answer(
     question: str = Query(..., description="问题"),
-    category: Optional[str] = Query(None, description="问题类别"),
+    category: Optional[str] = Query(None, description="问题class别"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     知识问答
-    基于知识库回答运维相关问题
+    Answer O&M related questions based on knowledge base
     """
-    # 从知识库搜索相关内容
+    # Search relevant content from knowledge base
     from modules.business.knowledge_base.models import SOPDocument
     
-    # 搜索SOP文档
+    # searchSOP文档
     query = db.query(SOPDocument).filter(
         SOPDocument.is_deleted == False,
         SOPDocument.status == 'approved'
@@ -1221,14 +1292,14 @@ async def question_answer(
             })
             # 提取相关内容作为答案
             content_preview = doc.content[:300] if doc.content else ""
-            answer_parts.append(f"【{doc.title}】\n{content_preview}...")
+            answer_parts.append(f"[{doc.title}]\n{content_preview}...")
     
     if answer_parts:
         answer = "\n\n".join(answer_parts[:2])
         confidence = 0.85
     else:
         # 通用回答
-        answer = "抱歉，知识库中未找到相关内容。建议您：\n1. 查看系统操作手册\n2. 咨询技术支持人员\n3. 提交工单获取帮助"
+        answer = "抱歉,No relevant content found in knowledge base.建议您:\n1. view系统operation手册\n2. 咨询技术supported人员\n3. commit工单gethelp"
         confidence = 0.3
     
     return {
@@ -1239,18 +1310,18 @@ async def question_answer(
     }
 
 
-# ============== 会话统计接口 ==============
+# ============== sessionstatistics接口 ==============
 
-@router.get("/stats", summary="获取AI助手统计")
+@router.get("/stats", summary="getAI助手statistics")
 async def get_ai_stats(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """获取AI助手使用统计"""
-    # 从故障案例获取统计数据
+    """getAI助手使用statistics"""
+    # Get statistics from fault cases
     total_cases = db.query(FaultCase).filter(FaultCase.is_deleted == False).count()
     
-    # 从SOP文档获取统计数据
+    # 从SOP文档getstatisticsdata
     from modules.business.knowledge_base.models import SOPDocument
     total_sops = db.query(SOPDocument).filter(
         SOPDocument.is_deleted == False,
@@ -1258,7 +1329,7 @@ async def get_ai_stats(
     ).count()
     
     return {
-        "total_conversations": 0,  # 需要会话存储
+        "total_conversations": 0,  # 需要sessionstorage
         "total_messages": 0,
         "today_conversations": 0,
         "today_messages": 0,
@@ -1266,21 +1337,21 @@ async def get_ai_stats(
             "fault_cases": total_cases,
             "sop_documents": total_sops,
         },
-        "avg_response_time_ms": 0,  # 需要LLM服务
+        "avg_response_time_ms": 0,  # 需要LLMservice
     }
 
 
-# ============== 告警根因分析接口 ==============
+# ============== alert根因analysis接口 ==============
 
 class RootCauseAnalyzeRequest(BaseModel):
-    """根因分析请求"""
-    include_llm: bool = Field(True, description="是否使用LLM深度分析")
-    include_history: bool = Field(True, description="是否包含关联告警")
+    """根因analysisrequest"""
+    include_llm: bool = Field(True, description="是否使用LLM深度analysis")
+    include_history: bool = Field(True, description="是否包含关联alert")
     include_cases: bool = Field(True, description="是否包含相似案例")
 
 
 class RootCauseAnalyzeResponse(BaseModel):
-    """根因分析响应"""
+    """根因analysisresponse"""
     alert_id: int
     success: bool
     root_cause: str
@@ -1296,7 +1367,7 @@ class RootCauseAnalyzeResponse(BaseModel):
 
 @router.post(
     "/analyze/{alert_id}/root-cause",
-    summary="告警根因分析",
+    summary="alert根因analysis",
     response_model=RootCauseAnalyzeResponse
 )
 async def analyze_root_cause(
@@ -1306,32 +1377,32 @@ async def analyze_root_cause(
     db: Session = Depends(get_db),
 ):
     """
-    AI告警根因分析
+    AIalert根因analysis
     
-    基于告警信息和历史数据，使用AI分析告警的根本原因。
-    支持:
-    - 基于模式的初步分析
-    - 关联告警查找
-    - 相似案例匹配
-    - LLM深度分析(可选)
+    Based on alert info and historical data,使用AIanalysisalert的根本原因.
+    supported:
+    - 基于模式的初步analysis
+    - 关联alertfind
+    - 相似案例match
+    - LLM深度analysis(可选)
     """
-    # 如果没有请求体，使用默认参数
+    # 如果没有request体,使用defaultparameter
     if request is None:
         request = RootCauseAnalyzeRequest()
     
-    # 获取根因分析器
+    # get根因analysis器
     analyzer = get_root_cause_analyzer()
     
-    # 尝试获取LLM客户端(如果可用)
+    # 尝试getLLMclient(如果可用)
     try:
         from api.start import get_llm_client
         llm_client = get_llm_client()
         if llm_client:
             analyzer.llm_client = llm_client
     except Exception:
-        pass  # LLM不可用时使用无LLM模式
+        pass  # LLM不可用h使用无LLM模式
     
-    # 执行分析
+    # 执行analysis
     result = await analyzer.analyze(
         alert_id=alert_id,
         db=db,
@@ -1356,19 +1427,19 @@ async def analyze_root_cause(
     )
 
 
-# ============== C3: 告警处置(Remediation)接口 ==============
+# ============== C3: alert处置(Remediation)接口 ==============
 
 from modules.business.ai_copilot.remediation import RemediationEngine, RemediationPlan
 
 
 class RemediationRequest(BaseModel):
-    """告警处置请求"""
-    alert_id: int = Field(..., description="告警ID")
-    include_auto_executable: bool = Field(False, description="是否只返回可自动执行的步骤")
+    """alert处置request"""
+    alert_id: int = Field(..., description="alertID")
+    include_auto_executable: bool = Field(False, description="Only return auto-executable steps")
 
 
 class RemediationStepResponse(BaseModel):
-    """处置步骤响应"""
+    """处置stepresponse"""
     step_id: int
     action: str
     description: str
@@ -1379,7 +1450,7 @@ class RemediationStepResponse(BaseModel):
 
 
 class SOPMatchResponse(BaseModel):
-    """匹配的SOP响应"""
+    """match的SOPresponse"""
     sop_id: str
     sop_name: str
     match_score: float
@@ -1388,7 +1459,7 @@ class SOPMatchResponse(BaseModel):
 
 
 class RemediationResponse(BaseModel):
-    """告警处置响应"""
+    """alert处置response"""
     plan_id: str
     alert_id: str
     alert_type: str
@@ -1401,13 +1472,15 @@ class RemediationResponse(BaseModel):
 
 
 def get_remediation_engine() -> RemediationEngine:
-    """获取 RemediationEngine 实例"""
+    """
+    get RemediationEngine instance
+    """
     return RemediationEngine()
 
 
 @router.post(
     "/analyze/{alert_id}/remediation",
-    summary="告警智能处置",
+    summary="alert智能处置",
     response_model=RemediationResponse
 )
 async def get_remediation(
@@ -1416,31 +1489,22 @@ async def get_remediation(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    AI告警智能处置
-    
-    基于SOP知识库匹配生成告警处置步骤。
-    支持:
-    - SOP自动匹配
-    - 处置步骤生成
-    - 风险等级评估
-    - 预估时间计算
-    """
-    # 如果没有请求体，使用默认参数
+    """Alert remediation endpoint"""
+    # 如果没有request体,使用defaultparameter
     if request is None:
         request = RemediationRequest(alert_id=alert_id)
     
-    # 获取 RemediationEngine
+    # get RemediationEngine
     engine = get_remediation_engine()
     
-    # 从数据库获取告警信息
+    # 从data库getalertinformation
     from modules.foundation.db_models.monitoring import Alert
     alert = db.query(Alert).filter(Alert.id == alert_id).first()
     
     if not alert:
-        raise HTTPException(status_code=404, detail=f"告警 {alert_id} 不存在")
+        raise HTTPException(status_code=404, detail=f"alert {alert_id} 不存在")
     
-    # 构造告警数据
+    # 构造alertdata
     alert_data = {
         "alert_id": str(alert_id),
         "alert_type": alert.alert_type or "unknown",
@@ -1452,12 +1516,12 @@ async def get_remediation(
     # 生成处置方案
     plan: RemediationPlan = engine.generate_remediation_plan(alert_id, alert_data)
     
-    # 过滤自动可执行步骤（如果请求）
+    # Filter auto-executable steps (if requested)
     steps = plan.generated_steps
     if request.include_auto_executable:
         steps = [s for s in steps if s.auto_executable]
     
-    # 构建匹配的SOP响应
+    # buildmatch的SOPresponse
     matched_sop = None
     if plan.matched_sops:
         best_match = plan.matched_sops[0]

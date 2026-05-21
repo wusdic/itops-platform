@@ -88,12 +88,29 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
         """处理请求验证错误"""
         errors = []
         for error in exc.errors():
+            # 清理所有值，确保没有 bytes 对象（JSON 序列化失败）
+            def clean_value(v):
+                if isinstance(v, bytes):
+                    try:
+                        return v.decode("utf-8", errors="replace")
+                    except Exception:
+                        return str(v)
+                elif isinstance(v, dict):
+                    return {kk: clean_value(vv) for kk, vv in v.items()}
+                elif isinstance(v, (list, tuple)):
+                    return [clean_value(x) for x in v]
+                return v
+
+            cleaned_error = {}
+            for k, v in error.items():
+                cleaned_error[k] = clean_value(v)
+
             errors.append({
-                "field": ".".join(str(loc) for loc in error["loc"]),
-                "message": error["msg"],
-                "type": error["type"],
+                "field": ".".join(str(loc) for loc in cleaned_error.get("loc", [])),
+                "message": cleaned_error.get("msg", ""),
+                "type": cleaned_error.get("type", ""),
             })
-        
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={

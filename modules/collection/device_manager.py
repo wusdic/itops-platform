@@ -38,6 +38,70 @@ class DeviceMetrics:
     metrics: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
 
+    def save_to_db(self) -> int:
+        """
+        将采集的指标数据保存到 MySQL performance_metrics 表
+        返回保存的记录数
+        """
+        try:
+            from modules.foundation.db_models.base import DatabaseManager
+            from modules.foundation.db_models.monitoring import PerformanceMetric
+            stored = 0
+            with DatabaseManager().session_scope() as db:
+                now = self.timestamp or datetime.now()
+                device_id = 0  # device_id 需要从设备配置获取，暂时用 0
+                for category, data in self.metrics.items():
+                    if isinstance(data, dict):
+                        for key, value in data.items():
+                            if value is None:
+                                continue
+                            unit = ''
+                            name = key
+                            if key.endswith('_percent') or key == 'usage':
+                                unit = '%'
+                            elif key.endswith('_mb') or key == 'memory':
+                                unit = 'MB'
+                            elif key == 'load_1m' or key == 'load_5m' or key == 'load_15m':
+                                unit = ''
+                            metric = PerformanceMetric(
+                                device_id=device_id,
+                                device_name=self.device_name,
+                                device_ip=self.device_ip,
+                                device_type=self.device_type,
+                                metric_category=category,
+                                metric_name=name,
+                                metric_unit=unit,
+                                value=float(value) if isinstance(value, (int, float)) else 0,
+                                timestamp=now,
+                                collected_by='periodic_collect',
+                                source='auto'
+                            )
+                            db.add(metric)
+                            stored += 1
+                    elif isinstance(data, (int, float)):
+                        # 直接是数值，如 cpu_usage: 23.5
+                        metric = PerformanceMetric(
+                            device_id=device_id,
+                            device_name=self.device_name,
+                            device_ip=self.device_ip,
+                            device_type=self.device_type,
+                            metric_category=category,
+                            metric_name=category,
+                            metric_unit='%',
+                            value=float(data),
+                            timestamp=now,
+                            collected_by='periodic_collect',
+                            source='auto'
+                        )
+                        db.add(metric)
+                        stored += 1
+                db.commit()
+                return stored
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"保存指标到数据库失败: {e}")
+            return 0
+
 
 # 别名，保持向后兼容
 DeviceStatus = CollectionStatus
@@ -291,6 +355,36 @@ class DeviceManager:
                     logger.debug(f"更新设备 {device_name} 状态为 {status.value}")
         except Exception as e:
             logger.warning(f"更新设备状态到数据库失败: {e}")
+
+    def _update_device_metadata_in_db(self, device_name: str, metrics: DeviceMetrics) -> None:
+        """Update device OS/vendor info from collected metrics"""
+        try:
+            from modules.foundation.db_models.device import Device
+            from modules.foundation.db_models.base import _db_manager
+
+            metadata = metrics.metrics.get('system_info', metrics.metrics.get('snmp_info', {}))
+            if not metadata:
+                return
+
+            updates = {}
+            if metadata.get('os'):
+                updates['os_type'] = metadata['os']
+            if metadata.get('os_version'):
+                updates['os_version'] = metadata['os_version']
+            if metadata.get('vendor'):
+                updates['vendor'] = metadata['vendor']
+            if metadata.get('model'):
+                updates['model'] = metadata['model']
+
+            if updates:
+                with _db_manager.session_scope() as session:
+                    device = session.query(Device).filter(Device.name == device_name).first()
+                    if device:
+                        for k, v in updates.items():
+                            setattr(device, k, v)
+                        logger.info(f"Updated metadata for {device_name}: {updates}")
+        except Exception as e:
+            logger.warning(f"Update device metadata failed: {e}")
     
     def get_last_metrics(self, device_name: str) -> Optional[DeviceMetrics]:
         """获取设备最近一次指标"""
@@ -355,7 +449,11 @@ class DeviceManager:
                     
                     # 更新数据库中的设备状态
                     self._update_device_status_in_db(device_name, CollectionStatus.ONLINE)
-                    
+
+                    # Update device metadata if collector returned useful info
+                    if metrics and metrics.status == CollectionStatus.ONLINE and metrics.metrics:
+                        self._update_device_metadata_in_db(device_name, metrics)
+
                     return metrics
                 else:
                     # 协议返回 OFFLINE（采集器创建成功但设备不通）
@@ -1105,18 +1203,27 @@ class DeviceManager:
     async def start_periodic_collect(self, interval: int = 60) -> None:
         """
         启动定时采集任务
-        
+
         Args:
             interval: 采集间隔 (秒)
         """
         self._running = True
-        
+
         while self._running:
             try:
-                await self.collect_all()
+                results = await self.collect_all()
+                # 采集成功后保存到 performance_metrics 表
+                for metrics in results:
+                    if metrics.status == CollectionStatus.ONLINE and metrics.metrics:
+                        try:
+                            saved = metrics.save_to_db()
+                            if saved > 0:
+                                logger.info(f"保存 {metrics.device_name} 的 {saved} 条指标到数据库 (timestamp={metrics.timestamp})")
+                        except Exception as e:
+                            logger.warning(f"保存指标失败: {e}")
             except Exception as e:
                 logger.error(f"定时采集失败: {e}")
-            
+
             await asyncio.sleep(interval)
     
     def stop(self) -> None:

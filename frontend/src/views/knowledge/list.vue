@@ -171,11 +171,15 @@ const statusOptionsForForm = [
 // Categories loaded from API
 const categoryOptions = ref([])
 
-const pagination = reactive({
+const pagination = {
   page: 1,
   pageSize: 10,
-  total: 0
-})
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 
 const columns = [
   { title: '序号', type: 'index', width: 60 },

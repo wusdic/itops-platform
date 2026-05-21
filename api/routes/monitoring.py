@@ -412,43 +412,85 @@ async def promql_query(
 
 # ============== 告警接口 ==============
 
+@router.get("/alerts/stats", summary="获取告警统计")
+async def get_alert_stats(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """返回告警统计数据"""
+    try:
+        total = db.query(Alert).count()
+        critical = db.query(Alert).filter(Alert.level.in_([AlertLevel.CRITICAL, AlertLevel.HIGH])).count()
+        warning = db.query(Alert).filter(Alert.level == AlertLevel.MEDIUM).count()
+        info = db.query(Alert).filter(Alert.level.in_([AlertLevel.LOW, AlertLevel.INFO])).count()
+        active = db.query(Alert).filter(Alert.status.in_([AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED])).count()
+        return {
+            'total': total,
+            'critical': critical,
+            'warning': warning,
+            'info': info,
+            'active': active,
+        }
+    except Exception as e:
+        logger.error(f"获取告警统计失败: {e}")
+        return {'total': 0, 'critical': 0, 'warning': 0, 'info': 0, 'active': 0}
+
+
 @router.get("/alerts", summary="获取告警列表")
 async def get_alerts(
     status_filter: Optional[str] = Query(None, alias="status", description="状态过滤"),
     severity: Optional[str] = Query(None, description="严重程度过滤"),
     host: Optional[str] = Query(None, description="主机过滤"),
+    stats_only: Optional[int] = Query(0, description="If 1, return stats only"),
     pagination: PaginationParams = Depends(PaginationParams),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """获取告警列表"""
-    query = db.query(Alert)
-    
+    """Get alert list or aggregate stats.
+    When stats_only=1, returns counts grouped by level and status without pagination.
+    """
+    base_query = db.query(Alert)
+
     if status_filter:
         try:
             status_enum = AlertStatus(status_filter)
-            query = query.filter(Alert.status == status_enum)
+            base_query = base_query.filter(Alert.status == status_enum)
         except ValueError:
             pass
-    
+
     if severity:
         try:
             level_enum = AlertLevel(severity)
-            query = query.filter(Alert.level == level_enum)
+            base_query = base_query.filter(Alert.level == level_enum)
         except ValueError:
             pass
-    
+
     if host:
-        query = query.filter(
+        base_query = base_query.filter(
             or_(
                 Alert.device_name.ilike(f"%{host}%"),
                 Alert.device_ip.ilike(f"%{host}%"),
             )
         )
-    
-    total = query.count()
-    alerts = query.order_by(Alert.occurred_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
-    
+
+    # Return aggregate stats when stats_only=1
+    if stats_only:
+        total = base_query.count()
+        critical_count = base_query.filter(Alert.level.in_([AlertLevel.CRITICAL, AlertLevel.HIGH])).count()
+        warning_count = base_query.filter(Alert.level == AlertLevel.MEDIUM).count()
+        info_count = base_query.filter(Alert.level.in_([AlertLevel.LOW, AlertLevel.INFO])).count()
+        active_count = base_query.filter(Alert.status.in_([AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED])).count()
+        return {
+            "total": total,
+            "critical": critical_count,
+            "warning": warning_count,
+            "info": info_count,
+            "active": active_count,
+        }
+
+    total = base_query.count()
+    alerts = base_query.order_by(Alert.occurred_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
+
     return {
         "items": [_alert_to_dict(a) for a in alerts],
         "total": total,
@@ -659,6 +701,59 @@ class AlertAuditLogResponse(BaseModel):
     reason: Optional[str] = None
     workorder_id: Optional[int] = None
     created_at: datetime
+
+
+@router.get("/audit-logs", summary="获取所有告警审计日志")
+async def get_all_alert_audit_logs(
+    level: Optional[str] = Query(None, description="告警级别"),
+    action: Optional[str] = Query(None, description="操作类型"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取所有告警的审计日志（总表），支持分页"""
+    from modules.foundation.db_models.alert import AlertAuditLog
+
+    query = db.query(AlertAuditLog)
+
+    if level:
+        query = query.filter(AlertAuditLog.alert_key.ilike(f"%{level}%"))
+    if action:
+        query = query.filter(AlertAuditLog.action == action)
+    if keyword:
+        query = query.filter(
+            (AlertAuditLog.alert_key.ilike(f"%{keyword}%"))
+            | (AlertAuditLog.action.ilike(f"%{keyword}%"))
+            | (AlertAuditLog.operator.ilike(f"%{keyword}%"))
+            | (AlertAuditLog.reason.ilike(f"%{keyword}%"))
+        )
+
+    total = query.count()
+    logs = query.order_by(AlertAuditLog.created_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
+
+    return {
+        "items": [
+            {
+                "id": log.id,
+                "alert_id": log.alert_id,
+                "alert_key": log.alert_key,
+                "action": log.action,
+                "operator": log.operator,
+                "operator_ip": log.operator_ip,
+                "field_name": log.field_name,
+                "old_value": log.old_value,
+                "new_value": log.new_value,
+                "reason": log.reason,
+                "workorder_id": log.workorder_id,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in logs
+        ],
+        "total": total,
+        "page": pagination.page,
+        "page_size": pagination.page_size,
+    }
 
 
 @router.get("/alerts/{alert_id}/audit-logs", summary="获取告警审计日志")

@@ -476,6 +476,43 @@ async def get_report_stats(
     }
 
 
+@router.get("/list", summary="获取报表列表")
+async def get_reports_list(
+    report_type: Optional[str] = Query(None, description="报表类型过滤"),
+    status: Optional[str] = Query(None, description="状态过滤"),
+    start_date: Optional[datetime] = Query(None, description="开始日期"),
+    end_date: Optional[datetime] = Query(None, description="结束日期"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取报表列表"""
+    query = db.query(Report)
+    
+    if report_type:
+        template_type = _map_template_type(report_type)
+        query = query.filter(Report.template_type == template_type)
+    
+    if status:
+        query = query.filter(Report.status == status)
+    
+    if start_date:
+        query = query.filter(Report.start_date >= start_date)
+    
+    if end_date:
+        query = query.filter(Report.end_date <= end_date)
+    
+    total = query.count()
+    reports = query.order_by(Report.created_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
+    
+    return {
+        "items": [_report_to_dict(r) for r in reports],
+        "total": total,
+        "page": pagination.page,
+        "page_size": pagination.page_size,
+    }
+
+
 @router.get("/{report_id}", summary="获取报表详情")
 async def get_report(
     report_id: int,

@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <n-card title="指标评估" :bordered="false">
+    <n-card title="任务调度" :bordered="false">
       <n-tabs type="line" animated>
         <n-tab-pane name="evaluate" tab="指标评估">
           <n-form :model="form" label-placement="left" label-width="100" style="max-width: 600px; margin-top: 16px;">
@@ -38,7 +38,7 @@
           </n-card>
         </n-tab-pane>
 
-        <n-tab-pane name="history" tab="评估历史">
+        <n-tab-pane name="history" tab="历史记录">
           <n-space style="margin-bottom: 12px">
             <n-button quaternary @click="loadHistory" :loading="historyLoading">
               <template #icon><n-icon><RefreshOutline /></n-icon></template>
@@ -72,6 +72,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, h } from 'vue'
+import { useRoute } from 'vue-router'
 import { NCard, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSelect, NSpace, NTag, NIcon, NSpin, NTabs, NTabPane, NDescriptions, NDescriptionsItem, NDivider, useMessage } from 'naive-ui'
 import { RefreshOutline, SearchOutline } from '@vicons/ionicons5'
 
@@ -90,7 +91,15 @@ const snapshotDetail = ref('')
 const currentExecutionId = ref(null)
 
 const form = reactive({ device_id: null, metric_name: null, threshold: '' })
-const historyPagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const historyPagination = {
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { historyPagination.page = page; loadHistory(); },
+  onUpdatePageSize: (size) => { historyPagination.pageSize = size; historyPagination.page = 1; loadHistory(); }
+}
 
 const historyColumns = [
   { title: '执行ID', key: 'execution_id', width: 120 },
@@ -252,6 +261,8 @@ function resetForm() {
   evalResultDetail.value = ''
   metricOptions.value = []
 }
+
+const route = useRoute()
 
 onMounted(() => {
   loadDevices()

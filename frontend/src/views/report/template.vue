@@ -3,14 +3,14 @@
     <!-- Header -->
     <div class="header-section">
       <div class="header-title">
-        <h2>Report Templates</h2>
-        <p class="header-desc">Manage and configure report templates for automated generation</p>
+        <h2>报表模板</h2>
+        <p class="header-desc">管理和配置报表模板以实现自动化生成</p>
       </div>
       <n-button type="primary" @click="handleCreate">
         <template #icon>
           <n-icon><AddOutline /></n-icon>
         </template>
-        Create Template
+        创建模板
       </n-button>
     </div>
 
@@ -31,18 +31,18 @@
           </div>
           
           <div class="template-description">
-            {{ template.description || 'No description provided' }}
+            {{ template.description || '暂无描述' }}
           </div>
           
           <div class="template-meta">
             <div class="meta-item">
-              <span class="meta-label">Fields:</span>
+              <span class="meta-label">字段数:</span>
               <span class="meta-value">{{ template.fields?.length || 0 }}</span>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Status:</span>
+              <span class="meta-label">状态:</span>
               <n-tag :type="template.active ? 'success' : 'default'" size="small">
-                {{ template.active ? 'Active' : 'Inactive' }}
+                {{ template.active ? '启用' : '禁用' }}
               </n-tag>
             </div>
           </div>
@@ -52,13 +52,13 @@
               <template #icon>
                 <n-icon><CreateOutline /></n-icon>
               </template>
-              Edit
+              编辑
             </n-button>
             <n-button size="small" type="error" @click="handleDelete(template)">
               <template #icon>
                 <n-icon><TrashOutline /></n-icon>
               </template>
-              Delete
+              删除
             </n-button>
           </div>
         </n-card>
@@ -66,9 +66,9 @@
     </n-grid>
 
     <!-- Empty State -->
-    <n-empty v-else description="No templates found" class="empty-state">
+    <n-empty v-else description="暂无模板" class="empty-state">
       <template #extra>
-        <n-button size="small" @click="handleCreate">Create your first template</n-button>
+        <n-button size="small" @click="handleCreate">创建第一个模板</n-button>
       </template>
     </n-empty>
 
@@ -76,7 +76,7 @@
     <n-modal
       v-model:show="modal.show"
       preset="card"
-      :title="modal.isEdit ? 'Edit Template' : 'Create Template'"
+      :title="modal.isEdit ? '编辑模板' : '创建模板'"
       :style="{ width: '600px' }"
       :segmented="{ content: true, footer: true }"
     >
@@ -86,50 +86,50 @@
         :rules="formRules"
         label-placement="top"
       >
-        <n-form-item label="Template Name" path="name">
+        <n-form-item label="模板名称" path="name">
           <n-input
             v-model:value="formData.name"
-            placeholder="Enter template name"
+            placeholder="请输入模板名称"
           />
         </n-form-item>
 
-        <n-form-item label="Report Type" path="type">
+        <n-form-item label="报表类型" path="type">
           <n-select
             v-model:value="formData.type"
             :options="typeOptions"
-            placeholder="Select report type"
+            placeholder="请选择报表类型"
           />
         </n-form-item>
 
-        <n-form-item label="Description" path="description">
+        <n-form-item label="描述" path="description">
           <n-input
             v-model:value="formData.description"
             type="textarea"
-            placeholder="Enter template description"
+            placeholder="请输入模板描述"
             :rows="3"
           />
         </n-form-item>
 
-        <n-form-item label="Template Content" path="content">
+        <n-form-item label="模板内容" path="content">
           <n-input
             v-model:value="formData.content"
             type="textarea"
-            placeholder="Enter HTML template content with placeholders like {{device_name}}, {{metric_value}}"
+            placeholder="请输入HTML模板内容，占位符如 {{device_name}}, {{metric_value}}"
             :rows="8"
             monospaced
           />
         </n-form-item>
 
-        <n-form-item label="Active Status">
+        <n-form-item label="启用状态">
           <n-switch v-model:value="formData.active" />
         </n-form-item>
       </n-form>
 
       <template #footer>
         <n-space justify="end">
-          <n-button @click="modal.show = false">Cancel</n-button>
+          <n-button @click="modal.show = false">取消</n-button>
           <n-button type="primary" @click="handleSubmit" :loading="modal.loading">
-            {{ modal.isEdit ? 'Update' : 'Create' }}
+            {{ modal.isEdit ? '更新' : '创建' }}
           </n-button>
         </n-space>
       </template>
@@ -139,10 +139,10 @@
     <n-modal
       v-model:show="deleteModal.show"
       preset="dialog"
-      title="Confirm Delete"
+      title="确认删除"
       :content="deleteModal.message"
-      positive-text="Delete"
-      negative-text="Cancel"
+      positive-text="删除"
+      negative-text="取消"
       type="error"
       @positive-click="handleConfirmDelete"
       @negative-click="deleteModal.show = false"
@@ -191,19 +191,19 @@ const formData = reactive({
 
 // Form rules
 const formRules = {
-  name: { required: true, message: 'Please enter template name', trigger: 'blur' },
-  type: { required: true, type: 'string', message: 'Please select report type', trigger: 'change' },
-  content: { required: true, message: 'Please enter template content', trigger: 'blur' }
+  name: { required: true, message: '请输入模板名称', trigger: 'blur' },
+  type: { required: true, type: 'string', message: '请选择报表类型', trigger: 'change' },
+  content: { required: true, message: '请输入模板内容', trigger: 'blur' }
 }
 
 // Type options
 const typeOptions = [
-  { label: 'Daily Report', value: 'daily' },
-  { label: 'Weekly Report', value: 'weekly' },
-  { label: 'Monthly Report', value: 'monthly' },
-  { label: 'Quarterly Report', value: 'quarterly' },
-  { label: 'Annual Report', value: 'annual' },
-  { label: 'Custom Report', value: 'custom' }
+  { label: '日报', value: 'daily' },
+  { label: '周报', value: 'weekly' },
+  { label: '月报', value: 'monthly' },
+  { label: '季报', value: 'quarterly' },
+  { label: '年报', value: 'annual' },
+  { label: '自定义报表', value: 'custom' }
 ]
 
 // Helper functions
@@ -221,12 +221,12 @@ function getTypeColor(type) {
 
 function formatType(type) {
   const labels = {
-    daily: 'Daily',
-    weekly: 'Weekly',
-    monthly: 'Monthly',
-    quarterly: 'Quarterly',
-    annual: 'Annual',
-    custom: 'Custom'
+    daily: '日报',
+    weekly: '周报',
+    monthly: '月报',
+    quarterly: '季报',
+    annual: '年报',
+    custom: '自定义'
   }
   return labels[type] || type
 }
@@ -259,7 +259,7 @@ async function fetchTemplates() {
     templateList.value = data.items || data || []
   } catch (error) {
     console.error('Failed to fetch templates:', error)
-    message.error('Failed to load templates')
+    message.error('加载模板失败')
     templateList.value = []
   } finally {
     loading.value = false
@@ -275,14 +275,14 @@ async function createTemplate() {
     })
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     const data = await response.json()
-    message.success('Template created successfully')
+    message.success('模板创建成功')
     modal.show = false
     resetForm()
     fetchTemplates()
     return data
   } catch (error) {
     console.error('Failed to create template:', error)
-    message.error('Failed to create template')
+    message.error('创建模板失败')
     throw error
   }
 }
@@ -296,14 +296,14 @@ async function updateTemplate() {
     })
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     const data = await response.json()
-    message.success('Template updated successfully')
+    message.success('模板更新成功')
     modal.show = false
     resetForm()
     fetchTemplates()
     return data
   } catch (error) {
     console.error('Failed to update template:', error)
-    message.error('Failed to update template')
+    message.error('更新模板失败')
     throw error
   }
 }
@@ -315,11 +315,11 @@ async function deleteTemplate(id) {
       headers: getHeaders()
     })
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    message.success('Template deleted successfully')
+    message.success('模板删除成功')
     fetchTemplates()
   } catch (error) {
     console.error('Failed to delete template:', error)
-    message.error('Failed to delete template')
+    message.error('删除模板失败')
   }
 }
 
@@ -344,7 +344,7 @@ function handleEdit(template) {
 
 function handleDelete(template) {
   deleteModal.templateId = template.id
-  deleteModal.message = `Are you sure you want to delete template "${template.name}"? This action cannot be undone.`
+  deleteModal.message = `确定要删除模板"${template.name}"吗？此操作无法撤销。`
   deleteModal.show = true
 }
 

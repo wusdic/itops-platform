@@ -3,21 +3,21 @@
     <n-card class="main-card">
       <div class="card-header">
         <div class="header-info">
-          <h2>Generate New Report</h2>
-          <p>Create customized reports with your preferred settings and filters</p>
+          <h2>生成新报表</h2>
+          <p>通过您喜欢的设置和过滤器创建自定义报表</p>
         </div>
       </div>
 
       <n-tabs type="line" animated>
         <!-- Basic Settings Tab -->
-        <n-tab-pane name="basic" tab="Basic Settings">
+        <n-tab-pane name="basic" tab="基础设置">
           <div class="tab-content">
             <n-grid :cols="2" :x-gap="24">
               <!-- Left Column - Report Configuration -->
               <n-gi>
-                <n-card title="Report Configuration" class="config-card">
+                <n-card title="报表配置" class="config-card">
                   <!-- Report Type Selector -->
-                  <n-form-item label="Report Type" required>
+                  <n-form-item label="报表类型" required>
                     <n-grid :cols="3" :x-gap="12" :y-gap="12">
                       <n-gi v-for="type in reportTypes" :key="type.value">
                         <div
@@ -36,18 +36,18 @@
                   </n-form-item>
 
                   <!-- Template Selector -->
-                  <n-form-item label="Report Template" required>
+                  <n-form-item label="报表模板" required>
                     <n-select
                       v-model:value="formData.template_id"
                       :options="templateOptions"
-                      placeholder="Select a template"
+                      placeholder="选择模板"
                       filterable
                       :loading="templatesLoading"
                     />
                   </n-form-item>
 
                   <!-- Output Format Selector -->
-                  <n-form-item label="Output Format" required>
+                  <n-form-item label="输出格式" required>
                     <n-space vertical :size="12">
                       <n-grid :cols="3" :x-gap="12">
                         <n-gi v-for="format in outputFormats" :key="format.value">
@@ -70,9 +70,9 @@
 
               <!-- Right Column - Date & Filters -->
               <n-gi>
-                <n-card title="Date Range & Filters" class="config-card">
+                <n-card title="日期范围和过滤器" class="config-card">
                   <!-- Date Range Picker -->
-                  <n-form-item label="Date Range" required>
+                  <n-form-item label="日期范围" required>
                     <n-date-picker
                       v-model:value="formData.date_range"
                       type="daterange"
@@ -83,7 +83,7 @@
                   </n-form-item>
 
                   <!-- Quick Date Presets -->
-                  <n-form-item label="Quick Select">
+                  <n-form-item label="快速选择">
                     <n-space :size="8">
                       <n-button
                         v-for="preset in datePresets"
@@ -97,22 +97,22 @@
                   </n-form-item>
 
                   <!-- Device Group Filter -->
-                  <n-form-item label="Device Group">
+                  <n-form-item label="设备分组">
                     <n-select
                       v-model:value="formData.device_group"
                       :options="deviceGroupOptions"
-                      placeholder="All device groups"
+                      placeholder="所有设备分组"
                       clearable
                       multiple
                     />
                   </n-form-item>
 
                   <!-- Alert Level Filter -->
-                  <n-form-item label="Alert Level">
+                  <n-form-item label="告警级别">
                     <n-select
                       v-model:value="formData.alert_level"
                       :options="alertLevelOptions"
-                      placeholder="All alert levels"
+                      placeholder="所有告警级别"
                       clearable
                       multiple
                     />
@@ -122,18 +122,18 @@
             </n-grid>
 
             <!-- Report Name -->
-            <n-card title="Report Details" class="details-card">
-              <n-form-item label="Report Name" required>
+            <n-card title="报表详情" class="details-card">
+              <n-form-item label="报表名称" required>
                 <n-input
                   v-model:value="formData.name"
-                  placeholder="Enter a name for this report"
+                  placeholder="输入报表名称"
                 />
               </n-form-item>
-              <n-form-item label="Description">
+              <n-form-item label="描述">
                 <n-input
                   v-model:value="formData.description"
                   type="textarea"
-                  placeholder="Optional description for this report"
+                  placeholder="报表描述（可选）"
                   :rows="2"
                 />
               </n-form-item>
@@ -142,16 +142,16 @@
         </n-tab-pane>
 
         <!-- Preview Tab -->
-        <n-tab-pane name="preview" tab="Preview">
+        <n-tab-pane name="preview" tab="预览">
           <div class="tab-content">
-            <n-card title="Report Preview" class="preview-card">
+            <n-card title="报表预览" class="preview-card">
               <template #header-extra>
                 <n-space>
                   <n-button @click="refreshPreview" :loading="previewLoading">
                     <template #icon>
                       <n-icon><RefreshOutline /></n-icon>
                     </template>
-                    Refresh
+                    刷新
                   </n-button>
                 </n-space>
               </template>
@@ -159,7 +159,7 @@
               <n-spin :show="previewLoading">
                 <div class="preview-container">
                   <div v-if="previewContent" class="preview-content" v-html="previewContent"></div>
-                  <n-empty v-else description="Configure settings and click Generate Preview to see a preview" />
+                  <n-empty v-else description="配置设置后点击生成预览查看预览" />
                 </div>
               </n-spin>
             </n-card>
@@ -170,19 +170,19 @@
       <!-- Action Buttons -->
       <div class="action-bar">
         <n-space justify="space-between" align="center">
-          <n-button @click="handleReset">Reset Form</n-button>
+          <n-button @click="handleReset">重置表单</n-button>
           <n-space>
             <n-button @click="handleSaveTemplate" :loading="saving">
               <template #icon>
                 <n-icon><DocumentTextOutline /></n-icon>
               </template>
-              Save as Template
+              保存为模板
             </n-button>
             <n-button @click="handleGenerate" type="primary" :loading="generating">
               <template #icon>
                 <n-icon><PlayOutline /></n-icon>
               </template>
-              Generate Report
+              生成报表
             </n-button>
           </n-space>
         </n-space>
@@ -193,27 +193,27 @@
     <n-modal
       v-model:show="saveTemplateModal.show"
       preset="card"
-      title="Save as Template"
+      title="保存为模板"
       :style="{ width: '450px' }"
     >
       <n-form :model="saveTemplateForm" label-placement="top">
-        <n-form-item label="Template Name" required>
-          <n-input v-model:value="saveTemplateForm.name" placeholder="Enter template name" />
+        <n-form-item label="模板名称" required>
+          <n-input v-model:value="saveTemplateForm.name" placeholder="输入模板名称" />
         </n-form-item>
-        <n-form-item label="Description">
+        <n-form-item label="描述">
           <n-input
             v-model:value="saveTemplateForm.description"
             type="textarea"
-            placeholder="Optional description"
+            placeholder="模板描述（可选）"
             :rows="2"
           />
         </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="saveTemplateModal.show = false">Cancel</n-button>
+          <n-button @click="saveTemplateModal.show = false">取消</n-button>
           <n-button type="primary" @click="confirmSaveTemplate" :loading="savingTemplate">
-            Save
+            保存
           </n-button>
         </n-space>
       </template>
@@ -223,7 +223,7 @@
     <n-modal
       v-model:show="progressModal.show"
       preset="card"
-      title="Generating Report"
+      title="正在生成报表"
       :closable="false"
       :mask-closable="false"
     >
@@ -293,7 +293,7 @@ const progressModal = reactive({
   percentage: 0,
   status: 'success',
   processing: true,
-  message: 'Preparing report generation...'
+  message: '正在准备报表生成...'
 })
 
 // Preview content
@@ -312,56 +312,56 @@ const templateOptions = computed(() => {
 
 // Device group options
 const deviceGroupOptions = [
-  { label: 'Production Servers', value: 'prod_servers' },
-  { label: 'Development Servers', value: 'dev_servers' },
-  { label: 'Database Servers', value: 'db_servers' },
-  { label: 'Network Devices', value: 'network' },
-  { label: 'Storage Systems', value: 'storage' }
+  { label: '生产服务器', value: 'prod_servers' },
+  { label: '开发服务器', value: 'dev_servers' },
+  { label: '数据库服务器', value: 'db_servers' },
+  { label: '网络设备', value: 'network' },
+  { label: '存储系统', value: 'storage' }
 ]
 
 // Alert level options
 const alertLevelOptions = [
-  { label: 'Critical', value: 'critical' },
-  { label: 'Warning', value: 'warning' },
-  { label: 'Info', value: 'info' }
+  { label: '严重', value: 'critical' },
+  { label: '警告', value: 'warning' },
+  { label: '提示', value: 'info' }
 ]
 
 // Report types configuration
 const reportTypes = [
   {
     value: 'daily',
-    label: 'Daily',
-    description: '24-hour summary',
+    label: '日报',
+    description: '24小时汇总',
     icon: 'DailyOutline'
   },
   {
     value: 'weekly',
-    label: 'Weekly',
-    description: '7-day summary',
+    label: '周报',
+    description: '7天汇总',
     icon: 'WeeklyOutline'
   },
   {
     value: 'monthly',
-    label: 'Monthly',
-    description: '30-day summary',
+    label: '月报',
+    description: '30天汇总',
     icon: 'MonthlyOutline'
   },
   {
     value: 'quarterly',
-    label: 'Quarterly',
-    description: '90-day summary',
+    label: '季报',
+    description: '90天汇总',
     icon: 'QuarterlyOutline'
   },
   {
     value: 'annual',
-    label: 'Annual',
-    description: 'Yearly summary',
+    label: '年报',
+    description: '年度汇总',
     icon: 'AnnualOutline'
   },
   {
     value: 'custom',
-    label: 'Custom',
-    description: 'Custom date range',
+    label: '自定义',
+    description: '自定义日期范围',
     icon: 'CustomOutline'
   }
 ]
@@ -375,12 +375,12 @@ const outputFormats = [
 
 // Date presets
 const datePresets = [
-  { label: 'Today', getValue: () => { const now = new Date(); return [now, now] } },
-  { label: 'Yesterday', getValue: () => { const y = new Date(); y.setDate(y.getDate() - 1); return [y, y] } },
-  { label: 'Last 7 Days', getValue: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 6); return [s, e] } },
-  { label: 'Last 30 Days', getValue: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 29); return [s, e] } },
-  { label: 'This Month', getValue: () => { const now = new Date(); return [new Date(now.getFullYear(), now.getMonth(), 1), now] } },
-  { label: 'Last Month', getValue: () => { const now = new Date(); const s = new Date(now.getFullYear(), now.getMonth() - 1, 1); const e = new Date(now.getFullYear(), now.getMonth(), 0); return [s, e] } }
+  { label: '今天', getValue: () => { const now = new Date(); return [now, now] } },
+  { label: '昨天', getValue: () => { const y = new Date(); y.setDate(y.getDate() - 1); return [y, y] } },
+  { label: '最近7天', getValue: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 6); return [s, e] } },
+  { label: '最近30天', getValue: () => { const e = new Date(); const s = new Date(); s.setDate(s.getDate() - 29); return [s, e] } },
+  { label: '本月', getValue: () => { const now = new Date(); return [new Date(now.getFullYear(), now.getMonth(), 1), now] } },
+  { label: '上月', getValue: () => { const now = new Date(); const s = new Date(now.getFullYear(), now.getMonth() - 1, 1); const e = new Date(now.getFullYear(), now.getMonth(), 0); return [s, e] } }
 ]
 
 // Helper functions
@@ -400,23 +400,23 @@ function applyDatePreset(preset) {
 
 function validateForm() {
   if (!formData.name?.trim()) {
-    message.error('Please enter a report name')
+    message.error('请输入报表名称')
     return false
   }
   if (!formData.type) {
-    message.error('Please select a report type')
+    message.error('请选择报表类型')
     return false
   }
   if (!formData.template_id) {
-    message.error('Please select a template')
+    message.error('请选择报表模板')
     return false
   }
   if (!formData.format) {
-    message.error('Please select an output format')
+    message.error('请选择输出格式')
     return false
   }
   if (!formData.date_range || !formData.date_range[0] || !formData.date_range[1]) {
-    message.error('Please select a date range')
+    message.error('请选择日期范围')
     return false
   }
   return true
@@ -435,7 +435,7 @@ async function fetchTemplates() {
     templateList.value = data.items || data || []
   } catch (error) {
     console.error('Failed to fetch templates:', error)
-    message.error('Failed to load templates')
+    message.error('加载模板失败')
     templateList.value = []
   } finally {
     templatesLoading.value = false
@@ -444,7 +444,7 @@ async function fetchTemplates() {
 
 async function fetchPreview() {
   if (!formData.template_id) {
-    message.warning('Please select a template first')
+    message.warning('请先选择模板')
     return
   }
   
@@ -467,10 +467,10 @@ async function fetchPreview() {
     
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     const data = await response.json()
-    previewContent.value = data.content || data.html || '<p>Preview not available</p>'
+    previewContent.value = data.content || data.html || '<p>预览不可用</p>'
   } catch (error) {
     console.error('Failed to fetch preview:', error)
-    message.error('Failed to load preview')
+    message.error('加载预览失败')
     previewContent.value = ''
   } finally {
     previewLoading.value = false
@@ -483,7 +483,7 @@ async function generateReport() {
   progressModal.percentage = 0
   progressModal.status = 'success'
   progressModal.processing = true
-  progressModal.message = 'Starting report generation...'
+  progressModal.message = '正在生成报表...'
   
   try {
     // Simulate progress updates
@@ -519,11 +519,11 @@ async function generateReport() {
     
     const data = await response.json()
     progressModal.percentage = 100
-    progressModal.message = 'Report generated successfully!'
+    progressModal.message = '报表生成成功！'
     progressModal.processing = false
     progressModal.status = 'success'
     
-    message.success('Report generated successfully')
+    message.success('报表生成成功')
     
     setTimeout(() => {
       progressModal.show = false
@@ -535,8 +535,8 @@ async function generateReport() {
     progressModal.percentage = 100
     progressModal.status = 'error'
     progressModal.processing = false
-    progressModal.message = 'Failed to generate report'
-    message.error('Failed to generate report')
+    progressModal.message = '生成报表失败'
+    message.error('生成报表失败')
     throw error
   } finally {
     generating.value = false
@@ -562,14 +562,14 @@ async function saveAsTemplate() {
     
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     
-    message.success('Template saved successfully')
+    message.success('模板保存成功')
     saveTemplateModal.show = false
     saveTemplateForm.name = ''
     saveTemplateForm.description = ''
     fetchTemplates()
   } catch (error) {
     console.error('Failed to save template:', error)
-    message.error('Failed to save template')
+    message.error('保存模板失败')
   } finally {
     savingTemplate.value = false
   }
@@ -578,10 +578,10 @@ async function saveAsTemplate() {
 // Action Handlers
 function handleReset() {
   dialog.warning({
-    title: 'Confirm Reset',
-    content: 'Are you sure you want to reset all form data?',
-    positiveText: 'Reset',
-    negativeText: 'Cancel',
+    title: '确认重置',
+    content: '确定要重置所有表单数据吗？',
+    positiveText: '重置',
+    negativeText: '取消',
     onPositiveClick: () => {
       formData.name = ''
       formData.description = ''
@@ -592,14 +592,14 @@ function handleReset() {
       formData.device_group = null
       formData.alert_level = null
       previewContent.value = ''
-      message.success('Form reset successfully')
+      message.success('表单重置成功')
     }
   })
 }
 
 function handleSaveTemplate() {
   if (!formData.type || !formData.format) {
-    message.warning('Please select report type and format first')
+    message.warning('请先选择报表类型和格式')
     return
   }
   saveTemplateModal.show = true
@@ -607,7 +607,7 @@ function handleSaveTemplate() {
 
 function confirmSaveTemplate() {
   if (!saveTemplateForm.name?.trim()) {
-    message.error('Please enter a template name')
+    message.error('请输入模板名称')
     return
   }
   saveAsTemplate()

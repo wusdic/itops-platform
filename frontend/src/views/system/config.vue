@@ -11,6 +11,10 @@
       </n-space>
     </template>
 
+    <n-alert type="info" :show-icon="true" style="margin-bottom: 16px">
+      <strong>参数配置说明：</strong>系统级配置项，控制平台全局行为。修改前请确认用途，错误配置可能影响系统稳定性。
+    </n-alert>
+
     <n-data-table
       :columns="columns"
       :data="configList"
@@ -23,16 +27,28 @@
 
 <script setup>
 import { ref, reactive, onMounted, h } from 'vue'
-import { useMessage, useDialog, NButton, NIcon } from 'naive-ui'
+import { useMessage, NButton, NIcon, NAlert, NSelect } from 'naive-ui'
 import { RefreshOutline, CreateOutline, CheckmarkOutline, CloseOutline } from '@vicons/ionicons5'
-import { config as configApi } from '@/api'
-import { formatTime } from '@/utils/date'
+import { formatDate } from '@/utils/date'
 
 const message = useMessage()
 const loading = ref(false)
 const configList = ref([])
 
-const pagination = reactive({
+// 常用时区列表
+const TIMEZONE_OPTIONS = [
+  { label: '亚洲/上海 (UTC+8)', value: 'Asia/Shanghai' },
+  { label: '亚洲/东京 (UTC+9)', value: 'Asia/Tokyo' },
+  { label: '亚洲/香港 (UTC+8)', value: 'Asia/Hong_Kong' },
+  { label: '亚洲/新加坡 (UTC+8)', value: 'Asia/Singapore' },
+  { label: '美国/太平洋 (UTC-8)', value: 'America/Los_Angeles' },
+  { label: '美国/东部 (UTC-5)', value: 'America/New_York' },
+  { label: '欧洲/伦敦 (UTC+0)', value: 'Europe/London' },
+  { label: '欧洲/柏林 (UTC+1)', value: 'Europe/Berlin' },
+  { label: 'UTC', value: 'UTC' },
+]
+
+const pagination = {
   page: 1,
   pageSize: 10,
   showSizePicker: true,
@@ -46,7 +62,7 @@ const pagination = reactive({
     pagination.page = 1
     loadData()
   }
-})
+}
 
 const loadData = async () => {
   loading.value = true
@@ -91,10 +107,36 @@ const handleSave = async (row) => {
     row.value = row.editValue
     row.editing = false
     message.success('保存成功')
+
+    // 如果修改的是时区，立即应用到全局
+    if (row.key === 'system.timezone') {
+      const { setTimezone } = await import('@/utils/date')
+      setTimezone(row.value)
+    }
   } catch (error) {
     console.error('Save error:', error)
     message.error('保存失败')
   }
+}
+
+// 根据配置键判断是否有时区选择器
+const isTimezoneKey = (key) => key === 'system.timezone'
+
+// 构建编辑控件（时区用下拉框，普通配置用 input）
+const buildEditControl = (row) => {
+  if (isTimezoneKey(row.key)) {
+    return h(NSelect, {
+      value: row.editValue,
+      options: TIMEZONE_OPTIONS,
+      style: 'width: 260px',
+      onUpdateValue: (val) => { row.editValue = val }
+    })
+  }
+  return h('input', {
+    value: row.editValue,
+    onInput: (e) => { row.editValue = e.target.value },
+    style: 'width: 200px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;'
+  })
 }
 
 const columns = [
@@ -107,17 +149,18 @@ const columns = [
   {
     title: '配置值',
     key: 'value',
-    width: 300,
+    width: 320,
     ellipsis: { tooltip: true },
     render(row) {
       if (!row.editing) {
+        // 时区配置显示中文说明
+        if (isTimezoneKey(row.key)) {
+          const opt = TIMEZONE_OPTIONS.find(o => o.value === row.value)
+          return opt ? opt.label.split(' ')[0] + ' ' + opt.label.split(' ')[1] : row.value
+        }
         return row.value
       }
-      return h('input', {
-        value: row.editValue,
-        onInput: (e) => { row.editValue = e.target.value },
-        style: 'width: 200px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;'
-      })
+      return buildEditControl(row)
     }
   },
   {
@@ -131,7 +174,7 @@ const columns = [
     key: 'updated_at',
     width: 180,
     render(row) {
-      return formatTime(row.updated_at)
+      return formatDate(row.updated_at)
     }
   },
   {
@@ -142,21 +185,21 @@ const columns = [
     render(row) {
       if (!row.editing) {
         return h(
-          nButton,
+          NButton,
           { type: 'primary', size: 'small', onClick: () => handleEdit(row) },
-          { icon: () => h(nIcon, null, { default: () => h(CreateOutline) }), default: () => '编辑' }
+          { icon: () => h(NIcon, null, { default: () => h(CreateOutline) }), default: () => '编辑' }
         )
       }
       return h('div', { style: 'display: flex; gap: 8px;' }, [
         h(
-          nButton,
+          NButton,
           { type: 'primary', size: 'small', onClick: () => handleSave(row) },
-          { icon: () => h(nIcon, null, { default: () => h(CheckmarkOutline) }), default: () => '保存' }
+          { icon: () => h(NIcon, null, { default: () => h(CheckmarkOutline) }), default: () => '保存' }
         ),
         h(
-          nButton,
+          NButton,
           { type: 'info', size: 'small', onClick: () => handleCancel(row) },
-          { icon: () => h(nIcon, null, { default: () => h(CloseOutline) }), default: () => '取消' }
+          { icon: () => h(NIcon, null, { default: () => h(CloseOutline) }), default: () => '取消' }
         )
       ])
     }

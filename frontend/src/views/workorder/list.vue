@@ -46,7 +46,7 @@
     <!-- 工单列表 -->
     <n-card :bordered="false">
       <template #header>
-        <span>工单列表 <span class="table-count">共 {{ pagination.itemCount }} 条</span></span>
+        <span>工单列表 <span class="table-count">共 {{ pagination.total }} 条</span></span>
       </template>
       <n-data-table
         :columns="columns"
@@ -141,7 +141,15 @@ const filterDevice = ref(null)
 const deviceList = ref([])
 const workorderList = ref([])
 
-const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50] })
+const pagination = {
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 
 const viewModalVisible = ref(false)
 const viewData = ref({})
@@ -281,7 +289,7 @@ async function loadData() {
 
     const res = await workorderApi.getList(params)
     workorderList.value = res.items || res.data?.items || []
-    pagination.itemCount = res.total || res.data?.total || 0
+    pagination.total = res.total || res.data?.total || 0
   } catch (e) {
     console.error('加载工单列表失败:', e)
     message.error(`加载工单列表失败: ${e.message}`)

@@ -209,7 +209,7 @@ def create_app() -> FastAPI:
     
     app.include_router(
         report_router,
-        prefix="/api/v1/report",
+        prefix="/api/v1/reports",
         tags=["报表管理"],
     )
     

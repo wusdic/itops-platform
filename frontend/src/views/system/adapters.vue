@@ -188,7 +188,8 @@
 <script setup>
 import { ref, reactive, onMounted, h } from 'vue'
 import { useMessage, useDialog } from 'naive-ui'
-import { AddOutline, RefreshOutline } from '@vicons/ionicons5'
+import { NTag, NButton } from 'naive-ui'
+import { AddOutline } from '@vicons/ionicons5'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -348,7 +349,7 @@ const adapterColumns = [
         snmp: 'info', ssh: 'success', http: 'warning', mysql: 'error',
         redis: 'info', postgres: 'success', vmware: 'warning', kafka: 'error',
       }
-      return h('n-tag', { type: colors[row.protocol_type] || 'default', size: 'small' },
+      return h(NTag, { type: colors[row.protocol_type] || 'default', size: 'small' },
         { default: () => row.protocol_type.toUpperCase() })
     }
   },
@@ -360,7 +361,7 @@ const adapterColumns = [
     key: 'enabled',
     width: 80,
     render(row) {
-      return h('n-tag', { type: row.enabled ? 'success' : 'default', size: 'small' },
+      return h(NTag, { type: row.enabled ? 'success' : 'default', size: 'small' },
         { default: () => row.enabled ? '启用' : '禁用' })
     }
   },
@@ -370,11 +371,11 @@ const adapterColumns = [
     width: 150,
     fixed: 'right',
     render(row) {
-      return h('n-space', { size: 8 }, {
+      return h(NSpace, { size: 8 }, {
         default: () => [
-          h('n-button', { size: 'small', type: 'primary', onClick: () => editAdapter(row) },
+          h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => editAdapter(row) },
             { default: () => '编辑' }),
-          h('n-button', { size: 'small', type: 'error', onClick: () => deleteAdapter(row) },
+          h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => deleteAdapter(row) },
             { default: () => '删除' }),
         ]
       })
@@ -491,7 +492,7 @@ const protocolColumns = [
         snmp: 'info', ssh: 'success', http: 'warning', mysql: 'error',
         redis: 'info', postgres: 'success', vmware: 'warning',
       }
-      return h('n-tag', { type: colors[row.protocol_type] || 'default', size: 'small' },
+      return h(NTag, { type: colors[row.protocol_type] || 'default', size: 'small' },
         { default: () => row.protocol_type.toUpperCase() })
     }
   },
@@ -553,9 +554,9 @@ const protocolColumns = [
     width: 100,
     render(row) {
       if (!row.adapter_template_id && (!row.overrides || Object.keys(row.overrides).length === 0)) {
-        return h('n-tag', { type: 'default', size: 'small' }, { default: () => '未配置' })
+        return h(NTag, { type: 'default', size: 'small' }, { default: () => '未配置' })
       }
-      return h('n-tag', { type: row.enabled ? 'success' : 'warning', size: 'small' },
+      return h(NTag, { type: row.enabled ? 'success' : 'warning', size: 'small' },
         { default: () => row.enabled ? '已配置' : '已禁用' })
     }
   },

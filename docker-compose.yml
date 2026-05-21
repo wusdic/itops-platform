@@ -21,6 +21,7 @@ services:
       - CONFIG_FILE=/app/config/prod.yaml
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
       - AI_BASE_URL=http://host.docker.internal:11435
       - AI_MODEL=qwen3.5-9b-deepseek-v4-flash-q8_0
       - ITOPS_DB_HOST=itops-mysql
@@ -36,6 +37,7 @@ services:
     volumes:
       - ./config:/app/config:rw
       - ./api:/app/api:rw
+      - ./frontend:/app/frontend:ro
       - ./modules:/app/modules
       - api_logs:/app/logs
       - api_data:/app/data

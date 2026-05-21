@@ -38,6 +38,13 @@ const routes = [
         component: () => import('@/views/monitoring/performance.vue'),
         meta: { title: '性能监控', parent: '监控中心' }
       },
+      // 设备发现
+      {
+        path: 'discovery/scan',
+        name: 'DiscoveryScan',
+        component: () => import('@/views/discovery/scan.vue'),
+        meta: { title: '设备扫描', parent: '监控中心' }
+      },
       // 工单管理
       {
         path: 'workorder/list',
@@ -107,6 +114,12 @@ const routes = [
         name: 'AutomationTask',
         component: () => import('@/views/automation/task.vue'),
         meta: { title: '任务调度', parent: '自动化' }
+      },
+      {
+        path: 'automation/evaluate',
+        name: 'AutomationEvaluate',
+        component: () => import('@/views/automation/task.vue'),
+        meta: { title: '指标评估', parent: '自动化' }
       },
       {
         path: 'automation/execute',

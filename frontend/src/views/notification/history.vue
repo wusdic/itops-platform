@@ -7,52 +7,25 @@
       </div>
       <div class="page-actions">
         <n-button @click="loadData">
-          <template #icon>
-            <n-icon><Refresh /></n-icon>
-          </template>
+          <template #icon><n-icon><Refresh /></n-icon></template>
           刷新
         </n-button>
         <n-button @click="markAllRead">
-          <template #icon>
-            <n-icon><CheckmarkDoneOutline /></n-icon>
-          </template>
+          <template #icon><n-icon><CheckmarkDoneOutline /></n-icon></template>
           全部已读
         </n-button>
       </div>
     </div>
 
-    <!-- 筛选条件 -->
     <n-card class="mb-4">
       <n-space align="center">
-        <n-select
-          v-model:value="filterType"
-          :options="typeOptions"
-          placeholder="按类型筛选"
-          clearable
-          style="width: 150px"
-          @update:value="loadData"
-        />
-        <n-select
-          v-model:value="filterChannel"
-          :options="channelOptions"
-          placeholder="按渠道筛选"
-          clearable
-          style="width: 150px"
-          @update:value="loadData"
-        />
-        <n-select
-          v-model:value="filterRead"
-          :options="readOptions"
-          placeholder="按阅读状态筛选"
-          clearable
-          style="width: 150px"
-          @update:value="loadData"
-        />
+        <n-select v-model:value="filterType" :options="typeOptions" placeholder="按类型筛选" clearable style="width: 150px" @update:value="loadData" />
+        <n-select v-model:value="filterChannel" :options="channelOptions" placeholder="按渠道筛选" clearable style="width: 150px" @update:value="loadData" />
+        <n-select v-model:value="filterRead" :options="readOptions" placeholder="按阅读状态筛选" clearable style="width: 150px" @update:value="loadData" />
         <n-button @click="clearFilters">清除筛选</n-button>
       </n-space>
     </n-card>
 
-    <!-- 消息列表 -->
     <n-card>
       <n-data-table
         :columns="columns"
@@ -65,13 +38,7 @@
       />
     </n-card>
 
-    <!-- 详情弹窗 -->
-    <n-modal
-      v-model:show="detailModalVisible"
-      preset="card"
-      title="消息详情"
-      style="width: 500px"
-    >
+    <n-modal v-model:show="detailModalVisible" preset="card" title="消息详情" style="width: 500px">
       <n-descriptions v-if="currentMessage" label-placement="top" :column="1">
         <n-descriptions-item label="类型">
           <n-tag :type="getTypeColor(currentMessage.type)">{{ currentMessage.type }}</n-tag>
@@ -80,9 +47,7 @@
         <n-descriptions-item label="标题">{{ currentMessage.title }}</n-descriptions-item>
         <n-descriptions-item label="内容">{{ currentMessage.content }}</n-descriptions-item>
         <n-descriptions-item label="状态">
-          <n-tag :type="currentMessage.read ? 'success' : 'warning'">
-            {{ currentMessage.read ? '已读' : '未读' }}
-          </n-tag>
+          <n-tag :type="currentMessage.read ? 'success' : 'warning'">{{ currentMessage.read ? '已读' : '未读' }}</n-tag>
         </n-descriptions-item>
         <n-descriptions-item label="时间">{{ currentMessage.created_at }}</n-descriptions-item>
       </n-descriptions>
@@ -97,10 +62,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, h } from 'vue'
 import { NIcon } from 'naive-ui'
 import { Refresh, CheckmarkDoneOutline } from '@vicons/ionicons5'
+import { useMessage, NTag, NButton, NButtonGroup, NDescriptions, NDescriptionsItem } from 'naive-ui'
 
+const message = useMessage()
 const loading = ref(false)
 const list = ref([])
 const filterType = ref(null)
@@ -127,11 +94,15 @@ const readOptions = [
   { label: '未读', value: false }
 ]
 
-const pagination = reactive({
+const pagination = {
   page: 1,
   pageSize: 10,
-  total: 0
-})
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 
 const columns = [
   { title: '序号', type: 'index', width: 60 },
@@ -139,9 +110,7 @@ const columns = [
     render: (row) => h(NTag, { type: getTypeColor(row.type), size: 'small' }, () => row.type)
   },
   { title: '渠道', key: 'channel', width: 100 },
-  { title: '标题', key: 'title', width: 200,
-    ellipsis: { tooltip: true }
-  },
+  { title: '标题', key: 'title', width: 200, ellipsis: { tooltip: true } },
   { title: '内容', key: 'content', ellipsis: { tooltip: true } },
   { title: '状态', key: 'read', width: 100,
     render: (row) => h(NTag, { type: row.read ? 'success' : 'warning', size: 'small' }, () => row.read ? '已读' : '未读')
@@ -155,22 +124,16 @@ const columns = [
   }
 ]
 
-onMounted(() => {
-  loadData()
-})
+onMounted(() => { loadData() })
 
 const loadData = async () => {
   loading.value = true
   try {
     const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({
-      page: pagination.page,
-      page_size: pagination.pageSize
-    })
+    const params = new URLSearchParams({ page: pagination.page, page_size: pagination.pageSize })
     if (filterType.value) params.append('type', filterType.value)
     if (filterChannel.value) params.append('channel', filterChannel.value)
     if (filterRead.value !== null) params.append('read', filterRead.value)
-    
     const res = await fetch(`/api/v1/notifications/history?${params}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -188,21 +151,9 @@ const loadData = async () => {
   }
 }
 
-const handlePageChange = (page) => {
-  pagination.page = page
-  loadData()
-}
-
-const handlePageSizeChange = (pageSize) => {
-  pagination.pageSize = pageSize
-  pagination.page = 1
-  loadData()
-}
-
-const showDetail = (row) => {
-  currentMessage.value = row
-  detailModalVisible.value = true
-}
+const handlePageChange = (page) => { pagination.page = page; loadData() }
+const handlePageSizeChange = (pageSize) => { pagination.pageSize = pageSize; pagination.page = 1; loadData() }
+const showDetail = (row) => { currentMessage.value = row; detailModalVisible.value = true }
 
 const markAsRead = async () => {
   if (!currentMessage.value) return
@@ -218,7 +169,6 @@ const markAsRead = async () => {
     detailModalVisible.value = false
   } catch (e) {
     message.error(`标记失败: ${e.message}`)
-    console.error('[notification/history] markAsRead error:', e)
   }
 }
 
@@ -226,8 +176,7 @@ const toggleRead = async (row) => {
   try {
     const token = localStorage.getItem('token') || ''
     const method = row.read ? 'DELETE' : 'PUT'
-    const url = `/api/v1/notifications/history/${row.id}/read`
-    const res = await fetch(url, {
+    const res = await fetch(`/api/v1/notifications/history/${row.id}/read`, {
       method,
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -235,7 +184,6 @@ const toggleRead = async (row) => {
     loadData()
   } catch (e) {
     message.error(`操作失败: ${e.message}`)
-    console.error('[notification/history] toggleRead error:', e)
   }
 }
 
@@ -251,34 +199,18 @@ const markAllRead = async () => {
     loadData()
   } catch (e) {
     message.error(`操作失败: ${e.message}`)
-    console.error('[notification/history] markAllRead error:', e)
   }
 }
 
-const clearFilters = () => {
-  filterType.value = null
-  filterChannel.value = null
-  filterRead.value = null
-  loadData()
-}
-
-const getTypeColor = (type) => {
-  const colorMap = { alert: 'error', maintenance: 'warning', info: 'info' }
-  return colorMap[type] || 'default'
-}
-</script>
-
-<script>
-import { useMessage, NTag, NButton, NButtonGroup, NDescriptions, NDescriptionsItem } from 'naive-ui'
-export default {
-  components: { NTag, NButton, NButtonGroup, NDescriptions, NDescriptionsItem },
-  setup() {
-    const message = useMessage()
-    return { message }
-  }
-}
+const clearFilters = () => { filterType.value = null; filterChannel.value = null; filterRead.value = null; loadData() }
+const getTypeColor = (type) => ({ alert: 'error', maintenance: 'warning', info: 'info' }[type] || 'default')
 </script>
 
 <style lang="scss" scoped>
+.page-container { padding: 20px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.page-title { font-size: 20px; font-weight: 600; margin: 0; }
+.page-subtitle { font-size: 14px; color: #666; margin: 4px 0 0 0; }
+.page-actions { display: flex; gap: 8px; }
 .mb-4 { margin-bottom: 16px; }
 </style>

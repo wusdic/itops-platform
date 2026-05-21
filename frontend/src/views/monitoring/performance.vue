@@ -39,7 +39,7 @@
     </n-card>
 
     <!-- 性能概览 -->
-    <div v-if="selectedDeviceId" class="stats-grid stats-grid-4">
+    <div v-if="selectedDeviceId" class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon" style="background: #e8f0ff">
           <n-icon size="24" color="#165dff"><HardwareChipOutline /></n-icon>
@@ -53,7 +53,7 @@
       </div>
       <div class="stat-card">
         <div class="stat-icon" style="background: #e8ffea">
-          <n-icon size="24" color="#00b42a"><Tickets /></n-icon>
+          <n-icon size="24" color="#00b42a"><TicketOutline /></n-icon>
         </div>
         <div class="stat-content">
           <div class="stat-value" :class="{ loading: loading }">
@@ -120,6 +120,7 @@ import * as echarts from 'echarts'
 import {
   HardwareChipOutline, FolderOpenOutline, CloudOutline, Refresh, ServerOutline
 } from '@vicons/ionicons5'
+import { formatDate } from '@/utils/date'
 
 const message = useMessage()
 
@@ -169,6 +170,7 @@ onUnmounted(() => {
 })
 
 const loadDevices = async () => {
+  if (loading.value) return
   loading.value = true
   try {
     const token = localStorage.getItem('token') || ''
@@ -185,10 +187,8 @@ const loadDevices = async () => {
     const data = await res.json()
     if (!data || typeof data !== 'object') throw new Error('响应格式异常')
     const newDevices = data.items || data.data?.items || []
-    // 去重：基于设备ID过滤
-    const existingIds = new Set(deviceList.value.map(d => d.id))
-    const uniqueDevices = newDevices.filter(d => !existingIds.has(d.id))
-    deviceList.value = [...deviceList.value, ...uniqueDevices]
+    // Replace device list with fresh data
+    deviceList.value = newDevices
     deviceOptions.value = deviceList.value.map(d => ({
       label: `${d.name} (${d.ip_address})`,
       value: d.id
@@ -217,6 +217,7 @@ const handleDeviceChange = (value) => {
 
 const loadMetrics = async () => {
   if (!selectedDeviceId.value) return
+  if (loading.value) return
 
   loading.value = true
   try {
@@ -250,7 +251,7 @@ const loadMetrics = async () => {
     metrics.disk = data.disk ?? 0
     metrics.network = data.network ?? 0
 
-    lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    lastUpdateTime.value = formatDate(new Date(), 'HH:mm:ss')
 
     updateCharts(data)
   } catch (e) {
@@ -348,7 +349,11 @@ const stopRefresh = () => {
 
 <style lang="scss" scoped>
 .mb-4 { margin-bottom: 16px; }
-.stats-grid-4 { grid-template-columns: repeat(4, 1fr); }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
 .performance-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

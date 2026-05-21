@@ -14,7 +14,7 @@
     <n-card title="设备列表" :bordered="false">
       <template #header-extra>
         <n-space :size="12" align="center">
-          <n-input v-model:value="searchKeyword" placeholder="搜索名称/IP" clearable style="width: 200px" @update:value="handleSearch">
+          <n-input v-model:value="searchKeyword" placeholder="搜索名称/IP" clearable style="width: 200px" @keydown.enter="handleSearch" @clear="handleSearchClear">
             <template #prefix>
               <n-icon><Search /></n-icon>
             </template>
@@ -28,10 +28,12 @@
 
       <n-data-table
         :columns="columns"
-        :data="filteredDevices"
+        :data="deviceList"
         :loading="loading"
-        :pagination="pagination"
+        :pagination="getPaginationConfig()"
         :row-key="row => row.id"
+        :remote="true"
+        :key="paginationVersion"
         @row-click="handleRowClick"
       />
     </n-card>
@@ -50,7 +52,7 @@
               <div class="info-grid">
                 <div class="info-item"><span class="label">IP地址:</span> {{ selectedDevice?.ip_address || '-' }}</div>
                 <div class="info-item"><span class="label">操作系统:</span> {{ selectedDevice?.os_type || '-' }} {{ selectedDevice?.os_version || '' }}</div>
-                <div class="info-item"><span class="label">设备类型:</span> {{ selectedDevice?.device_type || '-' }}</div>
+                <div class="info-item"><span class="label">设备类型:</span> {{ selectedDevice?.type || '-' }}</div>
                 <div class="info-item"><span class="label">位置:</span> {{ selectedDevice?.location || '-' }}</div>
                 <div class="info-item">
                   <span class="label">状态:</span>
@@ -59,8 +61,8 @@
                 <div class="info-item"><span class="label">厂商:</span> {{ selectedDevice?.manufacturer || '-' }}</div>
                 <div class="info-item"><span class="label">型号:</span> {{ selectedDevice?.model || '-' }}</div>
                 <div class="info-item"><span class="label">序列号:</span> {{ selectedDevice?.serial_number || '-' }}</div>
-                <div class="info-item"><span class="label">最近采集:</span> {{ selectedDevice?.last_collect_time ? new Date(selectedDevice.last_collect_time).toLocaleString('zh-CN') : '-' }}</div>
-                <div class="info-item"><span class="label">创建时间:</span> {{ selectedDevice?.created_at ? new Date(selectedDevice.created_at).toLocaleString('zh-CN') : '-' }}</div>
+                <div class="info-item"><span class="label">最近采集:</span> {{ selectedDevice?.last_collect_time ? formatDate(new Date(selectedDevice.last_collect_time)) : '-' }}</div>
+                <div class="info-item"><span class="label">创建时间:</span> {{ selectedDevice?.created_at ? formatDate(new Date(selectedDevice.created_at)) : '-' }}</div>
               </div>
             </div>
           </n-tab-pane>
@@ -188,7 +190,45 @@ const dialog = useDialog()
 const loading = ref(false)
 const deviceList = ref([])
 const searchKeyword = ref('')
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
+// 分页状态（纯 JS 对象 + ref + version 触发重渲染）
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+// itemCount 必须是 ref，Naive UI 内部追踪同一个 ref
+const itemCountRef = ref(0)
+const pageCountRef = ref(1)
+// version 用于强制 Naive UI 重新读取 config
+const paginationVersion = ref(0)
+// paginationConfig 是共享的纯 JS 对象，getPaginationConfig() 每次返回同一引用
+const paginationConfig = {
+  page: 1,
+  pageSize: 20,
+  pageCount: 1,
+  itemCount: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (p) => {
+    page.value = p
+    paginationConfig.page = p
+    paginationVersion.value++
+    loadDevices()
+  },
+  onUpdatePageSize: (s) => {
+    pageSize.value = s
+    page.value = 1
+    paginationConfig.pageSize = s
+    paginationConfig.page = 1
+    paginationVersion.value++
+    loadDevices()
+  }
+}
+// getPaginationConfig 返回共享对象的引用，Naive UI 内部 Object.assign 作用在同一引用上
+const getPaginationConfig = () => {
+  paginationVersion.value // 依赖这个 ref 建立响应式连接
+  paginationConfig.itemCount = itemCountRef.value
+  paginationConfig.pageCount = pageCountRef.value
+  return paginationConfig
+}
 
 // 抽屉相关
 const drawerVisible = ref(false)
@@ -300,18 +340,19 @@ const filteredAdapterOptions = computed(() => {
     .map(a => ({ label: a.name, value: a.id }))
 })
 
-// 本地搜索过滤
-const filteredDevices = computed(() => {
-  if (!searchKeyword.value) return deviceList.value
-  const kw = searchKeyword.value.toLowerCase()
-  return deviceList.value.filter(d =>
-    (d.name || '').toLowerCase().includes(kw) ||
-    (d.ip_address || '').toLowerCase().includes(kw)
-  )
-})
+// 设备列表（搜索时由API返回过滤结果）
+const filteredDevices = computed(() => deviceList.value)
 
 const handleSearch = () => {
-  // 搜索在 computed 中实时过滤，无需额外操作
+  // 搜索时重新从第1页加载
+  page.value = 1
+  loadDevices()
+}
+
+// 处理输入框清空（clearable X 按钮）
+const handleSearchClear = () => {
+  page.value = 1
+  loadDevices()
 }
 
 const protocolListColumns = [
@@ -464,13 +505,13 @@ const getRowClassName = ({ row }) => {
 
 const columns = [
   { title: '名称', key: 'name', ellipsis: { tooltip: true }, render: (row) => h('a', { style: 'color: #18a058; cursor: pointer', onClick: () => handleRowClick(row) }, row.name) },
-  { title: 'IP地址', key: 'ip_address', width: 140 },
+  { title: 'IP地址', key: 'ip_address', width: 140, render: (r) => r.ip_address || '-' },
   { title: '系统', key: 'os_type', width: 100, render: (r) => r.os_type || '-' },
-  { title: '系统版本', key: 'os_version', width: 150, ellipsis: { tooltip: true } },
+  { title: '系统版本', key: 'os_version', width: 150, ellipsis: { tooltip: true }, render: (r) => r.os_version || '-' },
   { title: '厂商型号', key: 'manufacturer', width: 160, render: (r) => r.manufacturer ? r.manufacturer + ' ' + (r.model || '') : '-' },
   { title: '状态', key: 'status', width: 90, render: (r) => h(NTag, { type: statusType(r.status), size: 'small' }, () => statusText(r.status)) },
-  { title: '位置', key: 'location', width: 150, ellipsis: { tooltip: true } },
-  { title: '最近采集', key: 'last_collect_time', width: 170, render: (r) => r.last_collect_time ? new Date(r.last_collect_time).toLocaleString('zh-CN') : '-' },
+  { title: '位置', key: 'location', width: 150, ellipsis: { tooltip: true }, render: (r) => r.location || '-' },
+  { title: '最近探测', key: 'last_collect_time', width: 170, render: (r) => r.last_collect_time ? formatDate(new Date(r.last_collect_time)) : '-' },
   {
     title: '操作',
     key: 'actions',
@@ -492,7 +533,7 @@ async function loadDevices() {
 
     // 统计
     try {
-      const statsRes = await fetch('/api/v1/devices/stats', { headers: { Authorization: `Bearer ${token}` } })
+      const statsRes = await fetch('/api/v1/assets/stats', { headers: { Authorization: `Bearer ${token}` } })
       if (statsRes.status === 401) {
         message.warning('登录已过期，请重新登录')
         localStorage.removeItem('token')
@@ -501,10 +542,10 @@ async function loadDevices() {
       }
       if (statsRes.ok) {
         const statsData = await statsRes.json()
-        stats[0].value = statsData.total || 0
-        stats[1].value = statsData.online || 0
-        stats[2].value = statsData.offline || 0
-        stats[3].value = statsData.unknown || 0
+        stats[0].value = statsData.total_devices || 0
+        stats[1].value = statsData.online_devices || 0
+        stats[2].value = statsData.offline_devices || 0
+        stats[3].value = (statsData.total_devices || 0) - (statsData.online_devices || 0) - (statsData.offline_devices || 0) - (statsData.maintenance_devices || 0)
       } else {
         const listRes = await fetch('/api/v1/assets/device?page=1&page_size=100', { headers: { Authorization: `Bearer ${token}` } })
         if (listRes.status === 401) {
@@ -524,7 +565,7 @@ async function loadDevices() {
       }
     } catch { /* ignore */ }
 
-    const res = await fetch(`/api/v1/assets/device?page=${pagination.page}&page_size=${pagination.pageSize}`, {
+    const res = await fetch(`/api/v1/assets/device?page=${page.value}&page_size=${pageSize.value}${searchKeyword.value ? '&keyword=' + encodeURIComponent(searchKeyword.value) : ''}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (res.status === 401) {
@@ -538,7 +579,11 @@ async function loadDevices() {
     if (!data || typeof data !== 'object') throw new Error('响应格式异常')
 
     deviceList.value = data.items || data.data?.items || []
-    pagination.total = data.total || data.data?.total || 0
+    total.value = data.total || data.data?.total || 0
+    paginationConfig.total = total.value
+    itemCountRef.value = total.value
+    pageCountRef.value = Math.max(1, Math.ceil((total.value || 0) / (pageSize.value || 1)))
+    paginationVersion.value++
   } catch (e) {
     message.error(`加载设备列表失败: ${e.message}`)
     deviceList.value = []
@@ -741,16 +786,6 @@ function initCharts(cpuData, memData, diskData) {
 
 // 监听 tab 切换，切换到 metrics 时 resize 图表
 let resizeObserver = null
-
-function handlePageChange(page) {
-  pagination.page = page
-  loadDevices()
-}
-function handlePageSizeChange(pageSize) {
-  pagination.pageSize = pageSize
-  pagination.page = 1
-  loadDevices()
-}
 
 function startPoll() {
   stopPoll()

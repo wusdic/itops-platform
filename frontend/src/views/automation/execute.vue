@@ -9,10 +9,10 @@
       </template>
 
       <n-space style="margin-bottom: 12px">
-        <n-input v-model:value="searchKeyword" placeholder="搜索执行ID或规则名称" clearable style="width: 240px" @change="loadData">
+        <n-input v-model:value="searchKeyword" placeholder="搜索执行ID或规则名称" clearable style="width: 240px" @update:value="loadData">
           <template #prefix><n-icon><SearchOutline /></n-icon></template>
         </n-input>
-        <n-select v-model:value="filterStatus" :options="statusOptions" placeholder="回滚状态" clearable style="width: 140px" @change="loadData" />
+        <n-select v-model:value="filterStatus" :options="statusOptions" placeholder="回滚状态" clearable style="width: 140px" @update:value="loadData" />
       </n-space>
 
       <n-data-table
@@ -86,7 +86,15 @@ const snapshotDialogVisible = ref(false)
 const currentRollback = ref(null)
 const snapshotDetail = ref('')
 
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const pagination = {
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 
 const statusOptions = [
   { label: '全部', value: null },

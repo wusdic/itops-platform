@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <n-card title="触发规则管理" :bordered="false">
+    <n-card title="脚本管理" :bordered="false">
       <template #header-extra>
         <n-button type="primary" @click="handleAdd">
           <template #icon><n-icon><AddOutline /></n-icon></template>
@@ -9,10 +9,10 @@
       </template>
 
       <n-space style="margin-bottom: 12px">
-        <n-input v-model:value="searchKeyword" placeholder="搜索规则名称" clearable style="width: 200px" @change="loadData">
+        <n-input v-model:value="searchKeyword" placeholder="搜索规则名称" clearable style="width: 200px" @update:value="loadData">
           <template #prefix><n-icon><SearchOutline /></n-icon></template>
         </n-input>
-        <n-select v-model:value="filterType" :options="typeOptions" placeholder="规则类型" clearable style="width: 140px" @change="loadData" />
+        <n-select v-model:value="filterType" :options="typeOptions" placeholder="规则类型" clearable style="width: 140px" @update:value="loadData" />
       </n-space>
 
       <n-data-table
@@ -87,7 +87,15 @@ const dialogTitle = ref('新建规则')
 const testResult = ref('')
 const currentTestRule = ref(null)
 
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const pagination = {
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 const form = reactive({ id: null, name: '', type: 'threshold', enabled: true, conditions: '', actions: '', description: '' })
 
 const typeOptions = [

@@ -18,7 +18,7 @@
           :options="readOptions"
           clearable
           style="width: 140px"
-          @change="handleSearch"
+          @update:value="handleSearch"
         />
         <n-button @click="handleMarkAllRead">全部标为已读</n-button>
       </n-space>
@@ -94,6 +94,7 @@ import {
   NDescriptions, NDescriptionsItem
 } from 'naive-ui'
 import { useMessage } from 'naive-ui'
+import { formatDate } from '@/utils/date'
 
 const message = useMessage()
 
@@ -123,7 +124,7 @@ const getTypeText = (type) => {
 
 const formatTime = (time) => {
   if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN')
+  return formatDate(new Date(time))
 }
 
 const fetchApi = async (url, options = {}) => {

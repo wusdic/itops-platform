@@ -130,6 +130,7 @@ import {
   CloudOfflineOutline,
   WarningOutline
 } from '@vicons/ionicons5'
+import { formatDate } from '@/utils/date'
 import { devices, alerts, workorder } from '@/api'
 
 const message = useMessage()
@@ -194,7 +195,7 @@ const alertColumns = [
     width: 160,
     render(row) {
       if (!row.created_at) return '-'
-      return new Date(row.created_at).toLocaleString('zh-CN')
+      return formatDate(new Date(row.created_at))
     }
   }
 ]

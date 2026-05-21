@@ -56,7 +56,7 @@
         :value="activeKey"
         :expanded-keys="expandedKeys"
         :indent="16"
-        @update:value="onMenuSelect"
+        @update:value="(key, item) => onMenuSelect(key, item)"
         @update:expanded-keys="onExpandChange"
       />
     </n-layout-sider>
@@ -102,7 +102,7 @@ import {
   AlertOutline, FlashOutline, TicketOutline,
   BookOutline, SparklesOutline, DocumentText,
   NotificationsOutline, SettingsOutline, MenuOutline,
-  Ticket, TimeOutline
+  TimeOutline
 } from '@vicons/ionicons5'
 import { notification } from '@/api'
 
@@ -137,6 +137,7 @@ const menuOptions = [
     icon: icon(ServerOutline),
     children: [
       { key: '/monitoring/devices', label: '设备监控' },
+      { key: '/discovery/scan', label: '设备扫描' },
       { key: '/monitoring/alerts', label: '告警管理' },
       { key: '/monitoring/performance', label: '性能监控' },
     ]
@@ -158,6 +159,7 @@ const menuOptions = [
     children: [
       { key: '/knowledge/list', label: '知识文档' },
       { key: '/knowledge/category', label: '分类管理' },
+      { key: '/knowledge/cases', label: '故障案例' },
     ]
   },
   {
@@ -165,7 +167,8 @@ const menuOptions = [
     label: 'AI助手',
     icon: icon(SparklesOutline),
     children: [
-      { key: '/ai/copilot', label: '智能问答' },
+      { key: '/ai/chat', label: 'AI 聊天' },
+      { key: '/ai/copilot', label: '知识库问答' },
       { key: '/ai/analyze', label: '智能分析' },
     ]
   },
@@ -176,6 +179,7 @@ const menuOptions = [
     children: [
       { key: '/automation/script', label: '脚本管理' },
       { key: '/automation/task', label: '任务调度' },
+      { key: '/automation/evaluate', label: '指标评估' },
       { key: '/automation/execute', label: '执行记录' },
     ]
   },
@@ -189,11 +193,22 @@ const menuOptions = [
     ]
   },
   {
+    key: 'report',
+    label: '报表管理',
+    icon: icon(DocumentText),
+    children: [
+      { key: '/report/list', label: '报表管理' },
+      { key: '/report/create', label: '生成报表' },
+      { key: '/report/template', label: '模板管理' },
+    ]
+  },
+  {
     key: 'notification',
     label: '消息中心',
     icon: icon(NotificationsOutline),
     children: [
       { key: '/notification/message', label: '我的消息' },
+      { key: '/notification/history', label: '消息历史' },
       { key: '/notification/config', label: '通知配置' },
     ]
   },
@@ -257,8 +272,8 @@ function onUserAction(key) {
       onPositiveClick: () => {
         localStorage.removeItem('token')
         localStorage.removeItem('user')
-        message.success('已退出登录')
-        router.push('/login')
+        // 强跳登录页，不依赖 SPA 路由
+        window.location.href = '/login'
       }
     })
   } else if (key === 'password') {

@@ -1,37 +1,131 @@
 <template>
-  <div class="page-container">
-    <n-card title="AI助手分类" :bordered="false">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon><n-icon><AddOutline /></n-icon></template>
-          新建分类
-        </n-button>
-      </template>
+  <div class="copilot-page">
+    <div class="copilot-layout">
+      <!-- 左侧：知识库分类选择 -->
+      <div class="category-sider">
+        <div class="sider-header">
+          <n-button type="primary" block @click="createCategory" size="small">
+            <template #icon><n-icon><AddOutline /></n-icon></template>
+            新建分类
+          </n-button>
+          <n-input v-model:value="searchText" placeholder="搜索分类" size="small" clearable style="margin-top: 8px">
+            <template #prefix><n-icon><SearchOutline /></n-icon></template>
+          </n-input>
+        </div>
+        <div class="category-list">
+          <div
+            v-for="cat in filteredCategories"
+            :key="cat.id"
+            class="category-item"
+            :class="{ active: selectedCategory?.id === cat.id }"
+            @click="selectCategory(cat)"
+          >
+            <n-icon size="16" color="#18a058"><BookOutline /></n-icon>
+            <div class="cat-info">
+              <div class="cat-name">{{ cat.name }}</div>
+              <div class="cat-meta">{{ cat.description || '暂无描述' }}</div>
+            </div>
+          </div>
+          <n-empty v-if="filteredCategories.length === 0" description="暂无分类" size="small" style="padding: 20px" />
+        </div>
+      </div>
 
-      <n-data-table
-        :columns="columns"
-        :data="categoryList"
-        :loading="loading"
-        :row-key="row => row.id"
-      />
-    </n-card>
+      <!-- 右侧：问答界面 -->
+      <div class="qa-content">
+        <template v-if="selectedCategory">
+          <div class="qa-header">
+            <n-space align="center">
+              <n-icon size="20" color="#18a058"><SparklesOutline /></n-icon>
+              <span style="font-weight: 600; font-size: 15px">{{ selectedCategory.name }} 智能问答</span>
+            </n-space>
+            <n-tag type="success" size="small">{{ filteredKnowledgeCount }} 条知识</n-tag>
+          </div>
 
-    <n-modal v-model:show="dialogVisible" preset="card" :title="dialogTitle" style="width: 500px">
-      <n-form :model="form" label-placement="left" label-width="100">
-        <n-form-item label="分类名称">
-          <n-input v-model:value="form.name" placeholder="请输入分类名称" />
+          <!-- 知识片段列表（可折叠）-->
+          <n-collapse class="knowledge-collapse" v-if="knowledgeItems.length > 0">
+            <n-collapse-item title="查看知识库内容" name="kb">
+              <div class="knowledge-chips">
+                <n-tag v-for="item in knowledgeItems.slice(0, 20)" :key="item.id" size="small" style="margin: 4px">
+                  {{ item.title || item.content?.slice(0, 30) || '条目' + item.id }}
+                </n-tag>
+                <n-tag v-if="knowledgeItems.length > 20" size="small" type="info" style="margin: 4px">
+                  还有 {{ knowledgeItems.length - 20 }} 条...
+                </n-tag>
+              </div>
+            </n-collapse-item>
+          </n-collapse>
+
+          <!-- 问答历史 -->
+          <div class="messages" ref="messagesRef">
+            <template v-for="msg in qaHistory" :key="msg.id">
+              <div class="message message-user">
+                <n-avatar round size="small" :style="{ background: '#2080f0' }">{{ userInitial }}</n-avatar>
+                <div class="bubble bubble-user">{{ msg.question }}</div>
+              </div>
+              <div class="message message-ai">
+                <n-avatar round size="small" :style="{ background: '#18a058' }">AI</n-avatar>
+                <div class="bubble bubble-ai" v-html="renderMarkdown(msg.answer)"></div>
+              </div>
+            </template>
+            <div v-if="loading" class="message message-ai">
+              <n-avatar round size="small" :style="{ background: '#18a058' }">AI</n-avatar>
+              <div class="bubble bubble-ai">
+                <span style="color:#999">正在检索知识库并生成回答<span class="typing-cursor"></span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 输入框 -->
+          <div class="chat-input">
+            <n-input
+              v-model:value="inputText"
+              type="textarea"
+              placeholder="基于当前分类的知识库提问，按 Enter 发送"
+              :autosize="{ minRows: 1, maxRows: 4 }"
+              @keydown="handleKeydown"
+            />
+            <n-button type="primary" :disabled="!inputText.trim() || loading" :loading="loading" @click="askQuestion" circle class="send-btn">
+              <template #icon><n-icon><SendOutline /></n-icon></template>
+            </n-button>
+          </div>
+        </template>
+
+        <!-- 空状态 -->
+        <div v-else class="empty-state">
+          <n-icon size="80" color="#ddd"><SparklesOutline /></n-icon>
+          <p style="color: #999; margin-top: 16px; text-align: center">
+            选择左侧分类，基于知识库进行智能问答
+          </p>
+          <div style="margin-top: 20px; font-size: 13px; color: #666; text-align: center; max-width: 360px; line-height: 1.6;">
+            <p style="margin: 0 0 8px 0; font-weight: 600;">📚 知识库问答说明</p>
+            <ul style="margin: 0; padding-left: 20px; text-align: left;">
+              <li>先在左侧选择或新建知识分类</li>
+              <li>向AI提问，系统将检索该分类下的知识库内容</li>
+              <li>AI基于知识库内容生成准确回答</li>
+              <li>适用于故障排查、标准操作等场景</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新建/编辑分类弹窗 -->
+    <n-modal v-model:show="dialogVisible" preset="card" :title="dialogTitle" style="width: 480px">
+      <n-form :model="form" label-placement="left" label-width="90">
+        <n-form-item label="分类名称" required>
+          <n-input v-model:value="form.name" placeholder="如：服务器故障、数据库运维" />
         </n-form-item>
-        <n-form-item label="分类编码">
-          <n-input v-model:value="form.code" placeholder="请输入分类编码" />
+        <n-form-item label="分类编码" required>
+          <n-input v-model:value="form.code" placeholder="如：server_fault, db_ops" :disabled="!!form.id" />
         </n-form-item>
         <n-form-item label="描述">
-          <n-input v-model:value="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
+          <n-input v-model:value="form.description" type="textarea" :rows="2" placeholder="描述该知识分类的用途" />
         </n-form-item>
       </n-form>
       <template #footer>
         <n-space justify="end">
           <n-button @click="dialogVisible = false">取消</n-button>
-          <n-button type="primary" @click="submitForm" :loading="submitting">确定</n-button>
+          <n-button type="primary" @click="submitCategory" :loading="submitting">保存</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -39,38 +133,63 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { NCard, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSpace, NTag, NIcon, useMessage, useDialog } from 'naive-ui'
-import { AddOutline } from '@vicons/ionicons5'
+import { ref, computed, reactive, onMounted, nextTick } from 'vue'
+import { NIcon, useMessage, NButton, NSpace, NTag, NModal, NForm, NFormItem, NInput, NEmpty, NCollapse, NCollapseItem, NAvatar } from 'naive-ui'
+import {
+  AddOutline, SearchOutline, BookOutline, SparklesOutline,
+  SendOutline
+} from '@vicons/ionicons5'
 
 const message = useMessage()
-const dialog = useDialog()
+
+const userInitial = computed(() => {
+  try {
+    const userStr = localStorage.getItem('user')
+    if (userStr) return JSON.parse(userStr).username?.charAt(0)?.toUpperCase() || 'U'
+  } catch {}
+  return 'U'
+})
+
+// 分类
+const categories = ref([])
+const searchText = ref('')
+const selectedCategory = ref(null)
+const knowledgeItems = ref([])
+const qaHistory = ref([])
+const inputText = ref('')
 const loading = ref(false)
-const submitting = ref(false)
-const categoryList = ref([])
+const messagesRef = ref(null)
+
 const dialogVisible = ref(false)
 const dialogTitle = ref('新建分类')
-
+const submitting = ref(false)
 const form = reactive({ id: null, name: '', code: '', description: '' })
 
-const columns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '分类名称', key: 'name', ellipsis: { tooltip: true } },
-  { title: '分类编码', key: 'code', width: 150 },
-  { title: '描述', key: 'description', ellipsis: { tooltip: true } },
-  {
-    title: '操作', key: 'actions', width: 150,
-    render(row) {
-      return h(NSpace, { size: 8 }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => handleEdit(row) }, () => '编辑'),
-        h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => handleDelete(row) }, () => '删除')
-      ])
-    }
-  }
-]
+const filteredCategories = computed(() => {
+  if (!searchText.value) return categories.value
+  const kw = searchText.value.toLowerCase()
+  return categories.value.filter(c =>
+    (c.name || '').toLowerCase().includes(kw) ||
+    (c.code || '').toLowerCase().includes(kw)
+  )
+})
 
-async function loadData() {
-  loading.value = true
+const filteredKnowledgeCount = computed(() => knowledgeItems.value.length)
+
+function renderMarkdown(text) {
+  if (!text) return ''
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) =>
+    `<pre data-lang="${lang}"><code class="language-${lang}">${code.trim()}</code></pre>`)
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>')
+  html = html.replace(/\n/g, '<br>')
+  return html
+}
+
+async function loadCategories() {
   try {
     const token = localStorage.getItem('token') || ''
     const res = await fetch('/api/v1/knowledge/category', {
@@ -78,85 +197,215 @@ async function loadData() {
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
-    categoryList.value = data.items || data.data?.items || []
+    categories.value = data.items || data.data?.items || []
   } catch (e) {
-    message.error(`加载分类失败: ${e.message}`)
-    console.error('[copilot] loadData error:', e)
-    categoryList.value = []
-  } finally {
-    loading.value = false
+    console.error('[copilot] loadCategories error:', e)
+    categories.value = []
   }
 }
 
-function handleAdd() {
+async function loadKnowledge(categoryId) {
+  try {
+    const token = localStorage.getItem('token') || ''
+    const res = await fetch(`/api/v1/knowledge/list?category_id=${categoryId}&page_size=100`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error()
+    const data = await res.json()
+    knowledgeItems.value = data.items || data.data?.items || []
+  } catch {
+    knowledgeItems.value = []
+  }
+}
+
+async function selectCategory(cat) {
+  selectedCategory.value = cat
+  qaHistory.value = []
+  inputText.value = ''
+  await loadKnowledge(cat.id)
+}
+
+async function askQuestion() {
+  const text = inputText.value.trim()
+  if (!text || loading.value || !selectedCategory.value) return
+
+  const questionId = Date.now()
+  qaHistory.value.push({ id: questionId, question: text, answer: '' })
+  inputText.value = ''
+  loading.value = true
+  await nextTick()
+  scrollToBottom()
+
+  try {
+    const token = localStorage.getItem('token') || ''
+    const res = await fetch('/api/v1/ai/knowledge-qa', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        question: text,
+        category_id: selectedCategory.value.id,
+        knowledge_items: knowledgeItems.value.slice(0, 50)
+      })
+    })
+    if (!res.ok) throw new Error('请求失败')
+    const data = await res.json()
+    const answer = data.answer || data.result || data.response || '抱歉，暂未找到相关知识库内容，请尝试其他问题。'
+    const msg = qaHistory.value.find(m => m.id === questionId)
+    if (msg) msg.answer = answer
+  } catch (e) {
+    const msg = qaHistory.value.find(m => m.id === questionId)
+    if (msg) msg.answer = `查询失败: ${e.message}。知识库中有 ${knowledgeItems.value.length} 条相关知识，可尝试在AI聊天中直接提问。`
+  } finally {
+    loading.value = false
+    await nextTick()
+    scrollToBottom()
+  }
+}
+
+function handleKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    askQuestion()
+  }
+}
+
+function scrollToBottom() {
+  if (messagesRef.value) {
+    messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+  }
+}
+
+function createCategory() {
   dialogTitle.value = '新建分类'
   Object.assign(form, { id: null, name: '', code: '', description: '' })
   dialogVisible.value = true
 }
 
-function handleEdit(row) {
-  dialogTitle.value = '编辑分类'
-  Object.assign(form, { id: row.id, name: row.name, code: row.code, description: row.description || '' })
-  dialogVisible.value = true
-}
-
-function handleDelete(row) {
-  dialog.warning({
-    title: '确认删除',
-    content: `确定删除分类"${row.name}"吗？`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const token = localStorage.getItem('token') || ''
-        const res = await fetch(`/api/v1/knowledge/category/${row.id}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        message.success('删除成功')
-        loadData()
-      } catch (e) {
-        message.error(`删除失败: ${e.message}`)
-        console.error('[copilot] delete error:', e)
-      }
-    }
-  })
-}
-
-async function submitForm() {
+function submitCategory() {
   if (!form.name || !form.code) {
     message.warning('请填写必填项')
     return
   }
+  const existing = categories.value.find(c => c.code === form.code && c.id !== form.id)
+  if (existing) {
+    message.warning('分类编码已存在')
+    return
+  }
+  const method = form.id ? 'PUT' : 'POST'
+  const url = form.id ? `/api/v1/knowledge/category/${form.id}` : '/api/v1/knowledge/category'
+  const token = localStorage.getItem('token') || ''
   submitting.value = true
-  try {
-    const token = localStorage.getItem('token') || ''
-    const method = form.id ? 'PUT' : 'POST'
-    const url = form.id ? `/api/v1/knowledge/category/${form.id}` : '/api/v1/knowledge/category'
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(form)
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const result = await res.json()
-    if (result.error) throw new Error(result.error)
+  fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(form)
+  }).then(res => {
+    if (!res.ok) throw new Error()
     message.success(form.id ? '更新成功' : '创建成功')
     dialogVisible.value = false
-    loadData()
-  } catch (e) {
-    message.error(`操作失败: ${e.message}`)
-    console.error('[copilot] submit error:', e)
-  } finally {
+    return loadCategories()
+  }).catch(() => {
+    message.error('操作失败')
+  }).finally(() => {
     submitting.value = false
-  }
+  })
 }
 
-onMounted(loadData)
+function handleEditCategory(cat) {
+  dialogTitle.value = '编辑分类'
+  Object.assign(form, { id: cat.id, name: cat.name, code: cat.code, description: cat.description || '' })
+  dialogVisible.value = true
+}
+
+onMounted(loadCategories)
 </script>
 
 <style scoped>
-.page-container { padding: 16px; }
+.copilot-page { height: 100%; }
+.copilot-layout {
+  display: flex;
+  height: calc(100vh - 140px);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.category-sider {
+  width: 260px;
+  border-right: 1px solid #eee;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+}
+.sider-header { padding: 12px; background: #fff; border-bottom: 1px solid #eee; }
+.category-list { flex: 1; overflow-y: auto; }
+.category-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-bottom: 1px solid #f5f5f5;
+}
+.category-item:hover { background: #f0f0f0; }
+.category-item.active { background: #e8f4ff; }
+.cat-info { flex: 1; min-width: 0; }
+.cat-name { font-size: 14px; font-weight: 500; color: #333; }
+.cat-meta { font-size: 12px; color: #999; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.qa-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.qa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+}
+.knowledge-collapse { margin: 8px 16px; }
+.knowledge-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0; }
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.message { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
+.message-user { flex-direction: row-reverse; }
+.message-ai { flex-direction: row; }
+.bubble { max-width: 70%; padding: 10px 14px; border-radius: 12px; word-break: break-word; line-height: 1.5; }
+.bubble-user { background: #18a058; color: #fff; }
+.bubble-ai { background: #f0f0f0; color: #333; }
+.bubble-ai :deep(pre) { background: #282c34; border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; font-size: 13px; }
+.bubble-ai :deep(code) { background: rgba(0,0,0,0.08); border-radius: 3px; padding: 1px 4px; font-size: 13px; font-family: monospace; }
+.bubble-ai :deep(.typing-cursor)::after { content: '▊'; animation: blink 1s infinite; color: #18a058; }
+@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+.chat-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+  background: #fff;
+}
+.chat-input .n-input { flex: 1; }
+.send-btn { flex-shrink: 0; }
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
 </style>

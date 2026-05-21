@@ -98,6 +98,86 @@ class ScanProgressResponse(BaseModel):
 
 # ============== IP扫描接口 ==============
 
+def check_device_exists(ip: str) -> bool:
+    """检查设备是否已存在"""
+    try:
+        from modules.foundation.db_models.device import Device
+        from modules.foundation.db_models.base import _db_manager
+        with _db_manager.session_scope() as session:
+            existing = session.query(Device).filter(Device.ip_address == ip).first()
+            return existing is not None
+    except Exception:
+        return False
+
+
+def map_os_to_device_type(os_type: str) -> str:
+    """根据OS类型映射到设备类型"""
+    if not os_type:
+        return 'other'
+    os_lower = os_type.lower()
+    if 'windows' in os_lower:
+        return 'server_windows'
+    elif 'linux' in os_lower or 'unix' in os_lower or 'centos' in os_lower or 'ubuntu' in os_lower or 'redhat' in os_lower:
+        return 'server_linux'
+    elif 'esxi' in os_lower or 'vmware' in os_lower:
+        return 'server_vmware'
+    elif 'cisco' in os_lower or 'switch' in os_lower or 'router' in os_lower:
+        return 'network_switch'
+    elif 'firewall' in os_lower or 'fortinet' in os_lower or 'palo' in os_lower:
+        return 'network_firewall'
+    elif 'huawei' in os_lower:
+        return 'network_switch'
+    else:
+        return 'other'
+
+
+@router.post("/scan-and-import", summary="扫描网段并自动导入发现的设备")
+async def scan_and_import_devices(
+    request: IPScanRequest,  # reuses existing model with cidr field
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """扫描指定网段，自动发现新设备并导入平台"""
+    try:
+        from modules.collection.discovery.enhanced_scanner import get_enhanced_scanner
+        from modules.business.device_importer import DeviceImporter
+
+        scanner = get_enhanced_scanner()
+        results = await scanner.scan_and_identify(request.cidr)
+
+        # Filter hosts that are up
+        discovered = [h for h in results if h.status == 'up']
+
+        # Import new devices
+        importer = DeviceImporter()
+        imported = 0
+        for host in discovered:
+            # Check if device already exists by IP
+            existing = check_device_exists(host.ip)
+            if not existing:
+                device_data = {
+                    'name': host.hostname or f"auto-{host.ip.replace('.', '-')}",
+                    'ip_address': host.ip,
+                    'device_type': map_os_to_device_type(host.os_type),
+                    'os': host.os_type,
+                    'os_version': host.os_version,
+                    'vendor': host.vendor or 'Unknown',
+                    'model': host.model,
+                    'location': '',
+                }
+                result = importer.import_devices([device_data], username=current_user.username)
+                if result.success:
+                    imported += 1
+
+        return {
+            'total_discovered': len(discovered),
+            'newly_imported': imported,
+            'cidr': request.cidr,
+        }
+    except Exception as e:
+        logger.error(f"扫描导入失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/ip/scan", summary="启动IP范围扫描")
 async def start_ip_scan(
     request: IPScanRequest,

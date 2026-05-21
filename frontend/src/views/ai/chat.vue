@@ -155,9 +155,22 @@
         <div v-else class="empty-state">
           <n-icon size="80" color="#ddd"><ChatbubbleEllipsesOutline /></n-icon>
           <p style="color: #999; margin-top: 16px">选择一个会话或创建新会话开始对话</p>
-          <n-button type="primary" @click="createConversation" style="margin-top: 16px">
-            新建会话
-          </n-button>
+          <n-space vertical size="medium" align="center" style="margin-top: 20px; max-width: 400px;">
+            <n-space vertical size="small" align="start">
+              <div style="font-size: 13px; color: #666; line-height: 1.6;">
+                <p style="margin: 0 0 8px 0; font-weight: 600;">💡 我可以帮你：</p>
+                <ul style="margin: 0; padding-left: 20px;">
+                  <li>解答IT运维相关问题</li>
+                  <li>分析设备故障和告警原因</li>
+                  <li>提供系统配置优化建议</li>
+                  <li>协助编写运维脚本和文档</li>
+                </ul>
+              </div>
+            </n-space>
+            <n-button type="primary" @click="inputText = ''; createConversation(); nextTick(() => { document.querySelector('.chat-input textarea')?.focus() })" style="margin-top: 8px">
+              开启新对话
+            </n-button>
+          </n-space>
         </div>
       </n-layout-content>
     </n-layout>
@@ -173,6 +186,7 @@ import {
   RefreshOutline, MenuOutline
 } from '@vicons/ionicons5'
 import { useAuthStore } from '@/stores/auth'
+import { formatDate, formatTime } from '@/utils/date'
 
 const message = useMessage()
 const authStore = useAuthStore()
@@ -205,21 +219,6 @@ const filteredConversations = computed(() => {
   }
   return list
 })
-
-function formatDate(d) {
-  if (!d) return ''
-  const date = new Date(d)
-  const now = new Date()
-  if (date.toDateString() === now.toDateString()) {
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  }
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-}
-
-function formatTime(d) {
-  if (!d) return ''
-  return new Date(d).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
 
 function renderMarkdown(text) {
   if (!text) return ''
@@ -275,7 +274,8 @@ async function resendMessage(msg) {
 async function loadConversations() {
   conversationsLoading.value = true
   try {
-    const res = await fetch('/api/v1/ai/conversations?user_id=' + encodeURIComponent(authStore.userInfo.username), {
+    const username = authStore.userInfo?.username || localStorage.getItem('savedUsername') || 'unknown'
+    const res = await fetch('/api/v1/ai/conversations?user_id=' + encodeURIComponent(username), {
       headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
     })
     if (res.status === 401) {
@@ -303,7 +303,8 @@ async function selectConversation(conv) {
   messages.value = []
   loading.value = true
   try {
-    const res = await fetch(`/api/v1/ai/conversation/${conv.conversation_id}?user_id=${encodeURIComponent(authStore.userInfo.username)}`, {
+    const username = authStore.userInfo?.username || ''
+    const res = await fetch(`/api/v1/ai/conversation/${conv.conversation_id}?user_id=${encodeURIComponent(username)}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
     })
     if (res.status === 401) {
@@ -359,9 +360,11 @@ async function sendMessage() {
   scrollToBottom()
 
   try {
+    const username = authStore.userInfo?.username || 'unknown'
     const payload = { 
       message: text, 
-      user_id: authStore.userInfo.username,
+      user_id: username,
+      stream: false,
       conversation_id: currentConversation.value?.conversation_id || undefined 
     }
     const res = await fetch('/api/v1/ai/chat', {
@@ -382,29 +385,51 @@ async function sendMessage() {
       throw new Error('Send message failed')
     }
     
-    // 流式读取
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let fullContent = ''
-    
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const chunk = decoder.decode(value, { stream: true })
-      fullContent += chunk
-      streamingContent.value = fullContent
-      await nextTick()
-      scrollToBottom()
+    // 判断是否流式响应
+    const contentType = res.headers.get('content-type') || ''
+    if (contentType.includes('text/event-stream')) {
+      // 流式读取（解析 SSE 事件流）
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        // 按行分割，处理 SSE 事件
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6).trim()
+            if (dataStr === '[DONE]') continue
+            if (!dataStr) continue
+            try {
+              const data = JSON.parse(dataStr)
+              if (data.type === 'content' && data.content) {
+                fullContent += data.content
+                streamingContent.value = fullContent
+                await nextTick()
+                scrollToBottom()
+              }
+            } catch (_) {}
+          }
+        }
+      }
+      const aiMsg = { id: Date.now() + 1, role: 'ai', content: fullContent, created_at: new Date().toISOString() }
+      messages.value.push(aiMsg)
+      streamingContent.value = ''
+    } else {
+      // 非流式：直接读取 JSON 响应
+      const data = await res.json()
+      const answer = data.message || data.content || ''
+      const aiMsg = { id: Date.now() + 1, role: 'ai', content: answer, created_at: new Date().toISOString() }
+      messages.value.push(aiMsg)
     }
-    
-    const aiMsg = {
-      id: Date.now() + 1,
-      role: 'ai',
-      content: fullContent,
-      created_at: new Date().toISOString()
-    }
-    messages.value.push(aiMsg)
-    streamingContent.value = ''
 
     if (res.headers.get('X-Conversation-Id')) {
       const convId = res.headers.get('X-Conversation-Id')
@@ -434,7 +459,7 @@ function handleKeydown(e) {
 
 async function handleDelete(conversation_id) {
   try {
-    const res = await fetch(`/api/v1/ai/conversations/${conversation_id}`, {
+    const res = await fetch(`/api/v1/ai/conversation/${conversation_id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
     })
@@ -459,13 +484,14 @@ async function handleDelete(conversation_id) {
 async function handlePin(conv) {
   try {
     const isPinned = !conv.is_pinned
+    const username = authStore.userInfo?.username || ''
     const res = await fetch(`/api/v1/ai/conversations/${conv.conversation_id}/pin?is_pinned=${isPinned}`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         Authorization: `Bearer ${localStorage.getItem('token') || ''}` 
       },
-      body: JSON.stringify({ user_id: authStore.userInfo.username })
+      body: JSON.stringify({ user_id: username })
     })
     if (res.status === 401) {
       message.warning('登录已过期，请重新登录')

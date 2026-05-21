@@ -78,7 +78,15 @@ const dialogTitle = ref('添加角色')
 const currentRoleId = ref(null)
 const currentCheckedKeys = ref([])
 
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const pagination = {
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 const form = reactive({ id: null, name: '', code: '', description: '' })
 
 const permissionTree = ref([

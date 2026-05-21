@@ -17,7 +17,7 @@
           placeholder="搜索备份名称"
           clearable
           style="width: 200px"
-          @change="handleSearch"
+          @update:value="handleSearch"
         />
         <n-select
           v-model:value="filterType"
@@ -25,7 +25,7 @@
           :options="typeOptions"
           clearable
           style="width: 120px"
-          @change="handleSearch"
+          @update:value="handleSearch"
         />
         <n-select
           v-model:value="filterStatus"
@@ -33,14 +33,14 @@
           :options="statusOptions"
           clearable
           style="width: 120px"
-          @change="handleSearch"
+          @update:value="handleSearch"
         />
         <n-date-picker
           v-model:value="timeRange"
           type="daterange"
           clearable
           style="width: 260px"
-          @change="handleSearch"
+          @update:value="handleSearch"
         />
       </n-space>
     </n-card>
@@ -93,7 +93,7 @@ import {
   NDataTable, NPagination, NTag, NModal,
   NDescriptions, NDescriptionsItem, NDivider, NDatePicker, useDialog
 } from 'naive-ui'
-import { useMessage } from 'naive-ui'
+import { formatDate } from '@/utils/date'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -107,7 +107,15 @@ const backupList = ref([])
 const detailModalVisible = ref(false)
 const currentBackup = ref(null)
 
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const pagination = {
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 const totalPages = computed(() => Math.ceil(pagination.total / pagination.pageSize) || 1)
 
 const typeOptions = [
@@ -137,7 +145,7 @@ const getStatusText = (status) => {
 
 const formatTime = (time) => {
   if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN')
+  return formatDate(new Date(time))
 }
 
 const columns = [

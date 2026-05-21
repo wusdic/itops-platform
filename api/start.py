@@ -12,7 +12,28 @@ from typing import Optional
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 配置日志
+import logging.handlers
+import os
+
+# Ensure log directory exists
+_log_dir = "/app/data/logs"
+os.makedirs(_log_dir, exist_ok=True)
+
+# 配置日志：同时输出到 stdout 和滚动文件
+_file_handler = logging.handlers.TimedRotatingFileHandler(
+    os.path.join(_log_dir, "api.log"),
+    when="midnight",
+    interval=1,
+    backupCount=30,
+    encoding="utf-8",
+)
+_file_handler.setLevel(logging.INFO)
+_file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.INFO)
+_root_logger.addHandler(_file_handler)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

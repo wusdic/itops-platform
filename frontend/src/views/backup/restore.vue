@@ -56,7 +56,15 @@ const filterType = ref('')
 const resultDrawer = ref(false)
 const executeResult = ref('')
 
-const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const pagination = {
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  showSizePicker: true,
+  pageSizes: [10, 20, 50, 100],
+  onChange: (page) => { pagination.page = page; loadData(); },
+  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
+}
 
 // 计算属性：基于搜索关键词过滤备份列表
 const filteredBackupList = computed(() => {
