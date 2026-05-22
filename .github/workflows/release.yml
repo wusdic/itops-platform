@@ -75,7 +75,7 @@ jobs:
           cp .env.example dist/
           cp .gitignore dist/
           cp README.md dist/
-          cp docker-compose.yml dist/
+          cp PHYSICAL_DEPLOY.md dist/
           # 创建版本信息
           echo "${{ github.sha }}" > dist/VERSION
           echo "${{ github.event_name == 'release' && github.event.release.tag_name || 'latest' }}" > dist/TAG

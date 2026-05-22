@@ -1,5 +1,5 @@
 [Unit]
-Description=ITOps Platform API Server
+Description=ITOps Platform API Server (Standalone)
 After=network.target mysql.service
 Wants=mysql.service
 

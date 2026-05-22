@@ -1,10 +1,10 @@
 # ITOps Platform
 
-企业级运维管理平台，支持设备监控、告警管理、工单系统、备份管理等功能。
+企业级运维管理平台，支持设备监控、告警管理、工单系统、日志审计等功能。
 
 ## 快速部署
 
-### 方式一：一键部署（推荐）
+### 一键部署（推荐）
 
 ```bash
 # 克隆代码
@@ -16,13 +16,13 @@ sudo bash scripts/install_deps.sh
 
 # 填写环境配置
 cp .env.example .env
-nano .env   # 修改数据库密码等
+nano .env   # 修改 ITOPS_DB_PASSWORD
 
-# 部署
+# 执行部署
 sudo bash scripts/deploy.sh
 ```
 
-### 方式二：从 Release 下载
+### 从 Release 下载（离线部署）
 
 ```bash
 # 下载最新版本
@@ -75,11 +75,11 @@ sudo bash /opt/itops_platform/scripts/deploy.sh
 itops_platform/
 ├── api/                    # FastAPI 后端
 ├── frontend/               # Vue3 前端
-│   └── dist/               # 构建产物（部署时使用）
+│   └── dist/              # 构建产物（部署时使用）
 ├── nginx/                  # Nginx 配置
 ├── scripts/                # 部署脚本
 ├── systemd/                # systemd 服务文件
-├── modules/                # 采集模块
+├── modules/                # 业务模块
 ├── config/                 # 配置文件
 └── docs/                  # 文档
 ```
@@ -94,7 +94,7 @@ npm run dev
 
 # 后端开发
 cd api
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload
@@ -104,6 +104,6 @@ uvicorn main:app --reload
 
 每次 push 到 main 分支会自动构建并发布 Release。
 
-## License
+## 文档
 
-MIT
+- [物理机部署指南](./PHYSICAL_DEPLOY.md) — 完整的物理机部署说明

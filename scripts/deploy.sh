@@ -1,15 +1,15 @@
 #!/bin/bash
 # ============================================================
-# ITOps Platform - 一键部署脚本
-# 用法: bash deploy.sh [release_tag]
-#   release_tag: 可选，如 latest，不填则从 git pull 最新代码
+# ITOps Platform - 物理机一键部署脚本
+# 用法: bash deploy.sh
+#   支持从 GitHub Release 下载，或从 git pull 最新代码
+#   物理机部署，不依赖 Docker
 # ============================================================
 set -e
 
 APP_DIR="/opt/itops_platform"
-TAG="${1:-}"
 
-echo "=== ITOps Platform 部署脚本 ==="
+echo "=== ITOps Platform 物理机部署脚本 ==="
 echo "工作目录: $APP_DIR"
 echo ""
 
@@ -20,25 +20,15 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# 创建应用目录
-mkdir -p $APP_DIR
-
 # ============================================================
-# 从 GitHub 下载并解压，或从本地构建
+# 从 GitHub 下载并解压，或从本地 git pull
 # ============================================================
-if [ -n "$TAG" ]; then
-    echo "[1/7] 从 GitHub Release $TAG 下载..."
-    RELEASE_URL="https://github.com/wusdic/itops-deploy/releases/download/${TAG}/itops_platform.tar.gz"
-    curl -L "$RELEASE_URL" -o /tmp/itops_platform.tar.gz
-    tar -xzf /tmp/itops_platform.tar.gz -C $APP_DIR --strip-components=1
-    rm /tmp/itops_platform.tar.gz
+if [ -d "$APP_DIR/.git" ]; then
+    echo "[1/7] 更新代码 from GitHub..."
+    cd $APP_DIR && git pull origin main
 else
     echo "[1/7] 从 GitHub 克隆最新代码..."
-    if [ -d "$APP_DIR/.git" ]; then
-        cd $APP_DIR && git pull origin main
-    else
-        git clone https://github.com/wusdic/itops-deploy.git $APP_DIR --depth=1
-    fi
+    git clone https://github.com/wusdic/itops-deploy.git $APP_DIR --depth=1
 fi
 
 # ============================================================
@@ -47,8 +37,11 @@ fi
 echo "[2/7] 配置环境变量..."
 if [ ! -f "$APP_DIR/.env" ]; then
     cp "$APP_DIR/.env.example" "$APP_DIR/.env"
-    echo "请编辑 $APP_DIR/.env 填写数据库密码等配置"
-    echo "完成后重新运行此脚本: bash $APP_DIR/scripts/deploy.sh"
+    echo ""
+    echo "=== 请编辑 $APP_DIR/.env 填写数据库密码 ==="
+    echo "   nano $APP_DIR/.env"
+    echo ""
+    echo "完成后重新运行此脚本: sudo bash $APP_DIR/scripts/deploy.sh"
     exit 1
 fi
 
@@ -69,7 +62,9 @@ mysql -u root < $APP_DIR/scripts/init_db.sql
 # ============================================================
 echo "[4/7] 构建前端..."
 cd $APP_DIR/frontend
-npm install --legacy-peer-deps
+if [ ! -d "node_modules" ]; then
+    npm install --legacy-peer-deps
+fi
 npm run build
 cd ..
 
