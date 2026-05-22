@@ -561,7 +561,7 @@ async def get_system_logs(
     """读取 api.log 文件作为系统日志"""
     import os
 
-    log_file = "/app/data/logs/api.log"
+    log_file = os.environ.get("ITOPS_LOG_FILE", "/tmp/itops_data/logs/api.log")
     if not os.path.exists(log_file):
         return {"items": [], "total": 0, "page": pagination.page, "page_size": pagination.limit}
 

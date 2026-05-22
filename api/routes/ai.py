@@ -325,7 +325,7 @@ async def chat_debug(
         }
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
-                async with client.stream("POST", "http://host.docker.internal:11435/v1/chat/completions", json=payload) as resp:
+                async with client.stream("POST", "http://127.0.0.1:11435/v1/chat/completions", json=payload) as resp:
                     async for line in resp.aiter_lines():
                         if line:
                             try:

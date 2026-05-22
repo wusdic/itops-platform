@@ -3,7 +3,7 @@
 
 app:
   host: 0.0.0.0
-  port: 8000  # 与 docker-compose.yml 和 Dockerfile EXPOSE 保持一致
+  port: 8000
   debug: true
   secret_key: dev-secret-key-change-in-production
   cors_origins:

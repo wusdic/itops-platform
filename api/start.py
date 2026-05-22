@@ -15,8 +15,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging.handlers
 import os
 
+# 加载 .env 文件（项目根目录）
+_dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(_dotenv_path):
+    with open(_dotenv_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
 # Ensure log directory exists
-_log_dir = "/app/data/logs"
+_log_dir = os.environ.get("ITOPS_LOG_DIR", "/tmp/itops_data/logs")
 os.makedirs(_log_dir, exist_ok=True)
 
 # 配置日志：同时输出到 stdout 和滚动文件

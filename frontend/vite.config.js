@@ -25,7 +25,7 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://itops-api:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (err, req, res) => {
