@@ -10,6 +10,17 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 
+# 加载项目根目录 .env（确保在任何模块级代码之前读取数据库配置）
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_dotenv_path = os.path.join(_project_root, ".env")
+if os.path.exists(_dotenv_path):
+    with open(_dotenv_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
 # 尝试导入配置管理模块 (可选依赖)
 try:
     from modules.foundation.config_manager.config import ConfigManager

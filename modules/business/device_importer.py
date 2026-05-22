@@ -332,7 +332,7 @@ class DeviceImporter:
         """
         # Check required fields
         for field in self.REQUIRED_FIELDS:
-            value = row.get(field, '').strip() if row.get(field) else ''
+            value = (row.get(field) or '').strip()
             if not value:
                 return False, f"缺少必需字段: {field}"
         
@@ -392,7 +392,9 @@ class DeviceImporter:
         result.total = len(data)
         
         from modules.foundation.db_models.device import Device, DeviceType, DeviceStatus
-        from modules.foundation.db_models.base import db_session
+        from modules.foundation.db_models.base import _db_manager
+        from modules.foundation.db_models.base import DatabaseManager
+        from modules.foundation.db_models.base import db_session as _db_session_gen
         
         success_count = 0
         fail_count = 0
@@ -417,14 +419,19 @@ class DeviceImporter:
                 except ValueError:
                     device_type_enum = DeviceType.OTHER
                 
-                with db_session() as session:
+                with _db_manager.session_scope() as session:
                     # Check if device with same IP already exists
+                    ip_val = (row.get('ip_address') or '').strip()
+                    if not ip_val:
+                        result.add_failure(row, f"设备缺少IP地址: {row}", row_num)
+                        fail_count += 1
+                        continue
                     existing = session.query(Device).filter(
-                        Device.ip_address == row.get('ip_address', '').strip()
+                        Device.ip_address == ip_val
                     ).first()
                     
                     if existing:
-                        result.add_failure(row, f"IP {row.get('ip_address')} 已存在 (ID: {existing.id})", row_num)
+                        result.add_failure(row, f"IP {ip_val} 已存在 (ID: {existing.id})", row_num)
                         fail_count += 1
                         continue
                     
@@ -432,13 +439,13 @@ class DeviceImporter:
                     device = Device(
                         name=row.get('name', '').strip(),
                         hostname=row.get('name', '').strip(),  # Use name as hostname if not specified
-                        ip_address=row.get('ip_address', '').strip(),
+                        ip_address=ip_val,
                         device_type=device_type_enum,
-                        vendor=row.get('vendor', '').strip() or None,
-                        model=row.get('model', '').strip() or None,
-                        snmp_community=row.get('snmp_community', '').strip() or None,
-                        location=row.get('location', '').strip() or None,
-                        idc=row.get('idc', '').strip() or None,
+                        vendor=(row.get('vendor') or '').strip() or None,
+                        model=(row.get('model') or '').strip() or None,
+                        snmp_community=(row.get('snmp_community') or '').strip() or None,
+                        location=(row.get('location') or '').strip() or None,
+                        idc=(row.get('idc') or '').strip() or None,
                         status=DeviceStatus.UNKNOWN,
                         created_by=username,
                         updated_by=username,

@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from config.constants import Port
+
 try:
     import requests
 except ImportError:
@@ -16,7 +18,7 @@ except ImportError:
 class RabbitMQConfig:
     """Configuration for RabbitMQ collector."""
     host: str = "localhost"
-    port: int = 15672
+    port: int = Port.RABBITMQ
     username: str = "guest"
     password: str = "guest"
     virtual_host: str = "/"

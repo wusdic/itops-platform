@@ -291,7 +291,6 @@ async function loadConversations() {
       message.error('加载会话列表失败')
     }
   } catch (e) {
-    console.error('Load conversations error:', e)
     message.error('加载会话列表失败')
   } finally {
     conversationsLoading.value = false
@@ -329,7 +328,6 @@ async function selectConversation(conv) {
     await nextTick()
     scrollToBottom()
   } catch (e) {
-    console.error('Load conversation error:', e)
     message.error('加载会话失败')
   } finally {
     loading.value = false
@@ -440,7 +438,6 @@ async function sendMessage() {
       await loadConversations()
     }
   } catch (e) {
-    console.error('Chat error:', e)
     message.error('AI服务暂不可用，请稍后重试')
   } finally {
     loading.value = false
@@ -476,7 +473,6 @@ async function handleDelete(conversation_id) {
     }
     await loadConversations()
   } catch (e) {
-    console.error('Delete error:', e)
     message.error('删除失败')
   }
 }
@@ -503,7 +499,6 @@ async function handlePin(conv) {
     message.success(isPinned ? '已置顶' : '已取消置顶')
     await loadConversations()
   } catch (e) {
-    console.error('Pin error:', e)
     message.error('操作失败')
   }
 }

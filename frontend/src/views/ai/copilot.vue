@@ -139,6 +139,7 @@ import {
   AddOutline, SearchOutline, BookOutline, SparklesOutline,
   SendOutline
 } from '@vicons/ionicons5'
+import { CONFIG } from '@/config/constants'
 
 const message = useMessage()
 
@@ -199,7 +200,6 @@ async function loadCategories() {
     const data = await res.json()
     categories.value = data.items || data.data?.items || []
   } catch (e) {
-    console.error('[copilot] loadCategories error:', e)
     categories.value = []
   }
 }
@@ -207,7 +207,7 @@ async function loadCategories() {
 async function loadKnowledge(categoryId) {
   try {
     const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/knowledge/list?category_id=${categoryId}&page_size=100`, {
+    const res = await fetch(`/api/v1/knowledge/list?category_id=${categoryId}&page_size=${CONFIG.MAX_PAGE_SIZE}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error()

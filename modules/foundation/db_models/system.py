@@ -227,3 +227,73 @@ class LogItem(Base):
     __table_args__ = (
         Index('idx_cat_created', 'category', 'created_at'),
     )
+
+
+class SystemUser(Base):
+    """
+    系统用户模型
+    存储系统用户信息（从 InMemoryUserStore 迁移而来）
+    """
+    __tablename__ = "system_users"
+
+    id = Column(String(64), primary_key=True)  # 用户ID，如 u001
+    username = Column(String(64), unique=True, nullable=False, index=True)
+    password_hash = Column(String(256), nullable=False)
+    email = Column(String(128))
+    status = Column(String(32), default="active")  # active/inactive/locked/pending
+    roles = Column(Text)  # JSON 数组存储角色列表
+    last_login = Column(DateTime)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_username_active', 'username', 'status'),
+    )
+
+
+class NetworkScanConfig(Base):
+    """
+    网段扫描配置
+    存储用户配置的扫描网段，替代内存存储
+    """
+    __tablename__ = "network_scan_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    ip_range = Column(String(100), nullable=False)  # CIDR 格式
+    scan_type = Column(String(20), default="ping")
+    port_list = Column(String(500), default="22,80,443,3306,8080")
+    status = Column(String(20), default="active")  # active/inactive
+    auto_scan = Column(Integer, default=0)  # 0=手动, 1=自动
+    last_scan_at = Column(DateTime)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_status', 'status'),
+    )
+
+
+class DiscoveryTask(Base):
+    """
+    设备发现任务
+    存储用户创建的扫描任务
+    """
+    __tablename__ = "discovery_tasks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_id = Column(String(64), unique=True, nullable=False, index=True)  # task-YYYYMMDDHHMMSS
+    name = Column(String(200), nullable=False)
+    task_type = Column(String(32), nullable=False)  # ip_scan / snmp_discovery
+    target = Column(String(256), nullable=False)  # CIDR 或 IP 列表
+    options = Column(Text)  # JSON 配置
+    schedule = Column(String(64))  # Cron 表达式
+    status = Column(String(32), default="created")  # created/running/completed/failed
+    created_by = Column(String(64))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_task_type', 'task_type'),
+        Index('idx_status', 'status'),
+    )

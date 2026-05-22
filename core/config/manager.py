@@ -16,6 +16,8 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from core.config.constants import PBKDF2_ITERATIONS
+
 
 class ConfigEncryption:
     """配置加密工具类"""
@@ -27,7 +29,7 @@ class ConfigEncryption:
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt,
-            iterations=100000,
+            iterations=PBKDF2_ITERATIONS,
         )
         return base64.urlsafe_b64encode(kdf.derive(password.encode()))
     
@@ -242,7 +244,7 @@ class ConfigLoader:
             try:
                 callback(self._config)
             except Exception as e:
-                print(f"配置变更回调失败: {e}")
+                pass
 
 
 class ConfigValidator:
@@ -417,7 +419,7 @@ class ConfigManager:
             try:
                 callback(new_config)
             except Exception as e:
-                print(f"配置变更回调失败: {e}")
+                pass
     
     def add_watch_callback(self, callback: callable):
         """添加配置变更监听"""
@@ -506,12 +508,8 @@ class ConfigManager:
         for section in sections:
             try:
                 config = self.get_section(section)
-                if config:
-                    print(f"✓ {section} 配置加载成功")
-                else:
-                    print(f"✗ {section} 配置为空")
-            except Exception as e:
-                print(f"✗ {section} 配置验证失败: {e}")
+            except Exception:
+                pass
         
         return True
     

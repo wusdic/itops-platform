@@ -311,7 +311,7 @@ const loadDashboard = async () => {
         // deviceStats.warning 从告警列表计算
       }
     } else if (statsRes.reason) {
-      console.warn('Failed to load device stats:', statsRes.reason)
+      // load device stats failed silently
     }
 
     // Process alerts - Level 3 error handling
@@ -363,7 +363,6 @@ const loadDashboard = async () => {
     // Critical error - show error state
     error.value = '加载仪表盘数据失败，请稍后重试'
     message.error('加载仪表盘数据失败')
-    console.error('Dashboard load error:', err)
   } finally {
     loading.value = false
   }

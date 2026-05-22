@@ -608,7 +608,6 @@ class WebSocketClient:
             
             return True
         except Exception as e:
-            print(f"WebSocket连接失败: {e}")
             self._connected = False
             return False
     
@@ -619,7 +618,7 @@ class WebSocketClient:
                 for handler in self._message_handlers:
                     await handler(message)
         except Exception as e:
-            print(f"WebSocket接收错误: {e}")
+            pass
         finally:
             self._connected = False
     
@@ -642,7 +641,6 @@ class WebSocketClient:
             await self._ws.send(data)
             return True
         except Exception as e:
-            print(f"WebSocket发送失败: {e}")
             return False
     
     async def close(self) -> None:
@@ -842,7 +840,6 @@ class VendorAPIClient:
             self._session_token = response.headers.get('X-Subject-Token', '')
             return bool(self._session_token)
         except Exception as e:
-            print(f"华为云登录失败: {e}")
             return False
     
     async def _h3c_login(self, username: str, password: str) -> bool:

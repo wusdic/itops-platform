@@ -143,7 +143,6 @@ async function loadData() {
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载备份失败: ${e.message}`)
-    console.error('[backup] loadData error:', e)
     backupList.value = []
   } finally {
     loading.value = false
@@ -165,7 +164,6 @@ async function handleCreate() {
     loadData()
   } catch (e) {
     message.error(`创建备份失败: ${e.message}`)
-    console.error('[backup] create error:', e)
   } finally {
     creating.value = false
   }
@@ -193,7 +191,6 @@ async function handleDelete(row) {
         loadData()
       } catch (e) {
         message.error(`删除失败: ${e.message}`)
-        console.error('[backup] delete error:', e)
       }
     }
   })

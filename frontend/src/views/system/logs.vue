@@ -384,7 +384,6 @@ async function loadStats() {
   try {
     logStats.value = await fetchApi('/log-stats')
   } catch (e) {
-    console.warn('log-stats failed:', e.message)
     logStats.value = { operation: { total_items: 0, total_groups: 0 }, system: { total_items: 0, total_groups: 0 }, collection: { total_items: 0, total_groups: 0 }, audit: { total_items: 0, total_groups: 0 } }
   }
 }
@@ -406,7 +405,7 @@ async function loadConfigs() {
       }
     }
   } catch (e) {
-    console.warn('log-configs failed:', e.message)
+    // log-configs failed silently
   }
 }
 

@@ -7,6 +7,7 @@ from typing import Optional, List
 from datetime import datetime
 import secrets
 import json
+import zlib
 
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from pydantic import BaseModel, Field
@@ -19,6 +20,11 @@ from modules.foundation.auth_manager.auth import PasswordHasher
 
 
 router = APIRouter()
+
+
+def _role_id_from_code(code: str) -> int:
+    """从角色代码生成确定性ID（避免Python hash()的进程随机化问题）"""
+    return zlib.crc32(code.encode('utf-8')) & 0x7FFFFFFF % 10000
 
 
 # ============== 请求/响应模型 ==============
@@ -115,10 +121,7 @@ async def get_users(
     db: Session = Depends(get_db),
 ):
     """获取用户列表"""
-    # 从 InMemoryUserStore 获取所有用户
-    all_users = []
-    for username, user in _user_store._users.items():
-        all_users.append(user)
+    all_users = _user_store.list_users()
     
     # 过滤
     filtered_users = all_users
@@ -204,12 +207,18 @@ async def get_user(
     if not user_data:
         raise HTTPException(status_code=404, detail="用户不存在")
     
-    # 获取完整用户对象
-    for username, user in _user_store._users.items():
-        if user.id == str(user_id):
-            return _user_to_dict(user)
-    
-    raise HTTPException(status_code=404, detail="用户不存在")
+    # get_user_by_id 返回简化dict，直接用
+    return {
+        "id": user_data["user_id"],
+        "username": user_data["username"],
+        "email": user_data["email"],
+        "full_name": None,
+        "phone": None,
+        "roles": user_data["roles"],
+        "is_active": user_data["is_active"],
+        "last_login": None,
+        "created_at": None,
+    }
 
 
 @router.put("/users/{user_id}", summary="更新用户")
@@ -222,7 +231,7 @@ async def update_user(
     """更新用户信息"""
     # 获取用户
     target_user = None
-    for username, u in _user_store._users.items():
+    for u in _user_store.list_users():
         if u.id == str(user_id):
             target_user = u
             break
@@ -231,21 +240,14 @@ async def update_user(
         raise HTTPException(status_code=404, detail="用户不存在")
     
     # 更新字段
-    if user.email:
-        target_user.email = user.email
-    if user.roles:
-        target_user.roles = user.roles
-    if user.is_active is not None:
-        from modules.foundation.auth_manager.auth import UserStatus
-        target_user.status = UserStatus.ACTIVE if user.is_active else UserStatus.INACTIVE
-    if not target_user.metadata:
-        target_user.metadata = {}
-    if user.full_name:
-        target_user.metadata["full_name"] = user.full_name
-    if user.phone:
-        target_user.metadata["phone"] = user.phone
-    
-    target_user.updated_at = datetime.now()
+    _user_store.update_user(
+        user_id=str(user_id),
+        email=user.email,
+        roles=user.roles,
+        is_active=user.is_active,
+        full_name=user.full_name,
+        phone=user.phone,
+    )
     
     return {"status": "success", "message": "User updated successfully"}
 
@@ -257,11 +259,12 @@ async def delete_user(
     db: Session = Depends(get_db),
 ):
     """删除用户"""
-    for username, user in list(_user_store._users.items()):
-        if user.id == str(user_id):
-            if username == "admin":
+    # 不能删除管理员
+    for u in _user_store.list_users():
+        if u.id == str(user_id):
+            if u.username == "admin":
                 raise HTTPException(status_code=400, detail="不能删除管理员账户")
-            del _user_store._users[username]
+            _user_store.delete_user(str(user_id))
             return {"status": "success", "message": "User deleted successfully"}
     
     raise HTTPException(status_code=404, detail="用户不存在")
@@ -274,18 +277,15 @@ async def reset_password(
     db: Session = Depends(get_db),
 ):
     """重置用户密码"""
-    for username, user in _user_store._users.items():
-        if user.id == str(user_id):
-            new_password = f"Password@{secrets.token_hex(4)}"
-            user.password_hash = PasswordHasher.hash_password(new_password)
-            user.updated_at = datetime.now()
-            return {
-                "status": "success",
-                "message": "Password reset successfully",
-                "new_password": new_password,  # 临时显示，实际应通过安全渠道发送
-            }
-    
-    raise HTTPException(status_code=404, detail="用户不存在")
+    new_password = f"Password@{secrets.token_hex(4)}"
+    ok = _user_store.update_user_password(str(user_id), PasswordHasher.hash_password(new_password))
+    if not ok:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {
+        "status": "success",
+        "message": "Password reset successfully",
+        "new_password": new_password,
+    }
 
 
 # ============== 角色管理接口 ==============
@@ -299,9 +299,10 @@ async def get_roles(
     items = []
     for code, role in ROLES.items():
         # 统计使用该角色的用户数
-        user_count = sum(1 for u in _user_store._users.values() if code in u.roles)
+        all_users = _user_store.list_users()
+        user_count = sum(1 for u in all_users if code in u.roles)
         items.append({
-            "id": hash(code) % 10000,
+            "id": _role_id_from_code(code),
             "name": role["name"],
             "code": role["code"],
             "description": role["description"],
@@ -330,7 +331,7 @@ async def create_role(
     }
     
     return {
-        "id": hash(role.code) % 10000,
+        "id": _role_id_from_code(role.code),
         "name": role.name,
         "code": role.code,
         "permissions": role.permissions,
@@ -349,7 +350,7 @@ async def update_role(
     # 查找角色
     found_code = None
     for code, r in ROLES.items():
-        if hash(code) % 10000 == role_id:
+        if _role_id_from_code(code) == role_id:
             found_code = code
             break
     
@@ -375,7 +376,7 @@ async def delete_role(
     """删除角色"""
     found_code = None
     for code, r in ROLES.items():
-        if hash(code) % 10000 == role_id:
+        if _role_id_from_code(code) == role_id:
             found_code = code
             break
     

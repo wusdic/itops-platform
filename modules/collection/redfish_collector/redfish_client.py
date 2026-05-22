@@ -8,13 +8,15 @@ import urllib.error
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from config.constants import Port
+
 
 @dataclass
 class RedfishConfig:
     """Redfish API configuration."""
 
     host: str
-    port: int = 443
+    port: int = Port.REDFISH
     username: str = ""
     password: str = ""
     timeout: int = 30

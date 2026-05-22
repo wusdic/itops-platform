@@ -105,6 +105,7 @@ import {
   TimeOutline
 } from '@vicons/ionicons5'
 import { notification } from '@/api'
+import { CONFIG } from '@/config/constants'
 
 const router = useRouter()
 const route = useRoute()
@@ -289,7 +290,6 @@ const fetchNotificationCount = async () => {
     // Assuming API returns { items: [...], total: number } or direct total
     notificationCount.value = res?.total || (Array.isArray(res) ? res.length : 0)
   } catch (err) {
-    console.warn('Failed to fetch notification count:', err)
     // Silently fail, notification badge will show 0
   }
 }
@@ -306,7 +306,7 @@ onMounted(() => {
   window.addEventListener('resize', checkMobile)
   fetchNotificationCount()
   // Poll for new notifications every 60 seconds
-  const interval = setInterval(fetchNotificationCount, 60000)
+  const interval = setInterval(fetchNotificationCount, CONFIG.POLL_INTERVAL_LONG)
   onUnmounted(() => clearInterval(interval))
 })
 

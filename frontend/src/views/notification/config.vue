@@ -81,7 +81,6 @@ async function loadChannels() {
     channelList.value = data.items || []
   } catch (e) {
     message.error('加载渠道失败: ' + e.message)
-    console.error('[notification/config] loadChannels error:', e)
     channelList.value = []
   } finally {
     loading.value = false
@@ -96,7 +95,7 @@ async function loadTypes() {
     const data = await res.json()
     notificationTypes.value = data.types || []
   } catch (e) {
-    console.error('[notification/config] loadTypes error:', e)
+    // loadTypes failed silently
   }
 }
 
@@ -130,7 +129,6 @@ async function handleSave() {
     loadChannels()
   } catch (e) {
     message.error('保存失败: ' + e.message)
-    console.error('[notification/config] handleSave error:', e)
   } finally {
     saving.value = false
   }
@@ -145,7 +143,6 @@ async function handleDelete(id) {
     loadChannels()
   } catch (e) {
     message.error('删除失败: ' + e.message)
-    console.error('[notification/config] handleDelete error:', e)
   }
 }
 </script>

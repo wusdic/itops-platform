@@ -19,6 +19,7 @@ import {
   NNotificationProvider, NLoadingBarProvider,
   zhCN, dateZhCN
 } from 'naive-ui'
+import { CONFIG } from './config/constants'
 
 const themeOverrides = {
   common: {
@@ -45,7 +46,7 @@ onMounted(async () => {
   // 立即检查 token 过期
   checkTokenExpiry()
   // 每分钟检查一次
-  tokenCheckTimer = setInterval(checkTokenExpiry, 60000)
+  tokenCheckTimer = setInterval(checkTokenExpiry, CONFIG.TOKEN_CHECK_INTERVAL)
 })
 
 // Token 过期自动退出
@@ -72,7 +73,7 @@ function checkTokenExpiry() {
 
     // 剩余5分钟时开始警告，每分钟最多提示一次
     if (remaining <= 5 * 60 * 1000 && remaining > 0) {
-      const nowMinute = Math.floor(Date.now() / 60000)
+      const nowMinute = Math.floor(Date.now() / CONFIG.TOKEN_CHECK_INTERVAL)
       if (nowMinute !== lastWarningTime) {
         lastWarningTime = nowMinute
         if (messageRef.value) messageRef.value.warning('登录即将过期，请保存工作内容')

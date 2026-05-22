@@ -454,8 +454,6 @@ class IntelligentSearch:
             
             return results
         except Exception as e:
-            # 向量搜索失败时回退到全文搜索
-            print(f"Semantic search failed: {e}")
             return self._fulltext_search(
                 query, doc_types, category_ids, tags,
                 None, None, page, page_size

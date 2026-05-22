@@ -168,7 +168,6 @@ const loadData = async () => {
       pagination.total = 0
     }
   } catch (error) {
-    console.error('Load messages error:', error)
     messages.value = []
   } finally {
     loading.value = false
@@ -197,7 +196,7 @@ const handleMarkRead = async (msg) => {
     msg.is_read = true
     message.success('已标为已读')
   } catch (error) {
-    console.error('Mark read error:', error)
+    // mark read failed silently
   }
 }
 
@@ -209,7 +208,7 @@ const handleMarkAllRead = async () => {
     message.success('全部已标为已读')
     loadData()
   } catch (error) {
-    console.error('Mark all read error:', error)
+    // mark all read failed silently
   }
 }
 

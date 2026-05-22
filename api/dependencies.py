@@ -52,6 +52,10 @@ class Settings:
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
     
+    # 默认用户密码（仅用于初始化，生产环境应通过环境变量配置）
+    DEFAULT_ADMIN_PASSWORD: str = "Admin@123456"
+    DEFAULT_OPERATOR_PASSWORD: str = "Operator@123456"
+    
     def __post_init__(self):
         if self.CORS_ORIGINS is None:
             self.CORS_ORIGINS = ["*"]
@@ -69,6 +73,8 @@ def get_settings() -> Settings:
         SECRET_KEY=os.getenv("SECRET_KEY", "your-secret-key-change-in-production"),
         REDIS_HOST=os.getenv("REDIS_HOST", "localhost"),
         REDIS_PORT=int(os.getenv("REDIS_PORT", "6379")),
+        DEFAULT_ADMIN_PASSWORD=os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@123456"),
+        DEFAULT_OPERATOR_PASSWORD=os.getenv("DEFAULT_OPERATOR_PASSWORD", "Operator@123456"),
     )
 
 

@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class VMwareConfig:
     """VMware 连接配置"""
     host: str                          # vCenter 或 ESXi 地址
-    port: int = 443                   # 端口
+    port: int = Port.VMWARE           # 端口
     user: str = "administrator@vsphere.local"  # 用户名
     password: str = ""                # 密码
     ssl_context: Optional[Any] = None  # SSL 上下文

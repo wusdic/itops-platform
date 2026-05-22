@@ -397,7 +397,7 @@ const loadDevices = async () => {
       value: d.id,
     }))
   } catch (e) {
-    console.error('load devices error:', e)
+    // load devices failed silently
   }
 }
 

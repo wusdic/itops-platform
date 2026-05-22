@@ -30,7 +30,7 @@
         :columns="columns"
         :data="deviceList"
         :loading="loading"
-        :pagination="getPaginationConfig()"
+        :pagination="paginationConfig"
         :row-key="row => row.id"
         :remote="true"
         :key="paginationVersion"
@@ -164,6 +164,46 @@
               />
             </template>
           </n-tab-pane>
+
+          <!-- 采集配置Tab -->
+          <n-tab-pane name="collection" tab="采集配置">
+            <n-spin :show="collectionConfigLoading">
+              <n-form label-placement="left" label-width="140" style="max-width: 500px">
+                <n-form-item label="参数检测间隔">
+                  <n-input-number v-model:value="collectionConfig.param_check_interval" :min="30" :max="86400" placeholder="30-86400秒" style="width: 100%">
+                    <template #suffix>秒</template>
+                  </n-input-number>
+                  <template #feedback>完整采集含指标，默认3600秒(1小时)</template>
+                </n-form-item>
+
+                <n-form-item label="状态检测间隔">
+                  <n-input-number v-model:value="collectionConfig.status_check_interval" :min="10" :max="3600" placeholder="10-3600秒" style="width: 100%">
+                    <template #suffix>秒</template>
+                  </n-input-number>
+                  <template #feedback>快速状态检测，默认60秒(1分钟)</template>
+                </n-form-item>
+
+                <n-form-item label="有效协议">
+                  <n-tag v-if="collectionConfig.working_protocols?.length" v-for="p in collectionConfig.working_protocols" :key="p" type="info" style="margin-right: 6px">{{ p }}</n-tag>
+                  <n-text v-else depth="3">暂无（采集成功后会记录）</n-text>
+                </n-form-item>
+
+                <n-form-item label="上次参数检测">
+                  <n-text depth="3">{{ collectionConfig.last_param_check || '-' }}</n-text>
+                </n-form-item>
+
+                <n-form-item label="上次状态检测">
+                  <n-text depth="3">{{ collectionConfig.last_status_check || '-' }}</n-text>
+                </n-form-item>
+
+                <n-form-item>
+                  <n-space>
+                    <n-button type="primary" @click="saveCollectionConfig" :loading="collectionConfigSaving">保存配置</n-button>
+                  </n-space>
+                </n-form-item>
+              </n-form>
+            </n-spin>
+          </n-tab-pane>
         </n-tabs>
       </n-drawer-content>
     </n-drawer>
@@ -172,9 +212,10 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, h, nextTick, watchEffect } from 'vue'
-import { NGrid, NGi, NCard, NButton, NDataTable, NTag, NIcon, NSpace, NTooltip, useMessage, useDialog, NDrawer, NDrawerContent, NSpin, NEmpty, NResult, NTabs, NTabPane, NDescriptions, NDescriptionsItem } from 'naive-ui'
+import { NGrid, NGi, NCard, NButton, NDataTable, NTag, NIcon, NSpace, NTooltip, useMessage, useDialog, NDrawer, NDrawerContent, NSpin, NEmpty, NResult, NTabs, NTabPane, NDescriptions, NDescriptionsItem, NForm, NFormItem, NInputNumber, NText } from 'naive-ui'
 import * as echarts from 'echarts'
 import { devices } from '@/api'
+import { CONFIG } from '@/config/constants'
 import { RefreshOutline, Search } from '@vicons/ionicons5'
 
 const message = useMessage()
@@ -263,6 +304,65 @@ let diskChart = null
 
 // 设备详情标签页
 const activeDeviceTab = ref('info')
+
+// 采集配置状态
+const collectionConfig = ref({
+  param_check_interval: 3600,
+  status_check_interval: 60,
+  last_param_check: null,
+  last_status_check: null,
+  working_protocols: []
+})
+const collectionConfigLoading = ref(false)
+const collectionConfigSaving = ref(false)
+
+async function loadCollectionConfig(deviceName) {
+  collectionConfigLoading.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/v1/devices/${encodeURIComponent(deviceName)}/collection-config`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (res.ok) {
+      const data = await res.json()
+      collectionConfig.value = {
+        param_check_interval: data.param_check_interval || 3600,
+        status_check_interval: data.status_check_interval || 60,
+        last_param_check: data.last_param_check || null,
+        last_status_check: data.last_status_check || null,
+        working_protocols: data.working_protocols || []
+      }
+    }
+  } catch (e) {
+    message.error('加载采集配置失败')
+  } finally {
+    collectionConfigLoading.value = false
+  }
+}
+
+async function saveCollectionConfig() {
+  collectionConfigSaving.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/v1/devices/${encodeURIComponent(selectedDevice.value.name)}/collection-config`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        param_check_interval: collectionConfig.value.param_check_interval,
+        status_check_interval: collectionConfig.value.status_check_interval
+      })
+    })
+    if (res.ok) {
+      message.success('采集配置已保存')
+    } else {
+      throw new Error(`HTTP ${res.status}`)
+    }
+  } catch (e) {
+    message.error('保存采集配置失败: ' + e.message)
+  } finally {
+    collectionConfigSaving.value = false
+  }
+}
 
 // 磁盘列定义
 const diskColumns = [
@@ -421,7 +521,6 @@ async function loadDevices() {
   } catch (e) {
     message.error(`加载设备列表失败: ${e.message}`)
     deviceList.value = []
-    console.error('[devices] loadDevices error:', e)
   } finally {
     loading.value = false
   }
@@ -432,6 +531,7 @@ function handleRowClick(row) {
   drawerVisible.value = true
   activeDeviceTab.value = 'info'
   loadMetrics(row)
+  loadCollectionConfig(row.name)
 }
 
 function handleDelete(row) {
@@ -486,7 +586,7 @@ async function loadMetrics(device) {
   try {
     const token = localStorage.getItem('token')
     const now = new Date()
-    const startTime = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString()
+    const startTime = new Date(now.getTime() - CONFIG.METRICS_TIME_WINDOW).toISOString()
     const endTime = now.toISOString()
 
     const [cpuRes, memRes, diskRes] = await Promise.all([
@@ -531,7 +631,6 @@ async function loadMetrics(device) {
   } catch (e) {
     metricsError.value = e.message
     message.error(`加载性能指标失败: ${e.message}`)
-    console.error('[devices] loadMetrics error:', e)
   } finally {
     metricsLoading.value = false
   }
@@ -606,7 +705,7 @@ function initCharts(cpuData, memData, diskData) {
 
 function startPoll() {
   stopPoll()
-  pollTimer = setInterval(() => { loadDevices() }, 30000)
+  pollTimer = setInterval(() => { loadDevices() }, CONFIG.POLL_INTERVAL_SHORT)
 }
 
 function stopPoll() {

@@ -323,9 +323,10 @@ async def chat_debug(
             "temperature": 0.0,
             "max_tokens": 100,
         }
+        base_url = os.getenv("AI_BASE_URL", "http://localhost:11435")
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
-                async with client.stream("POST", "http://127.0.0.1:11435/v1/chat/completions", json=payload) as resp:
+                async with client.stream("POST", f"{base_url}/v1/chat/completions", json=payload) as resp:
                     async for line in resp.aiter_lines():
                         if line:
                             try:
@@ -415,7 +416,7 @@ async def chat(
 
     if request.stream:
         # Streaming response: use module-level generator (avoid Python 3.13 nested async def closure bug)
-        base_url = llm_client.base_url or "http://127.0.0.1:11435"
+        base_url = os.getenv("AI_BASE_URL", llm_client.base_url or "http://localhost:11435")
         model = llm_client._default_model or "qwen3.5-9b-deepseek-v4-flash-q8_0"
         return StreamingResponse(
             _llm_stream_generator(base_url, model, messages, conversation_id),

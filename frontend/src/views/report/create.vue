@@ -434,7 +434,6 @@ async function fetchTemplates() {
     const data = await response.json()
     templateList.value = data.items || data || []
   } catch (error) {
-    console.error('Failed to fetch templates:', error)
     message.error('加载模板失败')
     templateList.value = []
   } finally {
@@ -469,7 +468,6 @@ async function fetchPreview() {
     const data = await response.json()
     previewContent.value = data.content || data.html || '<p>预览不可用</p>'
   } catch (error) {
-    console.error('Failed to fetch preview:', error)
     message.error('加载预览失败')
     previewContent.value = ''
   } finally {
@@ -531,7 +529,6 @@ async function generateReport() {
     
     return data
   } catch (error) {
-    console.error('Failed to generate report:', error)
     progressModal.percentage = 100
     progressModal.status = 'error'
     progressModal.processing = false
@@ -568,7 +565,6 @@ async function saveAsTemplate() {
     saveTemplateForm.description = ''
     fetchTemplates()
   } catch (error) {
-    console.error('Failed to save template:', error)
     message.error('保存模板失败')
   } finally {
     savingTemplate.value = false

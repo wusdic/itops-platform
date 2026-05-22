@@ -181,7 +181,6 @@ async function loadData() {
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载角色失败: ${e.message}`)
-    console.error('[role] loadData error:', e)
     roleList.value = []
   } finally {
     loading.value = false
@@ -220,7 +219,6 @@ function handleDelete(row) {
         loadData()
       } catch (e) {
         message.error(`删除失败: ${e.message}`)
-        console.error('[role] delete error:', e)
       }
     }
   })
@@ -248,7 +246,6 @@ async function handlePermission(row) {
       currentCheckedKeys.value = [...defaultCheckedKeys.value]
     }
   } catch (e) {
-    console.error('[role] 加载权限失败:', e)
     defaultCheckedKeys.value = []
     currentCheckedKeys.value = []
   }
@@ -283,7 +280,6 @@ async function submitPermission() {
       permDialogVisible.value = false
     } else {
       message.error(`权限分配失败: ${e.message}`)
-      console.error('[role] submitPermission error:', e)
     }
   } finally {
     permSubmitting.value = false
@@ -311,7 +307,6 @@ async function submitForm() {
     loadData()
   } catch (e) {
     message.error(`操作失败: ${e.message}`)
-    console.error('[role] submit error:', e)
   } finally {
     submitting.value = false
   }

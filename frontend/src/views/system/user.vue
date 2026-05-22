@@ -65,6 +65,7 @@
 import { ref, reactive, onMounted, h } from 'vue'
 import { NCard, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSelect, NSpace, NTag, NIcon, useMessage } from 'naive-ui'
 import { AddOutline, SearchOutline } from '@vicons/ionicons5'
+import { CONFIG } from '@/config/constants'
 
 const message = useMessage()
 const loading = ref(false)
@@ -82,7 +83,7 @@ function handleSearchInput() {
   searchTimer = setTimeout(() => {
     pagination.page = 1
     loadData()
-  }, 300)
+  }, CONFIG.SEARCH_DEBOUNCE)
 }
 
 function debouncedSearch() {
@@ -90,7 +91,7 @@ function debouncedSearch() {
   searchTimer = setTimeout(() => {
     pagination.page = 1
     loadData()
-  }, 300)
+  }, CONFIG.SEARCH_DEBOUNCE)
 }
 
 // 手机号格式校验
@@ -139,7 +140,7 @@ async function loadRoles() {
     const items = data.items || data.data?.items || []
     roleOptions.value = items.map(r => ({ label: r.name, value: r.code }))
   } catch (e) {
-    console.warn('loadRoles failed, using defaults:', e)
+    // loadRoles failed, using defaults silently
   }
 }
 
@@ -188,7 +189,6 @@ async function loadData() {
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载用户失败: ${e.message}`)
-    console.error('[user] loadData error:', e)
     userList.value = []
   } finally {
     loading.value = false
@@ -234,7 +234,6 @@ async function handleDelete(row) {
     loadData()
   } catch (e) {
     message.error(`删除失败: ${e.message}`)
-    console.error('[user] delete error:', e)
   }
 }
 
@@ -270,7 +269,6 @@ async function submitForm() {
     loadData()
   } catch (e) {
     message.error(`操作失败: ${e.message}`)
-    console.error('[user] submit error:', e)
   } finally {
     submitting.value = false
   }

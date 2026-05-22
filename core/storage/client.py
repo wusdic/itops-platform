@@ -10,6 +10,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 import threading
 
+from core.config.constants import DEFAULT_VECTOR_SIZE
+
 
 class StorageClient(ABC):
     """存储客户端基类"""
@@ -66,8 +68,7 @@ class RedisClient(StorageClient):
             self._connected = True
             self._use_memory_fallback = False
             return True
-        except Exception as e:
-            print(f"Redis连接失败，使用内存后备: {e}")
+        except Exception:
             self._use_memory_fallback = True
             self._connected = True
             return True  # 使用内存后备也算连接成功
@@ -336,8 +337,7 @@ class TDengineClient(StorageClient):
             response = requests.get(f"{self._base_url}/rest/sql", timeout=5)
             self._connected = True
             return True
-        except Exception as e:
-            print(f"TDengine连接失败: {e}")
+        except Exception:
             return False
     
     def disconnect(self):
@@ -396,8 +396,7 @@ class TDengineClient(StorageClient):
                 results.append(dict(zip(column_names, row)))
             
             return results
-        except Exception as e:
-            print(f"TDengine执行SQL失败: {e}")
+        except Exception:
             return []
     
     def execute_raw(self, sql: str) -> str:
@@ -505,8 +504,7 @@ class InfluxDBClient(StorageClient):
             )
             self._connected = True
             return True
-        except Exception as e:
-            print(f"InfluxDB连接失败: {e}")
+        except Exception:
             return False
     
     def disconnect(self):
@@ -556,8 +554,7 @@ class InfluxDBClient(StorageClient):
                         "fields": {k: v for k, v in record.values.items() if k not in ['tags', 'time', 'measurement']}
                     })
             return results
-        except Exception as e:
-            print(f"InfluxDB查询失败: {e}")
+        except Exception:
             return []
 
 
@@ -596,8 +593,7 @@ class MinIOClient(StorageClient):
             
             self._connected = True
             return True
-        except Exception as e:
-            print(f"MinIO连接失败: {e}")
+        except Exception:
             return False
     
     def disconnect(self):
@@ -621,8 +617,7 @@ class MinIOClient(StorageClient):
                 content_type=content_type
             )
             return True
-        except S3Error as e:
-            print(f"MinIO上传失败: {e}")
+        except S3Error:
             return False
     
     def upload_data(self, object_name: str, data: bytes, content_type: str = "application/octet-stream"):
@@ -639,8 +634,7 @@ class MinIOClient(StorageClient):
                 content_type=content_type
             )
             return True
-        except S3Error as e:
-            print(f"MinIO上传失败: {e}")
+        except S3Error:
             return False
     
     def download_file(self, object_name: str, file_path: str):
@@ -650,16 +644,14 @@ class MinIOClient(StorageClient):
         try:
             self._client.fget_object(self.bucket, object_name, file_path)
             return True
-        except S3Error as e:
-            print(f"MinIO下载失败: {e}")
+        except S3Error:
             return False
     
     def get_presigned_url(self, object_name: str, expires: int = 3600) -> Optional[str]:
         """获取预签名URL"""
         try:
             return self._client.presigned_get_object(self.bucket, object_name, expires=expires)
-        except Exception as e:
-            print(f"MinIO获取预签名URL失败: {e}")
+        except Exception:
             return None
     
     def list_objects(self, prefix: str = "", recursive: bool = False) -> List[str]:
@@ -667,8 +659,7 @@ class MinIOClient(StorageClient):
         try:
             objects = self._client.list_objects(self.bucket, prefix=prefix, recursive=recursive)
             return [obj.object_name for obj in objects]
-        except Exception as e:
-            print(f"MinIO列出对象失败: {e}")
+        except Exception:
             return []
     
     def delete_object(self, object_name: str):
@@ -688,7 +679,7 @@ class QdrantClient(StorageClient):
         host: str = "localhost",
         port: int = 6333,
         collection: str = "itops_knowledge",
-        vector_size: int = 1536
+        vector_size: int = DEFAULT_VECTOR_SIZE
     ):
         super().__init__()
         self.host = host
@@ -710,8 +701,7 @@ class QdrantClient(StorageClient):
             else:
                 self._connected = False
             return self._connected
-        except Exception as e:
-            print(f"Qdrant连接失败: {e}")
+        except Exception:
             return False
     
     def disconnect(self):
@@ -743,8 +733,8 @@ class QdrantClient(StorageClient):
                 json=payload,
                 timeout=30
             )
-        except Exception as e:
-            print(f"Qdrant创建集合失败: {e}")
+        except Exception:
+            pass
     
     def upsert(self, points: List[Dict]):
         """插入或更新向量"""
@@ -760,8 +750,8 @@ class QdrantClient(StorageClient):
                 json=payload,
                 timeout=30
             )
-        except Exception as e:
-            print(f"Qdrant插入向量失败: {e}")
+        except Exception:
+            pass
     
     def search(
         self,
@@ -796,8 +786,7 @@ class QdrantClient(StorageClient):
                 results = response.json()
                 return results.get("result", [])
             return []
-        except Exception as e:
-            print(f"Qdrant搜索失败: {e}")
+        except Exception:
             return []
     
     def delete(self, point_ids: List[str]):
@@ -814,8 +803,8 @@ class QdrantClient(StorageClient):
                 json=payload,
                 timeout=30
             )
-        except Exception as e:
-            print(f"Qdrant删除向量失败: {e}")
+        except Exception:
+            pass
     
     def count(self) -> int:
         """统计向量数量"""
@@ -922,7 +911,7 @@ class StorageManager:
                 host=qdrant_config.get("host", "localhost"),
                 port=qdrant_config.get("port", 6333),
                 collection=qdrant_config.get("collection", "itops_knowledge"),
-                vector_size=qdrant_config.get("vector_size", 1536)
+                vector_size=qdrant_config.get("vector_size", DEFAULT_VECTOR_SIZE)
             )
             self._clients["qdrant"].connect()
         return self._clients["qdrant"]

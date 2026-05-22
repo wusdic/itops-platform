@@ -5,6 +5,7 @@ Device Discovery API Routes
 Provides IP range scanning and SNMP scanning endpoints for device auto-discovery.
 """
 
+import json
 import logging
 from typing import Optional, List
 from datetime import datetime
@@ -148,7 +149,6 @@ async def scan_and_import_devices(
         discovered = [h for h in results if h.status == 'up']
 
         # Import new devices
-        importer = DeviceImporter()
         imported = 0
         for host in discovered:
             # Check if device already exists by IP
@@ -167,6 +167,19 @@ async def scan_and_import_devices(
                 result = importer.import_devices([device_data], username=current_user.username)
                 if result.success:
                     imported += 1
+
+                    # 导入成功后立即触发一次采集，更新设备状态
+                    device_name = device_data['name']
+                    try:
+                        from modules.collection.device_manager import get_device_manager
+                        manager = get_device_manager()
+                        metrics = await manager.collect_device(device_name)
+                        if metrics and metrics.status.value == 'online':
+                            logger.info(f"[discovery] 设备 {device_name} 采集成功，状态已更新为 ONLINE")
+                        else:
+                            logger.info(f"[discovery] 设备 {device_name} 采集完成，状态: {metrics.status.value if metrics else 'UNKNOWN'}")
+                    except Exception as e:
+                        logger.warning(f"[discovery] 设备 {device_name} 采集失败: {e}")
 
         return {
             'total_discovered': len(discovered),
@@ -696,25 +709,32 @@ async def create_discovery_task(
     schedule: Optional[str] = Body(None, description="Cron表达式（可选）"),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    import json
-    options = json.loads(options)
-    """
-    创建定时设备发现任务
-    """
+    """创建设备发现任务，持久化到数据库"""
     try:
         task_id = "task-" + datetime.now().strftime("%Y%m%d%H%M%S")
-        
+        with _db_manager.session_scope() as db:
+            task = DiscoveryTask(
+                task_id=task_id,
+                name=name,
+                task_type=task_type,
+                target=target,
+                options=options,
+                schedule=schedule,
+                status="created",
+                created_by=current_user.username,
+            )
+            db.add(task)
+            db.commit()
         return {
             "task_id": task_id,
             "name": name,
             "task_type": task_type,
             "target": target,
-            "options": options,
+            "options": json.loads(options),
             "schedule": schedule,
             "status": "created",
             "created_at": datetime.now().isoformat(),
         }
-        
     except Exception as e:
         logger.error(f"创建设备发现任务失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -725,27 +745,45 @@ async def list_discovery_tasks(
     status: Optional[str] = Query(None, description="状态过滤"),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """
-    获取设备发现任务列表
-    """
+    """获取设备发现任务列表"""
     try:
-        return {
-            "items": [],
-            "total": 0,
-        }
+        with _db_manager.session_scope() as db:
+            query = db.query(DiscoveryTask)
+            if status:
+                query = query.filter(DiscoveryTask.status == status)
+            total = query.count()
+            tasks = query.order_by(DiscoveryTask.created_at.desc()).all()
+            return {
+                "items": [
+                    {
+                        "task_id": t.task_id,
+                        "name": t.name,
+                        "task_type": t.task_type,
+                        "target": t.target,
+                        "options": json.loads(t.options) if t.options else {},
+                        "schedule": t.schedule,
+                        "status": t.status,
+                        "created_by": t.created_by,
+                        "created_at": t.created_at.isoformat() if t.created_at else None,
+                    }
+                    for t in tasks
+                ],
+                "total": total,
+            }
     except Exception as e:
         logger.error(f"获取发现任务列表失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============== 网段管理（内存存储） ==============
+# ============== 网段管理（数据库持久化） ==============
 
-_networks_store = {}  # id -> {id, cidr, description, auto_scan, created_at}
-_network_id_counter = 1
+from modules.foundation.db_models.base import _db_manager
+from modules.foundation.db_models.system import NetworkScanConfig, DiscoveryTask
+from sqlalchemy import func
 
 
 class NetworkCreate(BaseModel):
-    cidr: str
+    cidr: str = Field(..., description="CIDR格式网段")
     description: Optional[str] = ""
     auto_scan: bool = False
 
@@ -756,52 +794,83 @@ class NetworkUpdate(BaseModel):
     auto_scan: Optional[bool] = None
 
 
-@router.get("/networks", summary="获取已配置网段列表", response_model=List[dict])
+@router.get("/networks", summary="获取已配置网段列表")
 async def list_networks():
     """返回所有已配置的扫描网段"""
-    return list(_networks_store.values())
+    with _db_manager.session_scope() as db:
+        nets = db.query(NetworkScanConfig).order_by(NetworkScanConfig.id).all()
+        return [
+            {
+                "id": n.id,
+                "cidr": n.ip_range,
+                "name": n.name,
+                "description": n.name,  # 兼容旧字段
+                "auto_scan": bool(n.auto_scan),
+                "status": n.status,
+                "last_scan_at": n.last_scan_at.isoformat() if n.last_scan_at else None,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in nets
+        ]
 
 
-@router.post("/networks", summary="添加扫描网段", response_model=dict)
+@router.post("/networks", summary="添加扫描网段")
 async def create_network(net: NetworkCreate, network_id: Optional[int] = None):
-    """添加新的扫描网段，network_id 优先使用前端指定的 ID"""
-    global _network_id_counter
-    if network_id is not None and network_id not in _networks_store:
-        nid = network_id
-    else:
-        nid = _network_id_counter
-        _network_id_counter += 1
-    now = datetime.now().isoformat()
-    record = {
-        "id": nid,
-        "cidr": net.cidr,
-        "description": net.description or "",
-        "auto_scan": net.auto_scan,
-        "created_at": now,
-    }
-    _networks_store[nid] = record
-    return record
+    """添加新的扫描网段"""
+    with _db_manager.session_scope() as db:
+        if network_id is not None:
+            existing = db.query(NetworkScanConfig).filter(NetworkScanConfig.id == network_id).first()
+            if existing:
+                raise HTTPException(status_code=409, detail="该ID已存在")
+            record = NetworkScanConfig(id=network_id, ip_range=net.cidr, name=net.description or net.cidr, auto_scan=1 if net.auto_scan else 0)
+        else:
+            record = NetworkScanConfig(ip_range=net.cidr, name=net.description or net.cidr, auto_scan=1 if net.auto_scan else 0)
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return {
+            "id": record.id,
+            "cidr": record.ip_range,
+            "name": record.name,
+            "description": record.name,
+            "auto_scan": bool(record.auto_scan),
+            "status": record.status,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+        }
 
 
-@router.put("/networks/{network_id}", summary="更新扫描网段", response_model=dict)
+@router.put("/networks/{network_id}", summary="更新扫描网段")
 async def update_network(network_id: int, net: NetworkUpdate):
     """更新指定网段的配置"""
-    if network_id not in _networks_store:
-        raise HTTPException(status_code=404, detail="网段不存在")
-    record = _networks_store[network_id]
-    if net.cidr is not None:
-        record["cidr"] = net.cidr
-    if net.description is not None:
-        record["description"] = net.description
-    if net.auto_scan is not None:
-        record["auto_scan"] = net.auto_scan
-    return record
+    with _db_manager.session_scope() as db:
+        record = db.query(NetworkScanConfig).filter(NetworkScanConfig.id == network_id).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="网段不存在")
+        if net.cidr is not None:
+            record.ip_range = net.cidr
+        if net.description is not None:
+            record.name = net.description
+            record.description = net.description
+        if net.auto_scan is not None:
+            record.auto_scan = 1 if net.auto_scan else 0
+        db.commit()
+        return {
+            "id": record.id,
+            "cidr": record.ip_range,
+            "name": record.name,
+            "description": record.name,
+            "auto_scan": bool(record.auto_scan),
+            "status": record.status,
+        }
 
 
 @router.delete("/networks/{network_id}", summary="删除扫描网段")
 async def delete_network(network_id: int):
     """删除指定网段"""
-    if network_id not in _networks_store:
-        raise HTTPException(status_code=404, detail="网段不存在")
-    del _networks_store[network_id]
+    with _db_manager.session_scope() as db:
+        record = db.query(NetworkScanConfig).filter(NetworkScanConfig.id == network_id).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="网段不存在")
+        db.delete(record)
+        db.commit()
     return {"message": "删除成功"}

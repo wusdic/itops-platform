@@ -235,7 +235,6 @@ const loadData = async () => {
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载失败: ${e.message}`)
-    console.error('[knowledge/list] loadData error:', e)
     list.value = []
   } finally {
     loading.value = false
@@ -252,7 +251,7 @@ const loadCategories = async () => {
     const data = await res.json()
     categoryOptions.value = (data.items || []).map(c => ({ label: c.name, value: c.id }))
   } catch (e) {
-    console.error('[knowledge/list] loadCategories error:', e)
+    // load categories failed silently
   }
 }
 
@@ -286,7 +285,6 @@ const openEditModal = async (row) => {
     formData.status = data.status || 'draft'
   } catch (e) {
     message.error(`加载文档详情失败: ${e.message}`)
-    console.error('[knowledge/list] openEditModal error:', e)
     formModalVisible.value = false
   } finally {
     formLoading.value = false
@@ -329,7 +327,6 @@ const submitForm = async () => {
     loadData()
   } catch (e) {
     message.error(`${isEditing.value ? '更新' : '创建'}失败: ${e.message}`)
-    console.error('[knowledge/list] submitForm error:', e)
   } finally {
     formLoading.value = false
   }
@@ -353,7 +350,6 @@ const handleDelete = (row) => {
         loadData()
       } catch (e) {
         message.error(`删除失败: ${e.message}`)
-        console.error('[knowledge/list] handleDelete error:', e)
       }
     }
   })
@@ -377,7 +373,6 @@ const submitReview = async (row) => {
         loadData()
       } catch (e) {
         message.error(`提交审核失败: ${e.message}`)
-        console.error('[knowledge/list] submitReview error:', e)
       }
     }
   })
@@ -401,7 +396,6 @@ const approve = async (row) => {
         loadData()
       } catch (e) {
         message.error(`审核操作失败: ${e.message}`)
-        console.error('[knowledge/list] approve error:', e)
       }
     }
   })

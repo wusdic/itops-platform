@@ -153,7 +153,6 @@ async function loadData() {
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载规则失败: ${e.message}`)
-    console.error('[automation/script] loadData error:', e)
     ruleList.value = []
   } finally {
     loading.value = false
@@ -192,7 +191,6 @@ async function handleDelete(row) {
     loadData()
   } catch (e) {
     message.error(`删除失败: ${e.message}`)
-    console.error('[automation/script] delete error:', e)
   }
 }
 
@@ -219,7 +217,6 @@ async function handleTest() {
   } catch (e) {
     testResult.value = `测试失败: ${e.message}`
     message.error(`测试失败: ${e.message}`)
-    console.error('[automation/script] test error:', e)
   } finally {
     testing.value = false
   }
@@ -259,7 +256,6 @@ async function submitForm() {
     loadData()
   } catch (e) {
     message.error(`操作失败: ${e.message}`)
-    console.error('[automation/script] submit error:', e)
   } finally {
     submitting.value = false
   }

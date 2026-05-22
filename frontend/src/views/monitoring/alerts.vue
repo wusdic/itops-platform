@@ -54,7 +54,7 @@
         :columns="columns"
         :data="alerts"
         :loading="loading"
-        :pagination="getPaginationConfig()"
+        :pagination="paginationConfig"
         :key="paginationVersion"
         :row-key="row => row.id"
         :row-class-name="getRowClassName"
@@ -443,7 +443,6 @@ const loadAlerts = async () => {
   } catch (e) {
     if (isActive.value) {
       message.error('加载告警列表失败')
-      console.error('loadAlerts error:', e)
     }
   } finally {
     if (isActive.value) {

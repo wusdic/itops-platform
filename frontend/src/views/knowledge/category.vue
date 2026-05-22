@@ -349,7 +349,6 @@ async function submitForm() {
     modalVisible.value = false
   } catch (error) {
     message.error('操作失败')
-    console.error('Submit category error:', error)
   } finally {
     formLoading.value = false
   }
@@ -381,7 +380,6 @@ async function confirmDelete() {
     deleteModalVisible.value = false
   } catch (error) {
     message.error('删除失败')
-    console.error('Delete category error:', error)
   } finally {
     deleteLoading.value = false
   }

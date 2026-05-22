@@ -195,7 +195,6 @@ const loadDevices = async () => {
     }))
   } catch (e) {
     message.error(`加载设备失败: ${e.message}`)
-    console.error('[performance] loadDevices error:', e)
     deviceList.value = []
   } finally {
     loading.value = false
@@ -256,7 +255,6 @@ const loadMetrics = async () => {
     updateCharts(data)
   } catch (e) {
     message.error(`加载指标失败: ${e.message}`)
-    console.error('[performance] loadMetrics error:', e)
   } finally {
     loading.value = false
   }

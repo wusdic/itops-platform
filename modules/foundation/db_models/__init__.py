@@ -17,7 +17,7 @@ from .base import Base, db_session, init_db, close_db, get_engine
 from .device import Device, DeviceType, DeviceStatus
 from .alert import Alert, AlertLevel, AlertStatus, AlertCategory, AlertRule
 from .monitoring import PerformanceMetric
-from .system import OperationLog, BackupRecord
+from .system import OperationLog, BackupRecord, SystemUser, NetworkScanConfig, DiscoveryTask
 from .workorder import WorkOrder, WorkOrderType, WorkOrderStatus
 from .report_template import ReportTemplate, ReportTemplateType, ReportFormat, Report, ReportSchedule
 from .ai import AIConversation
@@ -44,6 +44,9 @@ __all__ = [
     'PerformanceMetric',
     'OperationLog',
     'BackupRecord',
+    'SystemUser',
+    'NetworkScanConfig',
+    'DiscoveryTask',
     'WorkOrder',
     'WorkOrderType',
     'WorkOrderStatus',

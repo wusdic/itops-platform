@@ -221,7 +221,6 @@ const loadData = async () => {
       pagination.total = 0
     }
   } catch (error) {
-    console.error('Load backup list error:', error)
     backupList.value = []
   } finally {
     loading.value = false

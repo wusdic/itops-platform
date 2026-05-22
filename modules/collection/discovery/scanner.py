@@ -75,8 +75,8 @@ class IPScanner:
     - Common port scanning
     """
     
-    # Common ports to scan
-    COMMON_PORTS = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5900, 8080, 8443]
+    # Common ports to scan (includes 8000 for local FastAPI)
+    COMMON_PORTS = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5900, 8080, 8443, 8000]
     
     # TCP ports for banner grabbing
     BANNER_PORTS = [21, 22, 23, 80, 443, 3306, 3389, 8080]

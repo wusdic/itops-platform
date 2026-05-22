@@ -35,7 +35,7 @@ class WMIResultStatus(Enum):
 class WinRMConfig:
     """WinRM configuration for async operations"""
     host: str
-    port: int = 5985
+    port: int = Port.WINRM_HTTP
     username: str = 'administrator'
     password: str = ''
     transport: str = 'ntlm'  # ntlm, kerberos, plaintext

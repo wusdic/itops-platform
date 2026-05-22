@@ -129,6 +129,7 @@ import { ref, reactive, computed, h, onMounted, onUnmounted } from 'vue'
 import { useMessage, NTag, NButton, NSpace, NAlert, NTooltip, NIcon } from 'naive-ui'
 import { AddOutline, ChevronForward } from '@vicons/ionicons5'
 import { workorder as workorderApi, devices as devicesApi } from '@/api'
+import { CONFIG } from '@/config/constants'
 
 const message = useMessage()
 
@@ -209,7 +210,7 @@ async function loadStats() {
       closed: res.closed || 0
     }
   } catch (e) {
-    console.warn('加载工单统计失败:', e)
+    // load order stats failed silently
   }
 }
 
@@ -291,7 +292,6 @@ async function loadData() {
     workorderList.value = res.items || res.data?.items || []
     pagination.total = res.total || res.data?.total || 0
   } catch (e) {
-    console.error('加载工单列表失败:', e)
     message.error(`加载工单列表失败: ${e.message}`)
   } finally {
     loading.value = false
@@ -303,7 +303,7 @@ async function loadDevices() {
     const res = await devicesApi.getList({ page: 1, page_size: 500 })
     deviceList.value = (res.items || res.data?.items || []).map(d => ({ label: d.name || d.device_name || `设备-${d.id}`, value: d.id }))
   } catch (e) {
-    console.warn('加载设备列表失败:', e)
+    // load device list failed silently
   }
 }
 
@@ -325,7 +325,6 @@ async function handleView(row) {
     viewData.value = data
     viewModalVisible.value = true
   } catch (e) {
-    console.error('获取工单详情失败:', e)
     message.error(`获取工单详情失败: ${e.message}`)
   }
 }
@@ -353,7 +352,6 @@ async function submitEdit() {
     editModalVisible.value = false
     loadData()
   } catch (e) {
-    console.error('更新工单失败:', e)
     message.error(`更新工单失败: ${e.message}`)
   } finally {
     editSubmitting.value = false
@@ -366,7 +364,6 @@ async function handleClose(row) {
     message.success('工单已关闭')
     loadData()
   } catch (e) {
-    console.error('关闭工单失败:', e)
     message.error(`关闭工单失败: ${e.message}`)
   }
 }
@@ -375,7 +372,7 @@ let pollTimer = null
 
 function startPoll() {
   stopPoll()
-  pollTimer = setInterval(() => { loadData() }, 30000)
+  pollTimer = setInterval(() => { loadData() }, CONFIG.POLL_INTERVAL_SHORT)
 }
 
 function stopPoll() {

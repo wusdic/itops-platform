@@ -117,7 +117,6 @@ const handleAnalyze = async () => {
     }
     message.success('分析完成')
   } catch (error) {
-    console.error('Analyze error:', error)
     message.error('分析失败，请重试')
     result.value = '分析失败: ' + error.message
   } finally {

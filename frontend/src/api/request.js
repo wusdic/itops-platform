@@ -1,6 +1,7 @@
 import axios from 'axios'
 import router from '../router'
 import { useMessage } from 'naive-ui'
+import { CONFIG } from '../config/constants'
 
 // 延迟获取 message 实例，避免在模块顶层调用（此时无 Vue 上下文）
 let _message = null
@@ -13,7 +14,7 @@ const getMessage = () => {
 
 const request = axios.create({
   baseURL: '/api/v1',
-  timeout: 30000
+  timeout: CONFIG.REQUEST_TIMEOUT
 })
 
 // 请求拦截器

@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 
+from core.config.constants import PBKDF2_ITERATIONS, SECONDS_PER_MINUTE, SECONDS_PER_HOUR, SECONDS_PER_DAY, SECONDS_PER_WEEK
+
 T = TypeVar('T')
 
 
@@ -303,7 +305,7 @@ def hash_password(password: str, salt: bytes = None) -> tuple:
     if salt is None:
         salt = base64.b64encode(os.urandom(32))
     
-    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, PBKDF2_ITERATIONS)
     return base64.b64encode(pwd_hash).decode(), base64.b64encode(salt).decode()
 
 
@@ -350,10 +352,10 @@ def parse_duration(duration_str: str) -> float:
     """解析时间字符串为秒数"""
     units = {
         's': 1,
-        'm': 60,
-        'h': 3600,
-        'd': 86400,
-        'w': 604800,
+        'm': SECONDS_PER_MINUTE,
+        'h': SECONDS_PER_HOUR,
+        'd': SECONDS_PER_DAY,
+        'w': SECONDS_PER_WEEK,
     }
     
     duration_str = duration_str.strip().lower()

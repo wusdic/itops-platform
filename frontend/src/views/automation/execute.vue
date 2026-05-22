@@ -165,7 +165,6 @@ async function loadData() {
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载回滚历史失败: ${e.message}`)
-    console.error('[automation/execute] loadData error:', e)
     rollbackList.value = []
   } finally {
     loading.value = false
@@ -198,7 +197,6 @@ async function handleViewSnapshot(row) {
   } catch (e) {
     snapshotDetail.value = `加载快照失败: ${e.message}`
     message.error(`加载快照失败: ${e.message}`)
-    console.error('[automation/execute] snapshot error:', e)
   } finally {
     snapshotLoading.value = false
   }

@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from enum import IntEnum
 
+from config.constants import Port
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +58,7 @@ class SyslogFacility(IntEnum):
 class SyslogConfig:
     """Syslog collector configuration"""
     host: str = "localhost"
-    port: int = 514
+    port: int = Port.SYSLOG
     protocol: str = "UDP"  # UDP or TCP
     timeout: float = 5.0
     buffer_size: int = 4096

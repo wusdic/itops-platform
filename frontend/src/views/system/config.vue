@@ -75,7 +75,6 @@ const loadData = async () => {
     const data = await res.json()
     configList.value = (data.items || []).map(c => ({ ...c, editing: false, editValue: c.value }))
   } catch (error) {
-    console.error('Load config error:', error)
     message.error('加载配置失败')
   } finally {
     loading.value = false
@@ -114,7 +113,6 @@ const handleSave = async (row) => {
       setTimezone(row.value)
     }
   } catch (error) {
-    console.error('Save error:', error)
     message.error('保存失败')
   }
 }

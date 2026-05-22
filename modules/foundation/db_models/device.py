@@ -120,7 +120,13 @@ class Device(Base):
     
     # 配置信息（JSON格式）
     config = Column(Text, comment='配置信息JSON')
-    
+
+    # 采集间隔配置（秒）
+    param_check_interval = Column(Integer, default=3600, comment='参数检测间隔（秒），默认3600')
+    status_check_interval = Column(Integer, default=60, comment='状态检测间隔（秒），默认60')
+    last_param_check = Column(DateTime, comment='上次参数检测时间')
+    last_status_check = Column(DateTime, comment='上次状态检测时间')
+
     # 标签/分组
     tags = Column(String(256), comment='标签，逗号分隔')
     group_id = Column(Integer, comment='设备组ID')

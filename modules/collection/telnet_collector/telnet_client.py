@@ -7,12 +7,14 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any
 
+from config.constants import Port, TelnetCmd
+
 
 @dataclass
 class TelnetConfig:
     """Telnet 配置"""
     host: str
-    port: int = 23
+    port: int = Port.TELNET
     username: str = ""
     password: str = ""
     timeout: int = 10
@@ -22,20 +24,20 @@ class TelnetConfig:
 class TelnetCollector:
     """Telnet 采集器，使用原生 socket 实现"""
 
-    # Telnet 协议常用命令
-    IAC = bytes([255])  # Interpret As Command
-    DONT = bytes([254])
-    DO = bytes([253])
-    WONT = bytes([252])
-    WILL = bytes([251])
-    SB = bytes([250])   # Sub-negotiation Begin
-    SE = bytes([240])   # Sub-negotiation End
-    ECHO = bytes([1])
-    SGA = bytes([3])    # Suppress Go Ahead
-    NAWS = bytes([31])  # Window Size
-    TSPEED = bytes([32])
-    ENVIRON = bytes([36])
-    LINEMODE = bytes([34])
+    # Telnet 协议常用命令 (引用 TelnetCmd 常量)
+    IAC = TelnetCmd.IAC
+    DONT = TelnetCmd.DONT
+    DO = TelnetCmd.DO
+    WONT = TelnetCmd.WONT
+    WILL = TelnetCmd.WILL
+    SB = TelnetCmd.SB
+    SE = TelnetCmd.SE
+    ECHO = TelnetCmd.ECHO
+    SGA = TelnetCmd.SGA
+    NAWS = TelnetCmd.NAWS
+    TSPEED = TelnetCmd.TSPEED
+    ENVIRON = TelnetCmd.ENVIRON
+    LINEMODE = TelnetCmd.LINEMODE
 
     # 命令提示符正则
     PROMPT_PATTERNS = [

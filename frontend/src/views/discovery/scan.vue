@@ -245,22 +245,50 @@ const historyColumns = [
 ]
 
 // ── 扫描 ───────────────────────────────────────────────────
+function normalizeCIDR(input) {
+  // Auto-fix common user mistakes:
+  // - "10.168.1.0" -> "10.168.1.0/24" (treat as network, not single host)
+  // - "10.168.1.1/24" -> "10.168.1.0/24" (normalize network address)
+  const trimmed = input.trim()
+  if (!trimmed.includes('/')) {
+    // No CIDR suffix — assume /24 and fix network address
+    const parts = trimmed.split('.')
+    if (parts.length === 4) {
+      return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`
+    }
+    return trimmed
+  }
+  // Has CIDR suffix — normalize the network address
+  try {
+    const ip = trimmed.split('/')[0]
+    const parts = ip.split('.').map(Number)
+    if (parts.length === 4) {
+      const normalized = `${parts[0]}.${parts[1]}.${parts[2]}.0/${trimmed.split('/')[1]}`
+      return normalized
+    }
+  } catch (e) {
+    // Let backend handle invalid input
+  }
+  return trimmed
+}
+
 async function startScan() {
   if (!cidr.value) return
+  const normalizedCidr = normalizeCIDR(cidr.value)
   scanning.value = true
   scanProgress.value = 0
-  scanStatus.value = '正在连接扫描服务...'
+  scanStatus.value = '正在扫描...'
   scanResults.value = []
   selectedHosts.value = []
 
   try {
     const token = localStorage.getItem('token')
-    // POST /api/v1/discovery/scan-and-import — 同步扫描，发现结果返回
+    // POST /api/v1/discovery/scan-and-import — 同步扫描，直接导入发现的设备
     const res = await fetch('/api/v1/discovery/scan-and-import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        cidr: cidr.value,
+        cidr: normalizedCidr,
         scan_ports: options.value.scanPorts,
         grab_banners: options.value.grabBanners,
       }),
@@ -271,19 +299,22 @@ async function startScan() {
       throw new Error(err.message || `HTTP ${res.status}`)
     }
 
-    scanProgress.value = 50
+    scanProgress.value = 80
     scanStatus.value = '解析响应...'
 
     const data = await res.json()
-    if (data.hosts && data.hosts.length > 0) {
-      scanProgress.value = 100
-      scanStatus.value = `扫描完成，发现 ${data.hosts.length} 台主机`
-      scanResults.value = data.hosts
+    // Backend returns {total_discovered, newly_imported, cidr} — hosts are imported directly to DB
+    const discovered = data.total_discovered || 0
+    const imported = data.newly_imported || 0
+    scanProgress.value = 100
+    if (discovered > 0) {
+      scanStatus.value = `扫描完成，发现 ${discovered} 台主机，已导入 ${imported} 台新设备到设备列表`
+      message.success(`发现 ${discovered} 台主机，导入 ${imported} 台新设备`)
     } else {
-      scanProgress.value = 100
-      scanStatus.value = '扫描完成，未发现主机（可能网络不可达）'
-      scanResults.value = []
+      scanStatus.value = '扫描完成，未发现主机（可能网络不可达或设备已存在）'
+      message.warning('未发现新设备，可能网络不可达或设备已在库中')
     }
+    scanResults.value = []
   } catch (e) {
     scanProgress.value = 0
     scanStatus.value = `扫描失败: ${e.message}`
@@ -299,7 +330,7 @@ function stopScan() {
 }
 
 async function quickScan(cidrValue) {
-  cidr.value = cidrValue
+  cidr.value = normalizeCIDR(cidrValue)
   await startScan()
 }
 
@@ -466,8 +497,8 @@ async function loadHistory() {
   }
 }
 
-onMounted(async () => {
-  // 加载已保存的网段
+// 加载网段列表
+async function loadNetworks() {
   const token = localStorage.getItem('token')
   try {
     const res = await fetch('/api/v1/discovery/networks', {
@@ -475,13 +506,29 @@ onMounted(async () => {
     })
     if (res.ok) {
       const data = await res.json()
-      savedNetworks.value = data.items || []
+      // 后端返回数组，不是 {items: [...]} 格式
+      savedNetworks.value = Array.isArray(data) ? data : (data.items || [])
+      // 同时备份到 localStorage
+      localStorage.setItem('scan_networks', JSON.stringify(savedNetworks.value))
     } else {
       throw new Error()
     }
   } catch {
     const networks = localStorage.getItem('scan_networks')
     if (networks) savedNetworks.value = JSON.parse(networks)
+  }
+}
+
+onMounted(async () => {
+  await loadNetworks()
+
+  // 对所有 auto_scan=true 的网段自动触发扫描
+  const autoScanNetworks = savedNetworks.value.filter(n => n.auto_scan)
+  if (autoScanNetworks.length > 0) {
+    message.info(`自动扫描 ${autoScanNetworks.length} 个已配置网段...`)
+    for (const net of autoScanNetworks) {
+      await quickScan(net.cidr)
+    }
   }
 
   loadHistory()

@@ -105,9 +105,11 @@ def _write_log_to_db(record: dict):
         try:
             from modules.foundation.db_models.base import DatabaseManager
             from modules.foundation.db_models.system import OperationLog
+            from api.routes.log_service import LogAggregationService, DEFAULT_LOG_CONFIG
 
             with DatabaseManager().session_scope() as db:
                 try:
+                    # 1. 写入原始日志表
                     log = OperationLog(
                         username=record.get("username", "anonymous"),
                         action=record.get("action", "unknown"),
@@ -124,6 +126,25 @@ def _write_log_to_db(record: dict):
                         timestamp=datetime.fromisoformat(record["timestamp"]),
                     )
                     db.add(log)
+                    db.flush()  # 确保 OperationLog 插入成功
+
+                    # 2. 同时写入归集层（log_groups + log_items）
+                    agg_record = {
+                        "action": record.get("action", "read"),
+                        "resource": record.get("resource", ""),
+                        "username": record.get("username", ""),
+                        "ip_address": record.get("ip_address", ""),
+                        "path": record.get("path", ""),
+                        "method": record.get("method", ""),
+                        "resource_id": record.get("resource_id"),
+                        "response_status": record.get("response_status"),
+                        "duration_ms": record.get("duration_ms"),
+                        "level": "INFO",
+                    }
+                    LogAggregationService.write_operation_log(
+                        db, agg_record, DEFAULT_LOG_CONFIG["operation"]
+                    )
+
                     db.commit()
                 except Exception as e:
                     db.rollback()

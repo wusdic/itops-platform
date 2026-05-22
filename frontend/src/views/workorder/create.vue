@@ -37,6 +37,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NForm, NFormItem, NInput, NSelect, NButton, NSpace, useMessage, useDialog } from 'naive-ui'
+import { CONFIG } from '@/config/constants'
 
 const router = useRouter()
 const message = useMessage()
@@ -76,7 +77,7 @@ const deviceOptions = ref([])
 async function loadDevices() {
   try {
     const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/assets/device?page=1&page_size=100', {
+    const res = await fetch('/api/v1/assets/device?page=1&page_size=' + CONFIG.MAX_PAGE_SIZE, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -89,7 +90,6 @@ async function loadDevices() {
   } catch (e) {
     deviceOptions.value = []
     message.error(`加载设备列表失败: ${e.message}`)
-    console.error('[workorder/create] loadDevices error:', e)
   }
 }
 
@@ -124,7 +124,6 @@ async function submitForm() {
     router.push('/workorder/my')
   } catch (e) {
     message.error(`提交失败: ${e.message}`)
-    console.error('[workorder/create] submit error:', e)
   } finally {
     submitting.value = false
   }

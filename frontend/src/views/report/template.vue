@@ -258,7 +258,6 @@ async function fetchTemplates() {
     const data = await response.json()
     templateList.value = data.items || data || []
   } catch (error) {
-    console.error('Failed to fetch templates:', error)
     message.error('加载模板失败')
     templateList.value = []
   } finally {
@@ -281,7 +280,6 @@ async function createTemplate() {
     fetchTemplates()
     return data
   } catch (error) {
-    console.error('Failed to create template:', error)
     message.error('创建模板失败')
     throw error
   }
@@ -302,7 +300,6 @@ async function updateTemplate() {
     fetchTemplates()
     return data
   } catch (error) {
-    console.error('Failed to update template:', error)
     message.error('更新模板失败')
     throw error
   }
@@ -318,7 +315,6 @@ async function deleteTemplate(id) {
     message.success('模板删除成功')
     fetchTemplates()
   } catch (error) {
-    console.error('Failed to delete template:', error)
     message.error('删除模板失败')
   }
 }

@@ -367,7 +367,6 @@ async function fetchStats() {
     const data = await response.json()
     stats.value = data
   } catch (error) {
-    console.error('Failed to fetch stats:', error)
     message.error('加载统计数据失败')
     stats.value = { total: 0, completed: 0, failed: 0, generating: 0 }
   }
@@ -398,7 +397,6 @@ async function fetchReportList() {
     reportList.value = data.items || data
     pagination.itemCount = data.total || reportList.value.length
   } catch (error) {
-    console.error('Failed to fetch report list:', error)
     message.error('加载报表列表失败')
     reportList.value = []
   } finally {
@@ -417,7 +415,6 @@ async function fetchReportPreview(id) {
     const data = await response.json()
     previewModal.content = data.content || data.html || '<p>暂无预览</p>'
   } catch (error) {
-    console.error('Failed to fetch preview:', error)
     message.error('加载报表预览失败')
     previewModal.content = '<n-empty description="预览不可用" />'
   } finally {
@@ -444,7 +441,6 @@ async function downloadReport(id) {
     document.body.removeChild(a)
     message.success('报表下载成功')
   } catch (error) {
-    console.error('Failed to download report:', error)
     message.error('下载报表失败')
   }
 }
@@ -460,7 +456,6 @@ async function deleteReport(id) {
     fetchReportList()
     fetchStats()
   } catch (error) {
-    console.error('Failed to delete report:', error)
     message.error('删除报表失败')
   }
 }

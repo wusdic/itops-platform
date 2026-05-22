@@ -339,7 +339,7 @@ async function loadCategories() {
     const data = await res.json()
     // categories already loaded
   } catch (e) {
-    console.warn('加载分类失败:', e)
+    // load categories failed silently
   }
 }
 

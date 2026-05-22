@@ -17,6 +17,8 @@ import socket
 import struct
 import time
 
+from core.config.constants import LOG_ROTATION_MAX_BYTES, LOG_ROTATION_BACKUP_COUNT
+
 
 class LogFormatter:
     """日志格式化器基类"""
@@ -139,8 +141,8 @@ class RotatingFileHandler(LogHandler):
     def __init__(
         self,
         filename: str = "logs/itops.log",
-        max_bytes: int = 10 * 1024 * 1024,  # 10MB
-        backup_count: int = 5,
+        max_bytes: int = LOG_ROTATION_MAX_BYTES,  # 10MB
+        backup_count: int = LOG_ROTATION_BACKUP_COUNT,
         level: str = "DEBUG",
         formatter: LogFormatter = None
     ):
@@ -328,8 +330,8 @@ class LoggerManager:
         syslog_host: str = "localhost",
         syslog_port: int = 514,
         json_format: bool = False,
-        max_file_size: int = 10 * 1024 * 1024,
-        backup_count: int = 5
+        max_file_size: int = LOG_ROTATION_MAX_BYTES,
+        backup_count: int = LOG_ROTATION_BACKUP_COUNT
     ):
         """配置日志管理器"""
         self._default_level = level
@@ -373,8 +375,8 @@ class LoggerManager:
             try:
                 syslog_handler = SysLogHandler(syslog_host, syslog_port, level, formatter)
                 self.add_handler(syslog_handler.get_handler())
-            except Exception as e:
-                print(f"无法连接Syslog服务器: {e}")
+            except Exception:
+                pass
         
         # 添加上下文过滤器
         for handler in self._handlers:

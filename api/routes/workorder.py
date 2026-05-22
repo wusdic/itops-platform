@@ -16,6 +16,7 @@ from modules.foundation.db_models.workorder import (
 )
 from modules.business.workorder.workorder import WorkOrderCore
 from modules.business.report_generator.excel_exporter import WorkOrderExporter, ExportFormat
+from core.config.constants import MAX_EXPORT_RECORDS
 
 router = APIRouter()
 
@@ -235,7 +236,7 @@ async def export_workorders(
         start_time=start_date,
         end_time=end_date,
         page=1,
-        page_size=10000  # 最大导出10000条
+        page_size=MAX_EXPORT_RECORDS  # 最大导出条数
     )
     
     if not workorders:
@@ -388,7 +389,7 @@ async def get_workorder_stats(
     core = _build_workorder_core(db)
     
     # 统计各状态工单数量
-    workorders, total = core.list(page=1, page_size=10000)
+    workorders, total = core.list(page=1, page_size=MAX_EXPORT_RECORDS)
     
     stats = {
         'total': total,
@@ -431,7 +432,7 @@ async def get_workorder_trend(
     start_date = end_date - timedelta(days=days)
     
     core = _build_workorder_core(db)
-    workorders, _ = core.list(start_time=start_date, end_time=end_date, page=1, page_size=10000)
+    workorders, _ = core.list(start_time=start_date, end_time=end_date, page=1, page_size=MAX_EXPORT_RECORDS)
     
     # 按日期分组
     dates_set = set()

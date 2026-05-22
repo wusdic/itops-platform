@@ -406,7 +406,7 @@ class RAGEnhancer:
                 # 更新分块记录
                 chunk.vector_id = vector_id
             except Exception as e:
-                print(f"Vectorization failed for chunk {chunk.id}: {e}")
+                pass
     
     def _get_collection_name(self, chunk: DocumentChunk) -> str:
         """获取集合名称"""

@@ -17,6 +17,7 @@ from api.dependencies import get_db, get_current_user, CurrentUser, PaginationPa
 from modules.foundation.db_models.alert import Alert, AlertLevel, AlertStatus, AlertCategory
 from modules.foundation.db_models.monitoring import PerformanceMetric, DeviceMetricConfig
 from modules.foundation.db_models.device import Device
+from core.config.constants import QUERY_RESULT_LIMIT, QUERY_RESULT_MAX_LIMIT
 
 
 router = APIRouter()
@@ -110,7 +111,7 @@ async def query_metrics(
     start: Optional[datetime] = Query(None, description="开始时间"),
     end: Optional[datetime] = Query(None, description="结束时间"),
     step: int = Query(60, description="采样间隔(秒)"),
-    limit: int = Query(1000, le=10000, description="返回点数限制"),
+    limit: int = Query(QUERY_RESULT_LIMIT, le=QUERY_RESULT_MAX_LIMIT, description="返回点数限制"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -397,7 +398,7 @@ async def promql_query(
             )
         )
 
-    metrics = query_db.order_by(PerformanceMetric.timestamp.desc()).limit(1000).all()
+    metrics = query_db.order_by(PerformanceMetric.timestamp.desc()).limit(QUERY_RESULT_LIMIT).all()
 
     return {
         "status": "success",

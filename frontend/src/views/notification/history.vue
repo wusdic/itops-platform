@@ -144,7 +144,6 @@ const loadData = async () => {
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载失败: ${e.message}`)
-    console.error('[notification/history] loadData error:', e)
     list.value = []
   } finally {
     loading.value = false

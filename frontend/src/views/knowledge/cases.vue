@@ -152,7 +152,6 @@ async function loadData() {
     pagination.total = data.total || 0
   } catch (e) {
     message.error(`加载失败: ${e.message}`)
-    console.error('[knowledge/cases] loadData error:', e)
     list.value = []
   } finally {
     loading.value = false

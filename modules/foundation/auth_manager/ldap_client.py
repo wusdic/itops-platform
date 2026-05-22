@@ -137,7 +137,6 @@ class LDAPConnection:
             self._connected = True
             return True
         except Exception as e:
-            print(f"LDAP连接失败: {e}")
             return False
 
     def disconnect(self):
@@ -182,7 +181,6 @@ class LDAPConnection:
             # 模拟模式
             return []
         except Exception as e:
-            print(f"LDAP搜索失败: {e}")
             return []
         
         return []

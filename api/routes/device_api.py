@@ -67,6 +67,22 @@ class DeviceStatsResponse(BaseModel):
     by_vendor: dict
 
 
+class CollectionConfigResponse(BaseModel):
+    """采集配置响应"""
+    device_name: str
+    param_check_interval: int = 3600
+    status_check_interval: int = 60
+    last_param_check: Optional[str] = None
+    last_status_check: Optional[str] = None
+    working_protocols: Optional[List[str]] = None
+
+
+class CollectionConfigUpdateRequest(BaseModel):
+    """采集配置更新请求"""
+    param_check_interval: Optional[int] = Field(None, ge=30, le=86400, description="参数检测间隔（秒），30-86400")
+    status_check_interval: Optional[int] = Field(None, ge=10, le=3600, description="状态检测间隔（秒），10-3600")
+
+
 class ProtocolInfo(BaseModel):
     """协议信息"""
     name: str
@@ -515,6 +531,75 @@ async def get_device_metrics_history(
         raise
     except Exception as e:
         logger.error(f"获取设备指标历史失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== 采集配置接口 ==============
+
+@router.get("/{device_name}/collection-config", summary="获取设备采集配置")
+async def get_collection_config(
+    device_name: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """获取设备的采集配置（参数检测间隔、状态检测间隔、有效协议）"""
+    try:
+        from modules.foundation.db_models.device import Device
+        from modules.foundation.db_models.base import _db_manager
+        import json
+
+        with _db_manager.session_scope() as session:
+            device = session.query(Device).filter(Device.name == device_name).first()
+            if not device:
+                raise HTTPException(status_code=404, detail=f"设备不存在: {device_name}")
+
+            config = json.loads(device.config) if device.config else {}
+            working_protocols = config.get('working_protocols')
+
+            return CollectionConfigResponse(
+                device_name=device.name,
+                param_check_interval=device.param_check_interval or 3600,
+                status_check_interval=device.status_check_interval or 60,
+                last_param_check=device.last_param_check.isoformat() if device.last_param_check else None,
+                last_status_check=device.last_status_check.isoformat() if device.last_status_check else None,
+                working_protocols=working_protocols,
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取采集配置失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{device_name}/collection-config", summary="更新设备采集配置")
+async def update_collection_config(
+    device_name: str,
+    req: CollectionConfigUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """更新设备的采集间隔配置"""
+    try:
+        from modules.foundation.db_models.device import Device
+        from modules.foundation.db_models.base import _db_manager
+
+        with _db_manager.session_scope() as session:
+            device = session.query(Device).filter(Device.name == device_name).first()
+            if not device:
+                raise HTTPException(status_code=404, detail=f"设备不存在: {device_name}")
+
+            if req.param_check_interval is not None:
+                device.param_check_interval = req.param_check_interval
+            if req.status_check_interval is not None:
+                device.status_check_interval = req.status_check_interval
+
+            session.commit()
+            logger.info(f"[API] 用户 {current_user.username} 更新设备 {device_name} 采集配置: param={req.param_check_interval}s, status={req.status_check_interval}s")
+
+            return {"message": "更新成功", "device_name": device_name}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新采集配置失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

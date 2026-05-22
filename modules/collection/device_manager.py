@@ -140,6 +140,8 @@ class DeviceManager:
         self._device_status: Dict[str, DeviceStatus] = {}
         self._last_collect_time: Dict[str, datetime] = {}
         self._last_metrics: Dict[str, DeviceMetrics] = {}
+        # 保存每个设备已验证有效的协议方法（采集时优先使用，保留首次成功的方法）
+        self._device_protocols: Dict[str, List[str]] = {}
         
         # 采集回调
         self._collect_callbacks: List[Callable[[DeviceMetrics], None]] = []
@@ -344,17 +346,67 @@ class DeviceManager:
                 CollectionStatus.OFFLINE: DBDeviceStatus.OFFLINE,
                 CollectionStatus.ERROR: DBDeviceStatus.WARNING,
                 CollectionStatus.UNKNOWN: DBDeviceStatus.UNKNOWN,
+                CollectionStatus.COLLECTING: DBDeviceStatus.UNKNOWN,
             }
             db_status = status_mapping.get(status, DBDeviceStatus.OFFLINE)
 
             with _db_manager.session_scope() as session:
                 device = session.query(Device).filter(Device.name == device_name).first()
                 if device:
+                    old_status = device.status
                     device.status = db_status.value  # 使用字符串值而非枚举对象
+                    device.last_status_check = datetime.now()
                     session.commit()
-                    logger.debug(f"更新设备 {device_name} 状态为 {status.value}")
+
+                    # 状态变更时写日志（仅状态实际变化时）
+                    if old_status != db_status.value:
+                        if status == CollectionStatus.ONLINE:
+                            logger.info(f"[采集] 设备上线: {device_name} (IP: {device.ip_address})")
+                        elif status == CollectionStatus.OFFLINE:
+                            logger.warning(f"[采集] 设备离线: {device_name} (IP: {device.ip_address})")
+                        elif status == CollectionStatus.ERROR:
+                            logger.error(f"[采集] 设备异常: {device_name} (IP: {device.ip_address})")
+                        else:
+                            logger.info(f"[采集] 设备状态变更: {device_name} {old_status} → {db_status.value}")
+                    else:
+                        logger.debug(f"[采集] 设备 {device_name} 状态更新为 {status.value}")
         except Exception as e:
             logger.warning(f"更新设备状态到数据库失败: {e}")
+
+    def _save_device_protocols_to_db(self, device_name: str, protocols: List[str]) -> None:
+        """保存设备已验证有效的协议到数据库config字段"""
+        try:
+            from modules.foundation.db_models.device import Device
+            from modules.foundation.db_models.base import _db_manager
+            import json
+
+            with _db_manager.session_scope() as session:
+                device = session.query(Device).filter(Device.name == device_name).first()
+                if device:
+                    config = json.loads(device.config) if device.config else {}
+                    config['working_protocols'] = protocols
+                    device.config = json.dumps(config)
+                    device.last_param_check = datetime.now()
+                    session.commit()
+                    logger.debug(f"[采集] 保存设备 {device_name} 有效协议: {protocols}")
+        except Exception as e:
+            logger.warning(f"保存设备协议到数据库失败: {e}")
+
+    def _get_working_protocols_from_db(self, device_name: str) -> Optional[List[str]]:
+        """从数据库加载设备已验证有效的协议"""
+        try:
+            from modules.foundation.db_models.device import Device
+            from modules.foundation.db_models.base import _db_manager
+            import json
+
+            with _db_manager.session_scope() as session:
+                device = session.query(Device).filter(Device.name == device_name).first()
+                if device and device.config:
+                    config = json.loads(device.config)
+                    return config.get('working_protocols')
+        except Exception as e:
+            logger.debug(f"加载设备协议失败: {e}")
+        return None
 
     def _update_device_metadata_in_db(self, device_name: str, metrics: DeviceMetrics) -> None:
         """Update device OS/vendor info from collected metrics"""
@@ -447,8 +499,9 @@ class DeviceManager:
                     self._stats['total_collects'] += 1
                     self._stats['successful_collects'] += 1
                     
-                    # 更新数据库中的设备状态
-                    self._update_device_status_in_db(device_name, CollectionStatus.ONLINE)
+                    # 采集成功，保存有效的协议方法
+                    self._device_protocols[device_name] = protocols
+                    self._save_device_protocols_to_db(device_name, protocols)
 
                     # Update device metadata if collector returned useful info
                     if metrics and metrics.status == CollectionStatus.ONLINE and metrics.metrics:
@@ -1200,31 +1253,178 @@ class DeviceManager:
         
         return valid_results
     
+    def _get_device_collect_config(self, device_name: str) -> Dict[str, Any]:
+        """获取设备采集间隔配置（默认参数检测3600秒，状态检测60秒）"""
+        try:
+            from modules.foundation.db_models.device import Device
+            from modules.foundation.db_models.base import _db_manager
+
+            with _db_manager.session_scope() as session:
+                device = session.query(Device).filter(Device.name == device_name).first()
+                if device:
+                    return {
+                        'param_check_interval': device.param_check_interval or 3600,
+                        'status_check_interval': device.status_check_interval or 60,
+                        'last_param_check': device.last_param_check,
+                        'last_status_check': device.last_status_check,
+                    }
+        except Exception as e:
+            logger.debug(f"获取设备采集配置失败: {e}")
+        return {
+            'param_check_interval': 3600,
+            'status_check_interval': 60,
+            'last_param_check': None,
+            'last_status_check': None,
+        }
+
+    async def _collect_status_only(self, device_name: str) -> Optional[DeviceMetrics]:
+        """
+        状态检测采集（轻量，只测状态，使用已保存的有效协议）
+        - 优先使用 _device_protocols 内存缓存
+        - 回退到数据库中保存的 working_protocols
+        - 再回退到全协议探测
+        - 不保存完整指标到数据库，只更新状态
+        """
+        # 优先使用已保存的有效协议（内存缓存）
+        protocols = self._device_protocols.get(device_name)
+        if not protocols:
+            protocols = self._get_working_protocols_from_db(device_name)
+
+        device_config = self._get_device_config_from_db(device_name)
+        if not device_config:
+            return None
+
+        # 如果没有已保存的协议，回退到全协议探测
+        if not protocols:
+            protocols = self._get_device_protocols(device_config)
+
+        last_error = None
+        last_metrics = None
+        for protocol in protocols:
+            try:
+                metrics = await self._collect_with_protocol(device_config, protocol)
+                if metrics and metrics.status == CollectionStatus.ONLINE:
+                    self._device_status[device_name] = CollectionStatus.ONLINE
+                    self._last_collect_time[device_name] = datetime.now()
+                    self._last_metrics[device_name] = metrics
+                    self._update_device_status_in_db(device_name, CollectionStatus.ONLINE)
+                    self._notify_callbacks(metrics)
+                    return metrics
+                else:
+                    if last_metrics is None:
+                        last_metrics = metrics
+                    last_error = f"{protocol}协议返回OFFLINE"
+            except Exception as e:
+                last_error = str(e)
+                logger.debug(f"状态检测 {device_name} 使用 {protocol} 失败: {e}")
+                continue
+
+        # 所有协议都失败，设备离线
+        self._device_status[device_name] = CollectionStatus.OFFLINE
+        self._update_device_status_in_db(device_name, CollectionStatus.OFFLINE)
+        if last_metrics:
+            last_metrics.error = last_error
+            return last_metrics
+        return None
+
+    async def _collect_full(self, device_name: str) -> Optional[DeviceMetrics]:
+        """
+        完整参数检测采集（完整采集含指标，更新 working_protocols，保存指标到数据库）
+        """
+        device_config = self._get_device_config_from_db(device_name)
+        if not device_config:
+            return None
+
+        # 完整协议探测（会自动保存 working_protocols 到 DB）
+        metrics = await self.collect_device(device_name)
+        if metrics and metrics.status == CollectionStatus.ONLINE and metrics.metrics:
+            try:
+                saved = metrics.save_to_db()
+                if saved > 0:
+                    logger.info(f"保存 {device_name} 的 {saved} 条指标到数据库")
+            except Exception as e:
+                logger.warning(f"保存指标失败: {e}")
+        return metrics
+
     async def start_periodic_collect(self, interval: int = 60) -> None:
         """
-        启动定时采集任务
+        启动定时采集任务（双循环：状态检测1分钟，参数检测1小时）
 
         Args:
-            interval: 采集间隔 (秒)
+            interval: 默认采集间隔（秒），已废弃，仅用于向后兼容
         """
         self._running = True
 
+        # 启动两个独立异步任务
+        status_task = asyncio.create_task(self._status_check_loop())
+        param_task = asyncio.create_task(self._param_check_loop())
+
+        try:
+            await asyncio.gather(status_task, param_task)
+        except Exception as e:
+            logger.error(f"定时采集任务异常: {e}")
+        finally:
+            self._running = False
+
+    async def _status_check_loop(self) -> None:
+        """状态检测循环（默认60秒间隔，优先使用已保存的协议）"""
+        logger.info("[采集] 状态检测循环启动（间隔60秒）")
         while self._running:
             try:
-                results = await self.collect_all()
-                # 采集成功后保存到 performance_metrics 表
-                for metrics in results:
-                    if metrics.status == CollectionStatus.ONLINE and metrics.metrics:
-                        try:
-                            saved = metrics.save_to_db()
-                            if saved > 0:
-                                logger.info(f"保存 {metrics.device_name} 的 {saved} 条指标到数据库 (timestamp={metrics.timestamp})")
-                        except Exception as e:
-                            logger.warning(f"保存指标失败: {e}")
-            except Exception as e:
-                logger.error(f"定时采集失败: {e}")
+                devices = self.get_devices_from_db()
+                if not devices:
+                    devices = self._config_loader.get_devices(enabled_only=True)
 
-            await asyncio.sleep(interval)
+                for d in devices:
+                    device_name = d.get('name')
+                    if not device_name:
+                        continue
+
+                    # 检查是否到达状态检测时间
+                    config = self._get_device_collect_config(device_name)
+                    last_check = config.get('last_status_check')
+                    now = datetime.now()
+                    if last_check:
+                        elapsed = (now - last_check).total_seconds()
+                        if elapsed < config['status_check_interval']:
+                            continue  # 未到检测时间，跳过
+
+                    await self._collect_status_only(device_name)
+
+            except Exception as e:
+                logger.error(f"状态检测循环异常: {e}")
+
+            await asyncio.sleep(60)
+
+    async def _param_check_loop(self) -> None:
+        """参数检测循环（默认3600秒间隔，完整协议探测）"""
+        logger.info("[采集] 参数检测循环启动（间隔3600秒）")
+        while self._running:
+            try:
+                devices = self.get_devices_from_db()
+                if not devices:
+                    devices = self._config_loader.get_devices(enabled_only=True)
+
+                for d in devices:
+                    device_name = d.get('name')
+                    if not device_name:
+                        continue
+
+                    # 检查是否到达参数检测时间
+                    config = self._get_device_collect_config(device_name)
+                    last_check = config.get('last_param_check')
+                    now = datetime.now()
+                    if last_check:
+                        elapsed = (now - last_check).total_seconds()
+                        if elapsed < config['param_check_interval']:
+                            continue  # 未到检测时间，跳过
+
+                    await self._collect_full(device_name)
+
+            except Exception as e:
+                logger.error(f"参数检测循环异常: {e}")
+
+            await asyncio.sleep(3600)
     
     def stop(self) -> None:
         """停止定时采集"""

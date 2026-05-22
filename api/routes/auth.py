@@ -109,121 +109,214 @@ def verify_token(token: str, settings: Settings) -> Optional[dict]:
         return None
 
 
-# ============== 内存用户存储（开发环境使用，生产环境应使用数据库）==============
+# ============== 数据库用户存储 ==============
 
-class InMemoryUserStore:
-    """内存用户存储（开发环境使用）"""
-    
+class DBUserStore:
+    """数据库用户存储（替代 InMemoryUserStore）"""
+
     _instance = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
         self._initialized = True
-        from modules.foundation.auth_manager.auth import PasswordHasher, UserStatus
-        self._users = {}
+        from modules.foundation.auth_manager.auth import PasswordHasher
+        from modules.foundation.db_models.base import _db_manager
+        self._db_manager = _db_manager
         self._password_hasher = PasswordHasher
-        # 初始化默认管理员
-        self._init_default_users()
-    
-    def _init_default_users(self):
-        """初始化默认用户"""
-        from modules.foundation.auth_manager.auth import UserStatus, User
-        admin = User(
-            id="u001",
-            username="admin",
-            password_hash=self._password_hasher.hash_password("Admin@123456"),
-            email="admin@example.com",
-            status=UserStatus.ACTIVE,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            roles=["admin"]
-        )
-        self._users["admin"] = admin
-        
-        operator = User(
-            id="u002",
-            username="operator",
-            password_hash=self._password_hasher.hash_password("Operator@123456"),
-            email="operator@example.com",
-            status=UserStatus.ACTIVE,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            roles=["operator"]
-        )
-        self._users["operator"] = operator
-    
+        self._ensure_default_users()
+
+    def _ensure_default_users(self):
+        """确保默认用户存在（首次启动时创建）"""
+        settings = get_settings()
+        with self._db_manager.session_scope() as session:
+            try:
+                from modules.foundation.db_models.system import SystemUser
+                admin_user = session.query(SystemUser).filter_by(username="admin").first()
+                if not admin_user:
+                    admin_user = SystemUser(
+                        id="u001",
+                        username="admin",
+                        password_hash=self._password_hasher.hash_password(settings.DEFAULT_ADMIN_PASSWORD),
+                        email="admin@example.com",
+                        status="active",
+                        roles='["admin"]',
+                    )
+                    session.add(admin_user)
+                operator_user = session.query(SystemUser).filter_by(username="operator").first()
+                if not operator_user:
+                    operator_user = SystemUser(
+                        id="u002",
+                        username="operator",
+                        password_hash=self._password_hasher.hash_password(settings.DEFAULT_OPERATOR_PASSWORD),
+                        email="operator@example.com",
+                        status="active",
+                        roles='["operator"]',
+                    )
+                    session.add(operator_user)
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+
+    def _get_session(self):
+        return self._db_manager.session_scope()
+
     def get_user(self, username: str):
         """获取用户"""
-        return self._users.get(username)
-    
+        import json
+        with self._db_manager.session_scope() as session:
+            from modules.foundation.db_models.system import SystemUser
+            user = session.query(SystemUser).filter_by(username=username).first()
+            if not user:
+                return None
+            from modules.foundation.auth_manager.auth import User, UserStatus
+            status_map = {"active": UserStatus.ACTIVE, "inactive": UserStatus.INACTIVE,
+                          "locked": UserStatus.LOCKED, "pending": UserStatus.PENDING}
+            return User(
+                id=user.id,
+                username=user.username,
+                password_hash=user.password_hash,
+                email=user.email,
+                status=status_map.get(user.status, UserStatus.ACTIVE),
+                created_at=user.created_at or datetime.utcnow(),
+                updated_at=user.updated_at or datetime.utcnow(),
+                roles=json.loads(user.roles) if user.roles else [],
+            )
+
     def authenticate(self, username: str, password: str) -> Optional[dict]:
         """验证用户凭证"""
-        user = self._users.get(username)
+        user = self.get_user(username)
         if not user:
             return None
-        
         from modules.foundation.auth_manager.auth import UserStatus
         if user.status == UserStatus.LOCKED:
             return None
-        
         if not self._password_hasher.verify_password(password, user.password_hash):
             return None
-        
         return {
             "user_id": user.id,
             "username": user.username,
             "email": user.email,
             "roles": user.roles,
         }
-    
+
     def create_user(self, username: str, password: str, email: str = None, full_name: str = None) -> dict:
         """创建用户"""
-        if username in self._users:
-            raise ValueError("用户名已存在")
-        
-        from modules.foundation.auth_manager.auth import UserStatus, User
-        user = User(
-            id=f"u{secrets.token_hex(4)}",
-            username=username,
-            password_hash=self._password_hasher.hash_password(password),
-            email=email,
-            status=UserStatus.ACTIVE,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            roles=["viewer"]  # 默认角色
-        )
-        self._users[username] = user
-        return {
-            "user_id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "roles": user.roles,
-        }
-    
+        import json
+        with self._db_manager.session_scope() as session:
+            from modules.foundation.db_models.system import SystemUser
+            existing = session.query(SystemUser).filter_by(username=username).first()
+            if existing:
+                raise ValueError("用户名已存在")
+            user = SystemUser(
+                id=f"u{secrets.token_hex(4)}",
+                username=username,
+                password_hash=self._password_hasher.hash_password(password),
+                email=email,
+                status="active",
+                roles='["viewer"]',
+            )
+            session.add(user)
+            session.commit()
+            return {
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "roles": json.loads(user.roles),
+            }
+
     def get_user_by_id(self, user_id: str) -> Optional[dict]:
         """根据ID获取用户"""
-        for user in self._users.values():
-            if user.id == user_id:
-                from modules.foundation.auth_manager.auth import UserStatus
-                return {
-                    "user_id": user.id,
-                    "username": user.username,
-                    "email": user.email,
-                    "roles": user.roles,
-                    "is_active": user.status == UserStatus.ACTIVE,
-                }
-        return None
+        with self._db_manager.session_scope() as session:
+            from modules.foundation.db_models.system import SystemUser
+            import json
+            user = session.query(SystemUser).filter_by(id=user_id).first()
+            if not user:
+                return None
+            from modules.foundation.auth_manager.auth import UserStatus
+            status_map = {"active": UserStatus.ACTIVE, "inactive": UserStatus.INACTIVE,
+                          "locked": UserStatus.LOCKED, "pending": UserStatus.PENDING}
+            return {
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "roles": json.loads(user.roles) if user.roles else [],
+                "is_active": user.status == "active",
+            }
+
+    def list_users(self) -> list:
+        """列出所有用户（返回 User 对象列表，供 admin.py 使用）"""
+        import json
+        with self._db_manager.session_scope() as session:
+            from modules.foundation.db_models.system import SystemUser
+            users = session.query(SystemUser).all()
+            from modules.foundation.auth_manager.auth import User, UserStatus
+            status_map = {"active": UserStatus.ACTIVE, "inactive": UserStatus.INACTIVE,
+                          "locked": UserStatus.LOCKED, "pending": UserStatus.PENDING}
+            result = []
+            for u in users:
+                result.append(User(
+                    id=u.id,
+                    username=u.username,
+                    password_hash=u.password_hash,
+                    email=u.email,
+                    status=status_map.get(u.status, UserStatus.ACTIVE),
+                    created_at=u.created_at or datetime.utcnow(),
+                    updated_at=u.updated_at or datetime.utcnow(),
+                    roles=json.loads(u.roles) if u.roles else [],
+                ))
+            return result
+
+    def delete_user(self, user_id: str) -> bool:
+        """删除用户"""
+        with self._db_manager.session_scope() as session:
+            from modules.foundation.db_models.system import SystemUser
+            user = session.query(SystemUser).filter_by(id=user_id).first()
+            if not user:
+                return False
+            session.delete(user)
+            session.commit()
+            return True
+
+    def update_user_password(self, user_id: str, password_hash: str) -> bool:
+        """更新用户密码hash"""
+        with self._db_manager.session_scope() as session:
+            from modules.foundation.db_models.system import SystemUser
+            user = session.query(SystemUser).filter_by(id=user_id).first()
+            if not user:
+                return False
+            user.password_hash = password_hash
+            session.commit()
+            return True
+
+    def update_user(self, user_id: str, email: str = None, roles: list = None,
+                    is_active: bool = None, full_name: str = None, phone: str = None) -> bool:
+        """更新用户信息"""
+        with self._db_manager.session_scope() as session:
+            from modules.foundation.db_models.system import SystemUser
+            import json
+            user = session.query(SystemUser).filter_by(id=user_id).first()
+            if not user:
+                return False
+            if email is not None:
+                user.email = email
+            if roles is not None:
+                user.roles = json.dumps(roles)
+            if is_active is not None:
+                user.status = "active" if is_active else "inactive"
+            session.commit()
+            return True
 
 
 # 获取用户存储实例
-_user_store = InMemoryUserStore()
+_user_store = DBUserStore()
 
 
 # ============== 验证码 ==============

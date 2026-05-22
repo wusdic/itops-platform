@@ -223,7 +223,6 @@ const fetchData = async () => {
     dictList.value = data.items || []
     pagination.total = data.total || 0
   } catch (error) {
-    console.error('Load dicts error:', error)
     message.error('加载字典列表失败')
   } finally {
     loading.value = false
@@ -267,7 +266,6 @@ const handleDelete = (row) => {
         message.success('删除成功')
         fetchData()
       } catch (error) {
-        console.error('Delete error:', error)
         message.error('删除失败')
       }
     }
@@ -311,7 +309,6 @@ const submitForm = async () => {
     dialogVisible.value = false
     fetchData()
   } catch (error) {
-    console.error('Submit error:', error)
     message.error('操作失败')
   }
 }

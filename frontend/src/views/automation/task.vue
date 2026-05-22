@@ -143,7 +143,6 @@ async function loadDevices() {
     deviceOptions.value = (data.items || data.data?.items || []).map(d => ({ label: `${d.name} (${d.ip_address})`, value: d.id }))
   } catch (e) {
     message.error(`加载设备失败: ${e.message}`)
-    console.error('[automation/task] loadDevices error:', e)
     deviceOptions.value = []
   }
 }
@@ -163,7 +162,6 @@ async function loadMetrics(deviceId) {
     const metrics = data.metrics || data.items || data.data?.items || []
     metricOptions.value = metrics.map(m => ({ label: m.name || m.metric_name, value: m.name || m.metric_name }))
   } catch (e) {
-    console.error('[automation/task] loadMetrics error:', e)
     // Fallback: use common metric names
     metricOptions.value = [
       { label: 'CPU使用率', value: 'cpu_usage' },
@@ -202,7 +200,6 @@ async function handleEvaluate() {
   } catch (e) {
     evalResultDetail.value = `评估失败: ${e.message}`
     message.error(`评估失败: ${e.message}`)
-    console.error('[automation/task] evaluate error:', e)
   } finally {
     evaluating.value = false
   }
@@ -224,7 +221,6 @@ async function handleViewSnapshot(row) {
   } catch (e) {
     snapshotDetail.value = `加载快照失败: ${e.message}`
     message.error(`加载快照失败: ${e.message}`)
-    console.error('[automation/task] snapshot error:', e)
   } finally {
     snapshotLoading.value = false
   }
@@ -246,7 +242,6 @@ async function loadHistory() {
     historyPagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载历史记录失败: ${e.message}`)
-    console.error('[automation/task] loadHistory error:', e)
     historyList.value = []
   } finally {
     historyLoading.value = false

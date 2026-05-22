@@ -11,6 +11,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from core.config.constants import SLOW_REQUEST_THRESHOLD_MS, METRICS_RETENTION_LIMIT
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,7 +23,7 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
     """
     
     # 慢请求阈值（毫秒）
-    SLOW_REQUEST_THRESHOLD_MS = 1000
+    SLOW_REQUEST_THRESHOLD_MS = SLOW_REQUEST_THRESHOLD_MS
     
     # 性能指标存储
     _metrics: Dict[str, List[float]] = {}
@@ -91,10 +93,10 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         if path_pattern not in self._metrics:
             self._metrics[path_pattern] = []
         
-        # 保留最近1000条记录
+        # 保留最近METRICS_RETENTION_LIMIT条记录
         self._metrics[path_pattern].append(duration_ms)
-        if len(self._metrics[path_pattern]) > 1000:
-            self._metrics[path_pattern] = self._metrics[path_pattern][-1000:]
+        if len(self._metrics[path_pattern]) > METRICS_RETENTION_LIMIT:
+            self._metrics[path_pattern] = self._metrics[path_pattern][-METRICS_RETENTION_LIMIT:]
     
     @classmethod
     def get_metrics(cls) -> Dict[str, Dict[str, float]]:

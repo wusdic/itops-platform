@@ -5,6 +5,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from config.constants import Port
+
 try:
     import redis
 except ImportError:
@@ -15,7 +17,7 @@ except ImportError:
 class RedisConfig:
     """Configuration for Redis collector."""
     host: str = "localhost"
-    port: int = 6379
+    port: int = Port.REDIS
     password: Optional[str] = None
     db: int = 0
     socket_timeout: int = 5

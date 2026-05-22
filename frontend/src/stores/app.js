@@ -56,7 +56,7 @@ export const useAppStore = defineStore('app', () => {
       try {
         userInfo.value = JSON.parse(savedUserInfo)
       } catch (e) {
-        console.error('Failed to parse userInfo:', e)
+        // silently ignore parse error
       }
     }
   }

@@ -3,6 +3,7 @@
 提供资产信息管理、配置管理等接口
 """
 
+import asyncio
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -156,6 +157,19 @@ def _device_to_dict(device: Device) -> dict:
     }
 
 
+async def _trigger_bg_collect(manager, device_name: str):
+    """
+    后台触发设备采集（不阻塞 API 响应）。
+    采集完成后自动更新数据库状态，状态变更时会写日志。
+    """
+    try:
+        metrics = await manager.collect_device(device_name)
+        status = metrics.status.value if metrics else 'UNKNOWN'
+        logger.info(f"[asset] 后台采集 {device_name} 完成，状态: {status}")
+    except Exception as e:
+        logger.warning(f"[asset] 后台采集 {device_name} 失败: {e}")
+
+
 @router.get("/device", summary="获取设备列表")
 async def get_devices(
     device_type: Optional[str] = Query(None, description="设备类型过滤"),
@@ -204,7 +218,7 @@ async def get_devices(
     # 从DeviceManager获取实时状态
     from modules.collection.device_manager import get_device_manager
     manager = get_device_manager()
-    
+
     # 转换设备列表，合并实时状态
     items = []
     for d in devices:
@@ -214,6 +228,11 @@ async def get_devices(
         # 获取实时状态
         real_status = manager.get_device_status(d.name)
         last_metrics = manager.get_last_metrics(d.name)
+
+        # 状态为 UNKNOWN 时，触发一次后台采集
+        if real_status.value == 'unknown' or real_status.value == 'UNKNOWN':
+            asyncio.create_task(_trigger_bg_collect(manager, d.name))
+
         device_dict['status'] = real_status.value if real_status else d.status.value
         device_dict['last_collect_time'] = last_metrics.timestamp.isoformat() if last_metrics and last_metrics.timestamp else None
         # 从采集数据中获取更多字段（metrics为空时fallback到Device表字段）

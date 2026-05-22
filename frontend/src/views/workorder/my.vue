@@ -164,7 +164,6 @@ async function loadData() {
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
     message.error(`加载工单失败: ${e.message}`)
-    console.error('[workorder/my] loadData error:', e)
     workorderList.value = []
   } finally {
     loading.value = false
@@ -231,7 +230,6 @@ async function submitAssign() {
     loadData()
   } catch (e) {
     message.error(`分配失败: ${e.message}`)
-    console.error('[workorder/my] assign error:', e)
   }
 }
 
