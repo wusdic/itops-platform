@@ -38,104 +38,55 @@
       />
     </n-card>
 
-    <!-- 设备详情弹窗 -->
-    <n-modal v-model:show="drawerVisible" preset="card" :title="selectedDevice?.name || '设备详情'" :style="{ width: '880px' }" :mask-closable="true">
-      <template #header-extra>
-        <n-button size="small" @click="drawerVisible = false">关闭</n-button>
-      </template>
+    <!-- 设备详情抽屉 -->
+    <n-drawer v-model:show="drawerVisible" :width="860" placement="right" :preset="null">
+      <n-drawer-content :title="selectedDevice?.name || '设备详情'" closable>
+        <template #header-extra>
+          <n-spin :show="metricsLoading" size="small" />
+        </template>
 
-      <n-spin :show="metricsLoading">
         <n-tabs type="line" animated v-model:value="activeDeviceTab" size="small">
           <!-- 基本信息Tab -->
           <n-tab-pane name="info" tab="基本信息">
-            <div class="device-info">
-              <div class="info-grid">
-                <div class="info-item"><span class="label">IP地址:</span> {{ selectedDevice?.ip_address || '-' }}</div>
-                <div class="info-item"><span class="label">操作系统:</span> {{ selectedDevice?.os_type || '-' }} {{ selectedDevice?.os_version || '' }}</div>
-                <div class="info-item"><span class="label">设备类型:</span> {{ selectedDevice?.type || '-' }}</div>
-                <div class="info-item"><span class="label">位置:</span> {{ selectedDevice?.location || '-' }}</div>
-                <div class="info-item">
-                  <span class="label">状态:</span>
-                  <n-tag :type="statusType(selectedDevice?.status)" size="small">{{ statusText(selectedDevice?.status) }}</n-tag>
-                </div>
-                <div class="info-item"><span class="label">厂商:</span> {{ selectedDevice?.manufacturer || '-' }}</div>
-                <div class="info-item"><span class="label">型号:</span> {{ selectedDevice?.model || '-' }}</div>
-                <div class="info-item"><span class="label">序列号:</span> {{ selectedDevice?.serial_number || '-' }}</div>
-                <div class="info-item"><span class="label">最近采集:</span> {{ selectedDevice?.last_collect_time ? formatDate(new Date(selectedDevice.last_collect_time)) : '-' }}</div>
-                <div class="info-item"><span class="label">创建时间:</span> {{ selectedDevice?.created_at ? formatDate(new Date(selectedDevice.created_at)) : '-' }}</div>
-              </div>
-            </div>
+            <n-descriptions label-placement="left" :column="2" size="small" bordered>
+              <n-descriptions-item label="IP地址">{{ selectedDevice?.ip_address || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="设备类型">{{ selectedDevice?.type || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="操作系统">{{ nullOrDefault(selectedDevice?.os_type) }} {{ nullOrDefault(selectedDevice?.os_version) }}</n-descriptions-item>
+              <n-descriptions-item label="位置">{{ selectedDevice?.location || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="状态">
+                <n-tag :type="statusType(selectedDevice?.status)" size="small">{{ statusText(selectedDevice?.status) }}</n-tag>
+              </n-descriptions-item>
+              <n-descriptions-item label="厂商">{{ selectedDevice?.manufacturer || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="型号">{{ selectedDevice?.model || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="序列号">{{ selectedDevice?.serial_number || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="最近采集">{{ selectedDevice?.last_collect_time ? formatDate(new Date(selectedDevice.last_collect_time)) : '-' }}</n-descriptions-item>
+              <n-descriptions-item label="创建时间">{{ selectedDevice?.created_at ? formatDate(new Date(selectedDevice.created_at)) : '-' }}</n-descriptions-item>
+            </n-descriptions>
           </n-tab-pane>
 
-          <!-- 协议配置Tab -->
-          <n-tab-pane name="config" tab="协议配置">
-            <div class="protocol-config-form">
-              <n-form label-placement="left" label-width="100" size="small">
-                <n-form-item label="选择协议">
-                  <n-tree-select
-                    v-model:value="protocolForm.protocol_type"
-                    :options="protocolTypeGroups"
-                    placeholder="选择协议类型"
-                    style="width: 100%"
-                    clearable
-                    filterable
-                    @update:value="onProtocolTypeChange"
-                  />
-                </n-form-item>
-                <n-form-item label="适配器模板">
-                  <n-select
-                    v-model:value="protocolForm.adapter_template_id"
-                    :options="filteredAdapterOptions"
-                    placeholder="选择模板（可选）"
-                    style="width: 100%"
-                    clearable
-                  />
-                </n-form-item>
-                <n-form-item label="主机地址">
-                  <n-input v-model:value="protocolForm.host" placeholder="留空使用设备IP" />
-                </n-form-item>
-                <n-form-item label="端口">
-                  <n-input-number v-model:value="protocolForm.port" :min="1" :max="65535" style="width: 100%" />
-                </n-form-item>
-                <n-form-item label="用户名">
-                  <n-input v-model:value="protocolForm.username" placeholder="协议用户名" />
-                </n-form-item>
-                <n-form-item label="密码">
-                  <n-input v-model:value="protocolForm.password" type="password" placeholder="协议密码" show-password-on="click" />
-                </n-form-item>
-                <n-form-item label="超时(秒)">
-                  <n-input-number v-model:value="protocolForm.timeout" :min="5" :max="300" style="width: 100%" />
-                </n-form-item>
-                <n-form-item label="额外参数">
-                  <n-input v-model:value="protocolForm.extra_json" type="textarea" placeholder='{"key": "value"}' :rows="2" />
-                </n-form-item>
-                <n-form-item label="启用">
-                  <n-switch v-model:value="protocolForm.enabled" />
-                </n-form-item>
-                <n-form-item>
-                  <n-space>
-                    <n-button type="primary" size="small" @click="saveProtocolConfig" :loading="protocolSaving">保存配置</n-button>
-                    <n-button size="small" @click="testProtocolConfig" :loading="protocolTesting">测试连接</n-button>
-                  </n-space>
-                </n-form-item>
-              </n-form>
+          <!-- 系统信息Tab -->
+          <n-tab-pane name="system" tab="系统信息">
+            <n-descriptions label-placement="left" :column="2" size="small" bordered>
+              <n-descriptions-item label="发行版">{{ nullOrDefault(selectedDevice?.distro) }}</n-descriptions-item>
+              <n-descriptions-item label="操作系统">{{ nullOrDefault(selectedDevice?.os_name) }}</n-descriptions-item>
+              <n-descriptions-item label="内核版本">{{ nullOrDefault(selectedDevice?.kernel) }}</n-descriptions-item>
+              <n-descriptions-item label="运行时间">{{ nullOrDefault(selectedDevice?.uptime) }}</n-descriptions-item>
+            </n-descriptions>
+          </n-tab-pane>
 
-              <!-- 已配置协议 - 折叠 -->
-              <n-collapse v-if="deviceProtocols.length > 0" class="protocol-collapse">
-                <n-collapse-item title="已配置协议" name="protocols">
-                  <n-data-table
-                    :columns="protocolListColumns"
-                    :data="deviceProtocols"
-                    size="small"
-                    :row-key="row => row.protocol_type"
-                  />
-                </n-collapse-item>
-              </n-collapse>
-            </div>
+          <!-- 硬件信息Tab -->
+          <n-tab-pane name="hardware" tab="硬件信息">
+            <n-descriptions label-placement="left" :column="2" size="small" bordered>
+              <n-descriptions-item label="产品名称">{{ nullOrDefault(selectedDevice?.hardware?.product_name) }}</n-descriptions-item>
+              <n-descriptions-item label="厂商">{{ nullOrDefault(selectedDevice?.hardware?.vendor) }}</n-descriptions-item>
+              <n-descriptions-item label="BIOS版本">{{ nullOrDefault(selectedDevice?.hardware?.bios_version) }}</n-descriptions-item>
+              <n-descriptions-item label="CPU型号">{{ nullOrDefault(selectedDevice?.cpu?.model) }}</n-descriptions-item>
+              <n-descriptions-item label="CPU核心数">{{ nullOrDefault(selectedDevice?.cpu?.cores) }}</n-descriptions-item>
+            </n-descriptions>
           </n-tab-pane>
 
           <!-- 性能Tab -->
-          <n-tab-pane name="metrics" tab="性能指标">
+          <n-tab-pane name="performance" tab="性能">
             <div v-if="metricsData" class="metrics-charts">
               <div class="metrics-grid">
                 <div class="metric-card">
@@ -172,21 +123,80 @@
               <n-empty description="暂无性能数据" />
             </div>
           </n-tab-pane>
+
+          <!-- 磁盘Tab -->
+          <n-tab-pane name="disk" tab="磁盘">
+            <n-data-table
+              v-if="selectedDevice?.disks?.length"
+              :columns="diskColumns"
+              :data="selectedDevice.disks"
+              size="small"
+              :row-key="(row, index) => index"
+            />
+            <n-empty v-else description="暂无磁盘信息" />
+          </n-tab-pane>
+
+          <!-- 网络Tab -->
+          <n-tab-pane name="network" tab="网络">
+            <n-data-table
+              v-if="selectedDevice?.network?.length"
+              :columns="networkColumns"
+              :data="selectedDevice.network"
+              size="small"
+              :row-key="(row, index) => index"
+            />
+            <n-empty v-else description="暂无网络信息" />
+          </n-tab-pane>
+
+          <!-- 容器Tab -->
+          <n-tab-pane name="container" tab="容器">
+            <n-descriptions label-placement="left" :column="2" size="small" bordered>
+              <n-descriptions-item label="Docker容器数">{{ nullOrDefault(selectedDevice?.containers?.docker?.count) }}</n-descriptions-item>
+              <n-descriptions-item label="Containerd容器数">{{ nullOrDefault(selectedDevice?.containers?.containerd?.count) }}</n-descriptions-item>
+            </n-descriptions>
+            <template v-if="selectedDevice?.containers?.docker?.containers?.length">
+              <div class="sub-title">Docker容器列表</div>
+              <n-data-table
+                :columns="dockerContainerColumns"
+                :data="selectedDevice.containers.docker.containers"
+                size="small"
+                :row-key="(row, index) => index"
+              />
+            </template>
+          </n-tab-pane>
         </n-tabs>
-      </n-spin>
-    </n-modal>
+      </n-drawer-content>
+    </n-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, h, nextTick } from 'vue'
-import { NGrid, NGi, NCard, NButton, NDataTable, NTag, NIcon, NSpace, NTooltip, useMessage, useDialog, NModal, NSpin, NEmpty, NResult, NTabs, NTabPane, NForm, NFormItem, NInput, NInputNumber, NSwitch, NSelect, NTreeSelect, NCollapse, NCollapseItem } from 'naive-ui'
+import { ref, reactive, computed, onMounted, onUnmounted, h, nextTick, watchEffect } from 'vue'
+import { NGrid, NGi, NCard, NButton, NDataTable, NTag, NIcon, NSpace, NTooltip, useMessage, useDialog, NDrawer, NDrawerContent, NSpin, NEmpty, NResult, NTabs, NTabPane, NDescriptions, NDescriptionsItem } from 'naive-ui'
 import * as echarts from 'echarts'
 import { devices } from '@/api'
 import { RefreshOutline, Search } from '@vicons/ionicons5'
 
 const message = useMessage()
 const dialog = useDialog()
+
+// 空值处理方法
+const nullOrDefault = (val, defaultStr = '-') => {
+  if (val === null || val === undefined || val === '') return defaultStr
+  return val
+}
+
+// 日期格式化函数
+const formatDate = (date) => {
+  if (!date) return '-'
+  try {
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return '-'
+    return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return '-'
+  }
+}
 const loading = ref(false)
 const deviceList = ref([])
 const searchKeyword = ref('')
@@ -223,12 +233,18 @@ const paginationConfig = {
   }
 }
 // getPaginationConfig 返回共享对象的引用，Naive UI 内部 Object.assign 作用在同一引用上
-const getPaginationConfig = () => {
-  paginationVersion.value // 依赖这个 ref 建立响应式连接
-  paginationConfig.itemCount = itemCountRef.value
-  paginationConfig.pageCount = pageCountRef.value
-  return paginationConfig
-}
+// 使用 watchEffect 主动同步，确保 total/page/pageSize 变化时 Naive UI 收到最新值
+
+watchEffect(() => {
+  // 读取所有响应式值建立依赖
+  paginationConfig.page = page.value
+  paginationConfig.pageSize = pageSize.value
+  paginationConfig.total = total.value
+  paginationConfig.itemCount = total.value
+  paginationConfig.pageCount = Math.max(1, Math.ceil((total.value || 0) / (pageSize.value || 1)))
+})
+
+const getPaginationConfig = () => paginationConfig
 
 // 抽屉相关
 const drawerVisible = ref(false)
@@ -247,242 +263,34 @@ let diskChart = null
 
 // 设备详情标签页
 const activeDeviceTab = ref('info')
-const protocolSaving = ref(false)
-const protocolTesting = ref(false)
-const deviceProtocols = ref([])
-const allAdapters = ref([])
 
-const protocolForm = reactive({
-  protocol_type: '',
-  adapter_template_id: null,
-  host: '',
-  port: 22,
-  username: '',
-  password: '',
-  timeout: 30,
-  extra_json: '',
-  enabled: true,
-})
-
-// 协议类型分组（带折叠功能）
-const protocolTypeGroups = [
-  {
-    label: '远程访问',
-    key: 'remote',
-    children: [
-      { label: 'SSH', value: 'ssh' },
-      { label: 'Telnet', value: 'telnet' },
-      { label: 'WinRM', value: 'winrm' },
-    ]
-  },
-  {
-    label: '数据库',
-    key: 'database',
-    children: [
-      { label: 'MySQL', value: 'mysql' },
-      { label: 'PostgreSQL', value: 'postgres' },
-      { label: 'Redis', value: 'redis' },
-    ]
-  },
-  {
-    label: '消息队列',
-    key: 'mq',
-    children: [
-      { label: 'RabbitMQ', value: 'rabbitmq' },
-      { label: 'Kafka', value: 'kafka' },
-    ]
-  },
-  {
-    label: '监控采集',
-    key: 'monitoring',
-    children: [
-      { label: 'SNMP', value: 'snmp' },
-      { label: 'IPMI', value: 'ipmi' },
-      { label: 'Zabbix', value: 'zabbix' },
-      { label: 'Prometheus', value: 'prometheus' },
-    ]
-  },
-  {
-    label: '虚拟化/容器',
-    key: 'vm',
-    children: [
-      { label: 'VMware', value: 'vmware' },
-      { label: 'Kubernetes', value: 'kubernetes' },
-      { label: 'Docker', value: 'docker' },
-    ]
-  },
-  {
-    label: 'Web/应用',
-    key: 'web',
-    children: [
-      { label: 'HTTP', value: 'http' },
-      { label: 'Browser', value: 'browser' },
-      { label: 'Elasticsearch', value: 'elasticsearch' },
-    ]
-  },
-  {
-    label: '其他',
-    key: 'other',
-    children: [
-      { label: 'Redfish', value: 'redfish' },
-      { label: 'Syslog', value: 'syslog' },
-    ]
-  },
+// 磁盘列定义
+const diskColumns = [
+  { title: '设备', key: 'device', render: (row) => nullOrDefault(row.device) },
+  { title: '挂载点', key: 'mount_point', render: (row) => nullOrDefault(row.mount_point) },
+  { title: '文件系统', key: 'filesystem', render: (row) => nullOrDefault(row.filesystem) },
+  { title: '总大小', key: 'total', render: (row) => row.total ? (row.total / 1024 / 1024 / 1024).toFixed(1) + ' GB' : '-' },
+  { title: '已用', key: 'used', render: (row) => row.used ? (row.used / 1024 / 1024 / 1024).toFixed(1) + ' GB' : '-' },
+  { title: '使用率', key: 'usage_percent', render: (row) => row.usage_percent ? row.usage_percent + '%' : '-' },
 ]
 
-// 扁平化选项（用于兼容现有逻辑）
-const protocolTypeOptions = protocolTypeGroups.flatMap(g => g.children)
-
-const filteredAdapterOptions = computed(() => {
-  if (!protocolForm.protocol_type) return []
-  return allAdapters.value
-    .filter(a => a.protocol_type === protocolForm.protocol_type && a.enabled)
-    .map(a => ({ label: a.name, value: a.id }))
-})
-
-// 设备列表（搜索时由API返回过滤结果）
-const filteredDevices = computed(() => deviceList.value)
-
-const handleSearch = () => {
-  // 搜索时重新从第1页加载
-  page.value = 1
-  loadDevices()
-}
-
-// 处理输入框清空（clearable X 按钮）
-const handleSearchClear = () => {
-  page.value = 1
-  loadDevices()
-}
-
-const protocolListColumns = [
-  {
-    title: '协议',
-    key: 'protocol_type',
-    width: 100,
-    render(row) {
-      const colors = { snmp: 'info', ssh: 'success', http: 'warning', mysql: 'error', redis: 'info', postgres: 'success', vmware: 'warning' }
-      return h(NTag, { type: colors[row.protocol_type] || 'default', size: 'small' }, () => row.protocol_type.toUpperCase())
-    }
-  },
-  {
-    title: '模板',
-    key: 'adapter_template_id',
-    render(row) {
-      const t = allAdapters.value.find(a => a.id === row.adapter_template_id)
-      return t ? t.name : '-'
-    }
-  },
-  {
-    title: '状态',
-    key: 'enabled',
-    width: 80,
-    render(row) {
-      return h(NTag, { type: row.enabled ? 'success' : 'default', size: 'small' }, () => row.enabled ? '启用' : '禁用')
-    }
-  },
+// 网络列定义
+const networkColumns = [
+  { title: '接口名', key: 'name', render: (row) => nullOrDefault(row.name) },
+  { title: 'IP地址', key: 'ip_address', render: (row) => nullOrDefault(row.ip_address) },
+  { title: 'MAC地址', key: 'mac', render: (row) => nullOrDefault(row.mac) },
+  { title: '状态', key: 'status', render: (row) => nullOrDefault(row.status) },
+  { title: '接收速率', key: 'rx_rate', render: (row) => row.rx_rate ? row.rx_rate + ' KB/s' : '-' },
+  { title: '发送速率', key: 'tx_rate', render: (row) => row.tx_rate ? row.tx_rate + ' KB/s' : '-' },
 ]
 
-async function loadAllAdapters() {
-  try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/admin/adapters', { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) return
-    const data = await res.json()
-    allAdapters.value = data.items || []
-  } catch (e) { console.error('load adapters error:', e) }
-}
-
-async function loadDeviceProtocols(deviceId) {
-  try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/admin/device/' + deviceId + '/protocols', { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) return
-    const data = await res.json()
-    deviceProtocols.value = data.items || []
-  } catch (e) { console.error('load device protocols error:', e) }
-}
-
-function onProtocolTypeChange(type) {
-  protocolForm.adapter_template_id = null
-  protocolForm.port = getDefaultPort(type)
-  const adapter = allAdapters.value.find(a => a.protocol_type === type && a.enabled)
-  if (adapter && adapter.default_config) {
-    const cfg = adapter.default_config
-    if (cfg.port) protocolForm.port = cfg.port
-    if (cfg.username) protocolForm.username = cfg.username || ''
-    if (cfg.timeout) protocolForm.timeout = cfg.timeout
-  }
-}
-
-function getDefaultPort(type) {
-  const ports = { snmp: 161, ssh: 22, http: 80, mysql: 3306, postgres: 5432, redis: 6379, rabbitmq: 15672, kafka: 9092, elasticsearch: 9200, vmware: 443, ipmi: 623, winrm: 5985, kubernetes: 6443, docker: 2375, zabbix: 80, prometheus: 9090, browser: 80, redfish: 443, syslog: 514, telnet: 23 }
-  return ports[type] || 22
-}
-
-async function saveProtocolConfig() {
-  if (!selectedDevice.value?.id || !protocolForm.protocol_type) {
-    message.warning('请选择协议类型')
-    return
-  }
-  protocolSaving.value = true
-  try {
-    const token = localStorage.getItem('token')
-    let extra = {}
-    if (protocolForm.extra_json) {
-      try { extra = JSON.parse(protocolForm.extra_json) } catch { message.warning('额外参数格式错误'); return }
-    }
-    const overrides = { ...extra }
-    if (protocolForm.host) overrides.host = protocolForm.host
-    if (protocolForm.port) overrides.port = protocolForm.port
-    if (protocolForm.username) overrides.username = protocolForm.username
-    if (protocolForm.password) overrides.password = protocolForm.password
-    if (protocolForm.timeout) overrides.timeout = protocolForm.timeout
-    const res = await fetch('/api/v1/admin/device/' + selectedDevice.value.id + '/protocols', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify([{
-        device_id: selectedDevice.value.id,
-        protocol_type: protocolForm.protocol_type,
-        adapter_template_id: protocolForm.adapter_template_id || null,
-        overrides,
-        enabled: protocolForm.enabled,
-      }])
-    })
-    if (!res.ok) throw new Error('保存失败')
-    message.success('保存成功')
-    loadDeviceProtocols(selectedDevice.value.id)
-  } catch (e) {
-    message.error(e.message)
-  } finally {
-    protocolSaving.value = false
-  }
-}
-
-async function testProtocolConfig() {
-  if (!selectedDevice.value?.id || !protocolForm.protocol_type) {
-    message.warning('请选择协议类型')
-    return
-  }
-  protocolTesting.value = true
-  try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/admin/device/' + selectedDevice.value.id + '/protocols/' + protocolForm.protocol_type + '/test', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const data = await res.json()
-    if (data.success) {
-      message.success('连接成功: ' + (data.message || ''))
-    } else {
-      message.warning('连接失败: ' + (data.message || data.error || ''))
-    }
-  } catch (e) {
-    message.error('测试失败: ' + e.message)
-  } finally {
-    protocolTesting.value = false
-  }
-}
+// Docker容器列定义
+const dockerContainerColumns = [
+  { title: '名称', key: 'name', ellipsis: { tooltip: true }, render: (row) => nullOrDefault(row.name) },
+  { title: '镜像', key: 'image', ellipsis: { tooltip: true }, render: (row) => nullOrDefault(row.image) },
+  { title: '状态', key: 'status', render: (row) => h(NTag, { type: row.status === 'running' ? 'success' : 'default', size: 'small' }, () => nullOrDefault(row.status)) },
+  { title: '端口映射', key: 'ports', render: (row) => nullOrDefault(row.ports) },
+]
 
 const stats = reactive([
   { key: 'total', label: '设备总数', value: 0, color: '#18a058' },
@@ -503,14 +311,38 @@ const getRowClassName = ({ row }) => {
   return ''
 }
 
+// CPU列渲染
+const renderCpu = (row) => {
+  const model = row.cpu?.model || ''
+  const cores = row.cpu?.cores
+  if (!model && cores === undefined) return '-'
+  return model ? `${model} (${cores}核)` : `${cores}核`
+}
+
+// 内存列渲染
+const renderMemory = (row) => {
+  const total = row.memory?.total_mb
+  if (!total) return '-'
+  return (total / 1024).toFixed(1) + ' GB'
+}
+
+// 负载列渲染
+const renderLoad = (row) => {
+  const load = row.cpu?.load_avg_1m
+  if (load === undefined || load === null) return '-'
+  return load.toFixed(2)
+}
+
 const columns = [
   { title: '名称', key: 'name', ellipsis: { tooltip: true }, render: (row) => h('a', { style: 'color: #18a058; cursor: pointer', onClick: () => handleRowClick(row) }, row.name) },
-  { title: 'IP地址', key: 'ip_address', width: 140, render: (r) => r.ip_address || '-' },
-  { title: '系统', key: 'os_type', width: 100, render: (r) => r.os_type || '-' },
-  { title: '系统版本', key: 'os_version', width: 150, ellipsis: { tooltip: true }, render: (r) => r.os_version || '-' },
+  { title: 'IP地址', key: 'ip_address', width: 140, render: (r) => nullOrDefault(r.ip_address) },
+  { title: 'CPU', key: 'cpu', width: 180, ellipsis: { tooltip: true }, render: renderCpu },
+  { title: '内存', key: 'memory', width: 100, render: renderMemory },
+  { title: '负载', key: 'load', width: 80, render: renderLoad },
+  { title: '系统', key: 'os_type', width: 100, render: (r) => nullOrDefault(r.os_type) },
+  { title: '系统版本', key: 'os_version', width: 150, ellipsis: { tooltip: true }, render: (r) => nullOrDefault(r.os_version) },
   { title: '厂商型号', key: 'manufacturer', width: 160, render: (r) => r.manufacturer ? r.manufacturer + ' ' + (r.model || '') : '-' },
   { title: '状态', key: 'status', width: 90, render: (r) => h(NTag, { type: statusType(r.status), size: 'small' }, () => statusText(r.status)) },
-  { title: '位置', key: 'location', width: 150, ellipsis: { tooltip: true }, render: (r) => r.location || '-' },
   { title: '最近探测', key: 'last_collect_time', width: 170, render: (r) => r.last_collect_time ? formatDate(new Date(r.last_collect_time)) : '-' },
   {
     title: '操作',
@@ -581,8 +413,10 @@ async function loadDevices() {
     deviceList.value = data.items || data.data?.items || []
     total.value = data.total || data.data?.total || 0
     paginationConfig.total = total.value
+    paginationConfig.itemCount = total.value
+    paginationConfig.pageCount = Math.max(1, Math.ceil((total.value || 0) / (pageSize.value || 1)))
     itemCountRef.value = total.value
-    pageCountRef.value = Math.max(1, Math.ceil((total.value || 0) / (pageSize.value || 1)))
+    pageCountRef.value = paginationConfig.pageCount
     paginationVersion.value++
   } catch (e) {
     message.error(`加载设备列表失败: ${e.message}`)
@@ -597,21 +431,7 @@ function handleRowClick(row) {
   selectedDevice.value = row
   drawerVisible.value = true
   activeDeviceTab.value = 'info'
-  resetProtocolForm()
   loadMetrics(row)
-  loadDeviceProtocols(row.id)
-}
-
-function resetProtocolForm() {
-  protocolForm.protocol_type = ''
-  protocolForm.adapter_template_id = null
-  protocolForm.host = ''
-  protocolForm.port = 22
-  protocolForm.username = ''
-  protocolForm.password = ''
-  protocolForm.timeout = 30
-  protocolForm.extra_json = ''
-  protocolForm.enabled = true
 }
 
 function handleDelete(row) {
@@ -784,9 +604,6 @@ function initCharts(cpuData, memData, diskData) {
   diskChart = diskChartRef.value ? echarts.getInstanceByDom(diskChartRef.value) : null
 }
 
-// 监听 tab 切换，切换到 metrics 时 resize 图表
-let resizeObserver = null
-
 function startPoll() {
   stopPoll()
   pollTimer = setInterval(() => { loadDevices() }, 30000)
@@ -794,11 +611,9 @@ function startPoll() {
 
 function stopPoll() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
-  resizeObserver?.disconnect()
 }
 
 onMounted(() => {
-  loadAllAdapters()
   loadDevices()
   startPoll()
 
@@ -828,15 +643,6 @@ function handleResize() {
 .stat-value { font-size: 28px; font-weight: 700; color: #1d2129; }
 .stat-label { font-size: 13px; color: #86909c; margin-top: 4px; }
 
-.device-info { margin-bottom: 24px; }
-.device-info h4 { margin: 0 0 12px 0; font-size: 14px; color: #1d2129; }
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.info-item { font-size: 13px; color: #4b4b4b; }
-.info-item .label { color: #86909c; }
-
-.protocol-config-form { padding: 8px 0; }
-.protocol-collapse { margin-top: 16px; }
-
 .metrics-charts { padding: 8px 0; }
 .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .metric-card {
@@ -855,6 +661,8 @@ function handleResize() {
 .metric-chart { width: 100%; height: 60px; }
 
 .no-data { padding: 24px 0; text-align: center; }
+
+.sub-title { font-size: 14px; font-weight: 500; color: #303133; margin: 16px 0 8px 0; }
 
 /* Row status */
 :deep(.row-offline) { background-color: #fff1f0 !important; }

@@ -97,8 +97,13 @@ def get_db() -> Generator[Session, None, None]:
         # Re-raise FastAPI's own exceptions so they propagate correctly
         raise
     except Exception as e:
+        import sys
+        import traceback
         logger = logging.getLogger(__name__)
-        logger.warning(f"Database not available: {e}")
+        logger.warning(f"Database not available: {type(e).__name__}: {e}")
+        sys.stderr.write(f"get_db EXCEPTION: {type(e).__name__}: {e}\n")
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         raise HTTPException(status_code=503, detail="数据库服务不可用，请检查数据库连接")
 
 

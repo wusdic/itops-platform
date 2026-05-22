@@ -95,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watchEffect } from 'vue'
 import {
   NCard, NDataTable, NButton, NSpace, NSelect, NDrawer, NDrawerContent,
   NDescriptions, NDescriptionsItem, NTag, NIcon, NSpin, useMessage, useDialog
@@ -140,13 +140,16 @@ const paginationConfig = {
     loadAlerts()
   }
 }
-// getPaginationConfig 返回共享对象引用
-const getPaginationConfig = () => {
-  paginationVersion.value // 依赖这个 ref 建立响应式连接
-  paginationConfig.pageCount = pageCountRef.value
-  paginationConfig.itemCount = itemCountRef.value
-  return paginationConfig
-}
+// watchEffect 主动同步：total/page/pageSize 变化时 Naive UI 收到最新值
+watchEffect(() => {
+  paginationConfig.page = page.value
+  paginationConfig.pageSize = pageSize.value
+  paginationConfig.total = total.value
+  paginationConfig.itemCount = total.value
+  paginationConfig.pageCount = Math.max(1, Math.ceil((total.value || 0) / (pageSize.value || 1)))
+})
+
+const getPaginationConfig = () => paginationConfig
 
 const showDrawer = ref(false)
 const currentAlert = ref(null)

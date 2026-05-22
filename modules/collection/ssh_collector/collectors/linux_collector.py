@@ -409,7 +409,97 @@ class LinuxCollector:
                 })
         
         return users
-    
+
+    def collect_hardware_info(self) -> Dict[str, Any]:
+        """
+        采集硬件信息
+        
+        Returns:
+            硬件信息字典
+        """
+        info = {}
+        
+        # 从DMI信息中获取硬件信息
+        dmi_path = '/sys/class/dmi/id/'
+        
+        def read_dmi_file(filename: str) -> str:
+            try:
+                _, content, _ = self._client.execute(f'cat {dmi_path}{filename} 2>/dev/null')
+                return content.strip() if content else 'Unknown'
+            except Exception:
+                return 'Unknown'
+        
+        info['product_name'] = read_dmi_file('product_name')
+        info['sys_vendor'] = read_dmi_file('sys_vendor')
+        info['bios_version'] = read_dmi_file('bios_version')
+        info['board_name'] = read_dmi_file('board_name')
+        info['board_vendor'] = read_dmi_file('board_vendor')
+        
+        return info
+
+    def collect_container_info(self) -> Dict[str, Any]:
+        """
+        采集容器信息
+        
+        Returns:
+            容器信息字典
+        """
+        info = {'docker': [], 'containerd': []}
+        
+        # Docker容器
+        _, docker_output, _ = self._client.execute('docker ps -a 2>/dev/null')
+        if docker_output and not docker_output.startswith('Cannot connect'):
+            for line in docker_output.strip().split('\n'):
+                if not line or line.startswith('CONTAINER ID'):
+                    continue
+                parts = line.split()
+                if len(parts) >= 4:
+                    info['docker'].append({
+                        'id': parts[0],
+                        'name': parts[-1] if len(parts) > 7 else parts[1] if len(parts) > 1 else '',
+                        'image': parts[1] if len(parts) > 1 else '',
+                        'status': ' '.join(parts[2:]) if len(parts) > 2 else ''
+                    })
+        
+        # Containerd容器
+        _, ctr_output, _ = self._client.execute('ctr containers list 2>/dev/null')
+        if ctr_output and not ctr_output.startswith('ctr'):
+            for line in ctr_output.strip().split('\n'):
+                if not line:
+                    continue
+                parts = line.split()
+                if len(parts) >= 3:
+                    info['containerd'].append({
+                        'id': parts[0],
+                        'image': parts[1],
+                        'runtime': parts[2] if len(parts) > 2 else ''
+                    })
+        
+        return info
+
+    def collect_package_info(self) -> Dict[str, Any]:
+        """
+        采集已安装软件包信息
+        
+        Returns:
+            软件包信息字典
+        """
+        info = {'count': 0, 'package_manager': 'unknown'}
+        
+        # 检测发行版并获取包数量
+        if self._distro in ['centos', 'redhat', 'anolis']:
+            _, pkg_output, _ = self._client.execute('rpm -qa --count 2>/dev/null || rpm -qa | wc -l')
+            if pkg_output.strip().isdigit():
+                info['count'] = int(pkg_output.strip())
+                info['package_manager'] = 'rpm'
+        elif self._distro in ['ubuntu', 'debian', 'kylin', 'uos']:
+            _, pkg_output, _ = self._client.execute("dpkg -l | grep ^ii | wc -l")
+            if pkg_output.strip().isdigit():
+                info['count'] = int(pkg_output.strip())
+                info['package_manager'] = 'dpkg'
+        
+        return info
+
     def collect_all(self) -> Dict[str, Any]:
         """
         采集所有系统信息
@@ -434,7 +524,10 @@ class LinuxCollector:
             'processes': self.collect_process_info(),
             'ports': self.collect_port_info(),
             'services': self.collect_service_info(),
-            'users': self.collect_users()
+            'users': self.collect_users(),
+            'hardware': self.collect_hardware_info(),
+            'containers': self.collect_container_info(),
+            'packages': self.collect_package_info()
         }
         
         return data

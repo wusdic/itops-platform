@@ -38,6 +38,12 @@ const routes = [
         component: () => import('@/views/monitoring/performance.vue'),
         meta: { title: '性能监控', parent: '监控中心' }
       },
+      {
+        path: 'management/vendor-credentials',
+        name: 'VendorCredentials',
+        component: () => import('@/views/management/VendorCredentials.vue'),
+        meta: { title: '厂商账密', parent: '系统管理' }
+      },
       // 设备发现
       {
         path: 'discovery/scan',

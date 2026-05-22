@@ -733,7 +733,75 @@ async def list_discovery_tasks(
             "items": [],
             "total": 0,
         }
-        
     except Exception as e:
         logger.error(f"获取发现任务列表失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== 网段管理（内存存储） ==============
+
+_networks_store = {}  # id -> {id, cidr, description, auto_scan, created_at}
+_network_id_counter = 1
+
+
+class NetworkCreate(BaseModel):
+    cidr: str
+    description: Optional[str] = ""
+    auto_scan: bool = False
+
+
+class NetworkUpdate(BaseModel):
+    cidr: Optional[str] = None
+    description: Optional[str] = None
+    auto_scan: Optional[bool] = None
+
+
+@router.get("/networks", summary="获取已配置网段列表", response_model=List[dict])
+async def list_networks():
+    """返回所有已配置的扫描网段"""
+    return list(_networks_store.values())
+
+
+@router.post("/networks", summary="添加扫描网段", response_model=dict)
+async def create_network(net: NetworkCreate, network_id: Optional[int] = None):
+    """添加新的扫描网段，network_id 优先使用前端指定的 ID"""
+    global _network_id_counter
+    if network_id is not None and network_id not in _networks_store:
+        nid = network_id
+    else:
+        nid = _network_id_counter
+        _network_id_counter += 1
+    now = datetime.now().isoformat()
+    record = {
+        "id": nid,
+        "cidr": net.cidr,
+        "description": net.description or "",
+        "auto_scan": net.auto_scan,
+        "created_at": now,
+    }
+    _networks_store[nid] = record
+    return record
+
+
+@router.put("/networks/{network_id}", summary="更新扫描网段", response_model=dict)
+async def update_network(network_id: int, net: NetworkUpdate):
+    """更新指定网段的配置"""
+    if network_id not in _networks_store:
+        raise HTTPException(status_code=404, detail="网段不存在")
+    record = _networks_store[network_id]
+    if net.cidr is not None:
+        record["cidr"] = net.cidr
+    if net.description is not None:
+        record["description"] = net.description
+    if net.auto_scan is not None:
+        record["auto_scan"] = net.auto_scan
+    return record
+
+
+@router.delete("/networks/{network_id}", summary="删除扫描网段")
+async def delete_network(network_id: int):
+    """删除指定网段"""
+    if network_id not in _networks_store:
+        raise HTTPException(status_code=404, detail="网段不存在")
+    del _networks_store[network_id]
+    return {"message": "删除成功"}

@@ -47,6 +47,7 @@ export const useAppStore = defineStore('app', () => {
     userInfo.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('userInfo')
+    window.location.href = '/login'
   }
 
   const init = () => {

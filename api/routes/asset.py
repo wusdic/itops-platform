@@ -164,7 +164,6 @@ async def get_devices(
     business_id: Optional[int] = Query(None, description="业务系统ID过滤"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
     pagination: PaginationParams = Depends(PaginationParams),
-    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """获取设备列表"""
@@ -210,15 +209,123 @@ async def get_devices(
     items = []
     for d in devices:
         device_dict = _device_to_dict(d)
+        # hostname为空时fallback到name字段
+        device_dict['hostname'] = device_dict['hostname'] or device_dict.get('name') or ''
         # 获取实时状态
         real_status = manager.get_device_status(d.name)
         last_metrics = manager.get_last_metrics(d.name)
         device_dict['status'] = real_status.value if real_status else d.status.value
         device_dict['last_collect_time'] = last_metrics.timestamp.isoformat() if last_metrics and last_metrics.timestamp else None
-        # 从采集数据中获取OS类型等信息
+        # 从采集数据中获取更多字段（metrics为空时fallback到Device表字段）
         if last_metrics and last_metrics.metrics:
-            device_dict['os_type'] = last_metrics.metrics.get('os_type') or d.os_type
-            device_dict['manufacturer'] = last_metrics.metrics.get('manufacturer') or d.manufacturer
+            m = last_metrics.metrics
+            sys_info = m.get('system', {})
+            cpu_info = m.get('cpu', {})
+            mem_info = m.get('memory', {})
+            network_info = m.get('network', []) or []
+            disks_info = m.get('disks', []) or []
+            hardware_info = m.get('hardware', {})
+            containers_info = m.get('containers', {})
+            packages_info = m.get('packages', {})
+
+            device_dict['distro'] = m.get('distro') or ''
+            device_dict['os_name'] = sys_info.get('os_name') or ''
+            device_dict['kernel'] = sys_info.get('kernel') or ''
+            device_dict['uptime'] = sys_info.get('uptime') or ''
+            device_dict['cpu_model'] = cpu_info.get('model') or ''
+            device_dict['cpu_cores'] = cpu_info.get('cores') or 0
+            device_dict['cpu_usage'] = cpu_info.get('usage') or 0
+            device_dict['cpu_load'] = cpu_info.get('load_avg_1m') or 0
+            device_dict['memory_total_mb'] = mem_info.get('total_mb') or 0
+            device_dict['memory_usage_percent'] = mem_info.get('usage_percent') or 0
+            disk_usage = ''
+            for disk in disks_info:
+                if not isinstance(disk, dict):
+                    continue
+                if disk.get('mounted_on') == '/':
+                    disk_usage = disk.get('usage_percent', '0%')
+                    break
+            device_dict['disk_usage'] = disk_usage
+            # 主网络接口
+            for iface in network_info:
+                if not isinstance(iface, dict):
+                    continue
+                ip = iface.get('ip_address', '')
+                if ip and ip not in ('N/A', '127.0.0.1', '::1'):
+                    device_dict['primary_ip'] = ip
+                    device_dict['primary_mac'] = iface.get('mac_address') or ''
+                    break
+            # 硬件/容器/包信息（完整对象供详情页使用）
+            device_dict['hardware'] = hardware_info
+            device_dict['containers'] = containers_info
+            device_dict['packages'] = packages_info
+            # 指纹信息
+            device_dict['fingerprint_vendor'] = hardware_info.get('vendor') or last_metrics.vendor or ''
+            device_dict['fingerprint_model'] = m.get('fingerprint_model') or ''
+            device_dict['fingerprint_category'] = m.get('fingerprint_category') or ''
+            device_dict['fingerprint_confidence'] = m.get('fingerprint_confidence') or 0.0
+            device_dict['fingerprint_matched_by'] = m.get('fingerprint_matched_by') or []
+            device_dict['fingerprint_suggested_protocols'] = m.get('fingerprint_suggested_protocols') or []
+            device_dict['fingerprint_possible_creds'] = m.get('fingerprint_possible_creds') or []
+            # 从metrics覆盖DB字段（os_type/manufacturer已在_device_to_dict中取DB值）
+            if m.get('distro'):
+                device_dict['os_type'] = m['distro'].capitalize()
+            if hardware_info.get('vendor'):
+                device_dict['manufacturer'] = hardware_info['vendor']
+        else:
+            # 无metrics时，使用Device表已有字段
+            # 解析CPU字符串如 "Intel i7-13620H (10C/16T) @ 4.9GHz"
+            cpu_str = d.cpu or ''
+            cpu_model_str = ''
+            cpu_cores_num = 0
+            if cpu_str:
+                import re
+                # 提取核心数: 先尝试 "(NC/NT)" 格式
+                cores_match = re.search(r'\((\d+)C/\d+T\)', cpu_str)
+                if not cores_match:
+                    cores_match = re.search(r'(\d+)\s*Cores?', cpu_str, re.I)
+                if cores_match:
+                    cpu_cores_num = int(cores_match.group(1))
+                # 提取型号名（取括号前的主名称部分，去掉 @ 频率后缀）
+                model_part = cpu_str.split('(')[0].strip()
+                model_part = re.sub(r'\s*@\s*[\d.]+GHz\s*$', '', model_part, flags=re.I).strip()
+                cpu_model_str = model_part
+            device_dict['cpu_model'] = cpu_model_str
+            device_dict['cpu_cores'] = cpu_cores_num
+            # 解析内存字符串如 "64GB DDR5" → MB
+            mem_mb = 0
+            if d.memory:
+                import re
+                g = re.search(r'(\d+)\s*GB', d.memory, re.I)
+                if g:
+                    mem_mb = int(g.group(1)) * 1024
+                else:
+                    m = re.search(r'(\d+)\s*MB', d.memory, re.I)
+                    if m:
+                        mem_mb = int(m.group(1))
+            device_dict['memory_total_mb'] = mem_mb
+            device_dict['distro'] = d.os_type or ''
+            device_dict['os_name'] = d.os_type or ''
+            device_dict['manufacturer'] = d.manufacturer or ''
+            device_dict['model'] = d.model or ''
+            device_dict['cpu_usage'] = 0
+            device_dict['cpu_load'] = 0
+            device_dict['memory_usage_percent'] = 0
+            device_dict['uptime'] = ''
+            device_dict['kernel'] = ''
+            device_dict['disk_usage'] = ''
+            device_dict['primary_ip'] = d.ip_address
+            device_dict['primary_mac'] = ''
+            device_dict['hardware'] = {}
+            device_dict['containers'] = {}
+            device_dict['packages'] = {}
+            device_dict['fingerprint_vendor'] = ''
+            device_dict['fingerprint_model'] = ''
+            device_dict['fingerprint_category'] = ''
+            device_dict['fingerprint_confidence'] = 0.0
+            device_dict['fingerprint_matched_by'] = []
+            device_dict['fingerprint_suggested_protocols'] = []
+            device_dict['fingerprint_possible_creds'] = []
         items.append(device_dict)
     
     return {
@@ -269,7 +376,6 @@ async def create_device(
 @router.get("/device/{device_id}", summary="获取设备详情")
 async def get_device(
     device_id: int,
-    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """获取设备的详细信息"""
@@ -278,7 +384,54 @@ async def get_device(
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
     
-    return _device_to_dict(device)
+    device_dict = _device_to_dict(device)
+    
+    # 获取实时状态和指标
+    from modules.collection.device_manager import get_device_manager
+    manager = get_device_manager()
+    real_status = manager.get_device_status(device.name)
+    last_metrics = manager.get_last_metrics(device.name)
+    device_dict['status'] = real_status.value if real_status else device.status.value
+    device_dict['last_collect_time'] = last_metrics.timestamp.isoformat() if last_metrics and last_metrics.timestamp else None
+    
+    # 从采集数据中获取更多字段
+    if last_metrics and last_metrics.metrics:
+        m = last_metrics.metrics
+        device_dict['os_type'] = m.get('os_type') or device.os_type
+        device_dict['manufacturer'] = m.get('manufacturer') or device.manufacturer
+        # 扩展字段
+        device_dict['distro'] = m.get('distro')
+        device_dict['os_name'] = m.get('os_name')
+        device_dict['kernel'] = m.get('kernel')
+        device_dict['uptime'] = m.get('uptime')
+        device_dict['cpu_model'] = m.get('cpu_model')
+        device_dict['cpu_cores'] = m.get('cpu_cores')
+        device_dict['cpu_usage'] = m.get('cpu_usage')
+        device_dict['cpu_load'] = m.get('cpu_load')
+        device_dict['memory_total_mb'] = m.get('memory_total_mb')
+        device_dict['memory_usage_percent'] = m.get('memory_usage_percent')
+        device_dict['disk_usage'] = m.get('disk_usage')
+        device_dict['primary_ip'] = m.get('primary_ip')
+        device_dict['primary_mac'] = m.get('primary_mac')
+        # 指纹信息
+        device_dict['fingerprint_vendor'] = m.get('fingerprint_vendor') or last_metrics.vendor or ''
+        device_dict['fingerprint_model'] = m.get('fingerprint_model') or ''
+        device_dict['fingerprint_category'] = m.get('fingerprint_category') or ''
+        device_dict['fingerprint_confidence'] = m.get('fingerprint_confidence') or 0.0
+        device_dict['fingerprint_matched_by'] = m.get('fingerprint_matched_by') or []
+        device_dict['fingerprint_suggested_protocols'] = m.get('fingerprint_suggested_protocols') or []
+        device_dict['fingerprint_possible_creds'] = m.get('fingerprint_possible_creds') or []
+    else:
+        # 无metrics时的指纹默认值
+        device_dict['fingerprint_vendor'] = ''
+        device_dict['fingerprint_model'] = ''
+        device_dict['fingerprint_category'] = ''
+        device_dict['fingerprint_confidence'] = 0.0
+        device_dict['fingerprint_matched_by'] = []
+        device_dict['fingerprint_suggested_protocols'] = []
+        device_dict['fingerprint_possible_creds'] = []
+
+    return device_dict
 
 
 @router.put("/device/{device_id}", summary="更新设备")

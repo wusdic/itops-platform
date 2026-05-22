@@ -382,8 +382,9 @@ async function saveNetwork() {
         body: JSON.stringify(editForm.value),
       })
       if (res.ok) {
+        const updated = await res.json()
         const idx = savedNetworks.value.findIndex(n => n.id === editingNetwork.value.id)
-        if (idx !== -1) savedNetworks.value[idx] = { ...savedNetworks.value[idx], ...editForm.value }
+        if (idx !== -1) savedNetworks.value[idx] = updated
         message.success('网段已更新')
       } else {
         message.error('更新失败')

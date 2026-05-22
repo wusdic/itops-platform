@@ -144,6 +144,7 @@ async function loadMenus() {
         { key: '/monitoring/devices', label: '设备监控', path: '/monitoring/devices', sort: 0 },
         { key: '/monitoring/alerts', label: '告警管理', path: '/monitoring/alerts', sort: 1 },
         { key: '/monitoring/performance', label: '性能监控', path: '/monitoring/performance', sort: 2 },
+        { key: '/management/vendor-credentials', label: '厂商账密', path: '/management/vendor-credentials', sort: 3 },
       ]},
       { key: 'workorder', label: '工单管理', icon: ConstructOutline, sort: 2, children: [
         { key: '/workorder/list', label: '工单列表', path: '/workorder/list', sort: 0 },

@@ -291,6 +291,13 @@ def create_app() -> FastAPI:
         tags=["备份管理"],
     )
 
+    from api.routes.vendor_credentials import router as vendor_credentials_router
+    app.include_router(
+        vendor_credentials_router,
+        prefix="/api/v1/credentials",
+        tags=["厂商账密管理"],
+    )
+
     # 前端静态文件服务 - 使用中间件方式避免路由冲突
     dist_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
     if os.path.exists(dist_path):

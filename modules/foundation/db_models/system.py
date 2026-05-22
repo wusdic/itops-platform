@@ -153,3 +153,77 @@ class APIKey(Base):
         if self.max_requests > 0 and self.request_count >= self.max_requests:
             return False
         return True
+
+
+class LogConfig(Base):
+    """
+    日志配置模型
+    控制各类型日志的记录开关和级别
+    """
+    __tablename__ = "log_config"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String(32), nullable=False, index=True)  # operation/system/collection/audit
+    sub_category = Column(String(64), nullable=False)  # login/device_crud/error/success/...
+    enabled = Column(Integer, default=1)  # 1=记录, 0=不记录
+    min_level = Column(String(16), default="INFO")  # DEBUG/INFO/WARNING/ERROR/CRITICAL
+    aggregation_enabled = Column(Integer, default=1)  # 是否归集
+    retention_days = Column(Integer, default=7)  # 保留天数
+    description = Column(String(256))  # 中文说明
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_category_sub', 'category', 'sub_category', unique=True),
+    )
+
+
+class LogGroup(Base):
+    """
+    日志归集组
+    同一归集键的多条日志聚合为一个组
+    """
+    __tablename__ = "log_groups"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String(32), nullable=False, index=True)
+    group_key = Column(String(256), nullable=False)  # 归集唯一标识
+    dimension_summary = Column(Text)  # JSON: {action: 'login', count: 42, ...}
+    first_seen = Column(DateTime, nullable=False)
+    last_seen = Column(DateTime, nullable=False)
+    total_count = Column(Integer, default=0)
+    level_distribution = Column(Text)  # JSON: {ERROR: 3, WARNING: 10}
+    sample_log = Column(Text)  # 代表性日志原文
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_cat_key', 'category', 'group_key'),
+        Index('idx_last_seen', 'last_seen'),
+    )
+
+
+class LogItem(Base):
+    """
+    日志明细
+    归集组内的单条日志
+    """
+    __tablename__ = "log_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_id = Column(Integer, index=True)
+    category = Column(String(32), nullable=False, index=True)
+    raw_content = Column(Text)  # 原始日志全文
+    level = Column(String(16), index=True)  # DEBUG/INFO/WARNING/ERROR
+    source = Column(String(64))
+    message = Column(Text)
+    detail = Column(Text)  # JSON 结构化详情
+    duration_ms = Column(Integer)
+    username = Column(String(64), index=True)
+    ip_address = Column(String(64))
+    resource_type = Column(String(64), index=True)
+    resource_id = Column(String(64))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    __table_args__ = (
+        Index('idx_cat_created', 'category', 'created_at'),
+    )

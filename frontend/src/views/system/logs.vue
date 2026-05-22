@@ -1,404 +1,588 @@
 <template>
   <div class="logs-container">
-    <n-tabs type="line" animated v-model:value="activeTab">
-      <!-- 操作日志 -->
-      <n-tab-pane name="operation" tab="操作日志">
-        <n-card title="操作日志" :bordered="false">
-          <template #header-extra>
-            <n-space>
-              <n-input v-model:value="filters.keyword" placeholder="搜索操作/路径" clearable style="width: 180px" />
-              <n-select v-model:value="filters.action" :options="actionOptions" placeholder="操作类型" clearable style="width: 120px" />
-              <n-date-picker v-model:value="filters.dateRange" type="daterange" clearable placeholder="日期范围" style="width: 240px" />
-              <n-button @click="loadOperationLogs" :loading="loading">
+    <!-- 顶部：统计卡片 + 配置按钮 -->
+    <n-space vertical :size="12" style="margin-bottom: 16px">
+      <!-- 统计卡片行 -->
+      <n-space v-if="logStats">
+        <n-card
+          v-for="cat in categories" :key="cat.key"
+          size="small" style="min-width: 140px; cursor: pointer"
+          :class="{ 'stat-active': activeCategory === cat.key }"
+          :bordered="activeCategory === cat.key"
+          @click="switchCategory(cat.key)"
+        >
+          <n-space vertical :size="4" align="center">
+            <n-tag :type="cat.color" size="small">{{ cat.label }}</n-tag>
+            <span style="font-size: 22px; font-weight: 600">{{ logStats[cat.key]?.total_items || 0 }}</span>
+            <span style="font-size: 11px; color: #999">{{ logStats[cat.key]?.total_groups || 0 }} 归集组</span>
+          </n-space>
+        </n-card>
+      </n-space>
+
+      <!-- 操作栏：刷新 + 配置 -->
+      <n-space align="center">
+        <n-button size="small" @click="showConfig = !showConfig">
                 <template #icon><n-icon><RefreshOutline /></n-icon></template>
-                刷新
-              </n-button>
-            </n-space>
-          </template>
+          {{ showConfig ? '收起配置' : '日志配置' }}
+        </n-button>
+        <n-button size="small" type="warning" @click="handleCleanup" :loading="cleaning">
+          清理过期日志
+        </n-button>
+      </n-space>
 
-          <n-data-table
-            :columns="operationColumns"
-            :data="operationLogs"
-            :loading="loading"
-            :pagination="getLogPagination()"
-            :key="logPaginationVersion"
-            :remote="true"
-            :row-key="row => row.id"
-            :scroll-x="1200"
-            size="small"
+      <!-- 配置面板 -->
+      <n-card v-if="showConfig" size="small" title="日志记录配置" :bordered="true" style="background: #fafafa">
+        <n-alert type="info" style="margin-bottom: 12px" :show-icon="true">
+          开启的日志才会被记录。默认配置已按推荐设置，适当减少日志量。
+        </n-alert>
+        <n-table size="small" :bordered="false" style="font-size: 13px">
+          <thead>
+            <tr>
+              <th style="width: 120px">分类</th>
+              <th>日志类型</th>
+              <th style="width: 70px; text-align: center">记录</th>
+              <th style="width: 100px">最低级别</th>
+              <th style="width: 70px; text-align: center">归集</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="cat in configCategories" :key="cat.key">
+              <tr v-for="sub in cat.items" :key="sub.sub_category">
+                <td><n-tag size="tiny" :type="cat.color">{{ cat.label }}</n-tag></td>
+                <td>
+                  {{ sub.description }}
+                  <span style="color: #bbb; font-size: 11px; margin-left: 4px">{{ sub.sub_category }}</span>
+                </td>
+                <td style="text-align: center">
+                  <n-switch
+                    :value="sub.enabled"
+                    size="small"
+                    @update:value="(v) => toggleEnabled(cat.key, sub.sub_category, v)"
+                  />
+                </td>
+                <td>
+                  <n-select
+                    v-if="sub.enabled"
+                    :value="sub.min_level"
+                    :options="levelOptions"
+                    size="tiny"
+                    style="width: 90px"
+                    @update:value="(v) => updateLevel(cat.key, sub.sub_category, v)"
+                  />
+                  <span v-else style="color: #ccc">-</span>
+                </td>
+                <td style="text-align: center">
+                  <n-switch
+                    :value="sub.aggregation_enabled"
+                    size="small"
+                    :disabled="!sub.enabled"
+                    @update:value="(v) => toggleAggregation(cat.key, sub.sub_category, v)"
+                  />
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </n-table>
+        <n-space style="margin-top: 10px">
+          <n-button size="small" type="primary" @click="saveConfigs" :loading="saving">保存配置</n-button>
+          <n-button size="small" @click="resetConfigs">重置默认</n-button>
+        </n-space>
+      </n-card>
+    </n-space>
+
+    <!-- 主内容区：归集组列表 / 归集明细 -->
+    <n-card :title="currentTitle" :bordered="false">
+      <template #header-extra>
+        <n-space v-if="viewMode === 'detail'" align="center">
+          <n-button size="tiny" @click="viewMode = 'group'; expandedGroup = null">
+            ← 返回列表
+          </n-button>
+          <span style="color: #888; font-size: 12px">共 {{ itemTotal }} 条明细</span>
+        </n-space>
+        <n-space v-else align="center">
+          <n-date-picker
+            v-model:value="filterDateRange" type="daterange" clearable
+            size="small" style="width: 240px" placeholder="日期范围"
+            @update:value="loadGroups"
           />
-        </n-card>
-      </n-tab-pane>
-
-      <!-- 系统日志 -->
-      <n-tab-pane name="system" tab="系统日志">
-        <n-card title="系统日志" :bordered="false">
-          <template #header-extra>
-            <n-space>
-              <n-select v-model:value="systemFilters.level" :options="logLevelOptions" placeholder="日志级别" clearable style="width: 120px" />
-              <n-input v-model:value="systemFilters.keyword" placeholder="搜索日志内容" clearable style="width: 200px" />
-              <n-button @click="loadSystemLogs" :loading="systemLoading">
-                <template #icon><n-icon><RefreshOutline /></n-icon></template>
-                刷新
-              </n-button>
-            </n-space>
-          </template>
-
-          <n-data-table
-            :columns="systemColumns"
-            :data="systemLogs"
-            :loading="systemLoading"
-            :pagination="getLogPagination()"
-            :key="logPaginationVersion"
-            :remote="true"
-            :row-key="row => row.idx"
-            :scroll-x="1000"
-            size="small"
+          <n-input
+            v-model:value="filterKeyword" placeholder="搜索关键词" clearable
+            size="small" style="width: 160px" @keydown.enter="loadGroups"
           />
-        </n-card>
-      </n-tab-pane>
+        </n-space>
+      </template>
 
-      <!-- 告警审计日志 -->
-      <n-tab-pane name="alert" tab="告警审计">
-        <n-card title="告警审计日志" :bordered="false">
-          <template #header-extra>
-            <n-button @click="loadAlertAuditLogs" :loading="alertLoading">
-              <template #icon><n-icon><RefreshOutline /></n-icon></template>
-              刷新
-            </n-button>
-          </template>
+      <!-- 归集组列表（一级视图） -->
+      <template v-if="viewMode === 'group'">
+        <n-alert v-if="groups.length === 0 && !loadingGroup" type="info" :show-icon="true" style="margin: 20px 0">
+          当前分类暂无日志记录，或已被配置关闭。
+        </n-alert>
 
-          <n-data-table
-            :columns="alertColumns"
-            :data="alertAuditLogs"
-            :loading="alertLoading"
-            :pagination="getLogPagination()"
-            :key="logPaginationVersion"
-            :remote="true"
-            :row-key="row => row.id"
-            :scroll-x="1000"
-            size="small"
-          />
-        </n-card>
-      </n-tab-pane>
+        <n-data-table
+          v-if="groups.length > 0"
+          :columns="groupColumns"
+          :data="groups"
+          :loading="loadingGroup"
+          :pagination="false"
+          :row-key="row => row.id"
+          @row-click="(row) => openGroup(row)"
+          size="small"
+          :row-props="() => ({ style: 'cursor: pointer' })"
+        />
+      </template>
 
-      <!-- 采集日志 -->
-      <n-tab-pane name="collection" tab="采集日志">
-        <n-card title="采集日志" :bordered="false">
-          <template #header-extra>
-            <n-space>
-              <n-select v-model:value="collectionFilters.status" :options="collectionStatusOptions" placeholder="采集状态" clearable style="width: 120px" />
-              <n-input v-model:value="collectionFilters.device" placeholder="设备名称" clearable style="width: 150px" />
-              <n-button @click="loadCollectionLogs" :loading="collectionLoading">
-                <template #icon><n-icon><RefreshOutline /></n-icon></template>
-                刷新
-              </n-button>
-            </n-space>
-          </template>
+      <!-- 归集明细列表（二级视图） -->
+      <template v-else>
+        <n-alert v-if="groupItems.length === 0 && !loadingItems" type="info" :show-icon="true">
+          该归集组暂无明细记录。
+        </n-alert>
 
-          <n-data-table
-            :columns="collectionColumns"
-            :data="collectionLogs"
-            :loading="collectionLoading"
-            :pagination="getLogPagination()"
-            :key="logPaginationVersion"
-            :remote="true"
-            :row-key="row => row.idx"
-            :scroll-x="1200"
-            size="small"
-          />
-        </n-card>
-      </n-tab-pane>
-    </n-tabs>
+        <n-data-table
+          v-if="groupItems.length > 0"
+          :columns="itemColumns"
+          :data="groupItems"
+          :loading="loadingItems"
+          :pagination="itemPaginationConfig"
+          :remote="true"
+          :row-key="row => row.id"
+          size="small"
+          :scroll-x="Math.max(800, itemColumns.reduce((s, c) => s + (c.width || 150), 0))"
+        />
+      </template>
+    </n-card>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, h } from 'vue'
+import { ref, reactive, computed, h, onMounted, watch, nextTick } from 'vue'
 import {
-  NCard, NDataTable, NButton, NInput, NSelect, NDatePicker, NTabs, NTabPane,
-  NSpace, NTag, NIcon, NEmpty, NTooltip, NBadge
+  NCard, NDataTable, NButton, NInput, NSelect, NDatePicker,
+  NSpace, NTag, NIcon, NEmpty, NTooltip, NBadge, NAlert,
+  NTable, NSwitch, useMessage, useDialog
 } from 'naive-ui'
-import { RefreshOutline } from '@vicons/ionicons5'
-import { useMessage } from 'naive-ui'
+import { RefreshOutline, CogOutline } from '@vicons/ionicons5'
 import { formatDate } from '@/utils/date'
 
 const message = useMessage()
-const activeTab = ref('operation')
+const dialog = useDialog()
 
-// ==================== 分页 refs ====================
-const logPage = ref(1)
-const logPageSize = ref(20)
-const logTotal = ref(0)
+// ==================== 常量 ====================
+const categories = [
+  { key: 'operation', label: '操作日志', color: 'success' },
+  { key: 'system',   label: '系统日志',  color: 'error'    },
+  { key: 'collection', label: '采集日志', color: 'warning' },
+  { key: 'audit',    label: '告警审计',  color: 'info'    },
+]
+const configCategories = [
+  {
+    key: 'operation', label: '操作日志', color: 'success',
+    items: [
+      { sub_category: 'login', description: '登录/登出', enabled: true, min_level: 'INFO', aggregation_enabled: true },
+      { sub_category: 'device_crud', description: '设备增删改查', enabled: true, min_level: 'INFO', aggregation_enabled: true },
+      { sub_category: 'alert_action', description: '告警状态变更', enabled: true, min_level: 'INFO', aggregation_enabled: true },
+      { sub_category: 'workorder_crud', description: '工单增删改', enabled: true, min_level: 'INFO', aggregation_enabled: true },
+      { sub_category: 'adapter_credential', description: '适配器/凭证变更', enabled: false, min_level: 'INFO', aggregation_enabled: true },
+    ]
+  },
+  {
+    key: 'system', label: '系统日志', color: 'error',
+    items: [
+      { sub_category: 'error', description: 'ERROR 及以上', enabled: true, min_level: 'ERROR', aggregation_enabled: true },
+      { sub_category: 'warning', description: 'WARNING 及以上', enabled: true, min_level: 'WARNING', aggregation_enabled: true },
+      { sub_category: 'info', description: 'INFO（量大，默认关闭）', enabled: false, min_level: 'INFO', aggregation_enabled: true },
+      { sub_category: 'debug', description: 'DEBUG（最大量，默认关闭）', enabled: false, min_level: 'DEBUG', aggregation_enabled: true },
+    ]
+  },
+  {
+    key: 'collection', label: '采集日志', color: 'warning',
+    items: [
+      { sub_category: 'success', description: '采集成功（量大，默认关闭）', enabled: false, min_level: 'INFO', aggregation_enabled: true },
+      { sub_category: 'failed', description: '采集失败', enabled: true, min_level: 'ERROR', aggregation_enabled: true },
+      { sub_category: 'offline', description: '设备离线', enabled: true, min_level: 'WARNING', aggregation_enabled: true },
+    ]
+  },
+  {
+    key: 'audit', label: '告警审计', color: 'info',
+    items: [
+      { sub_category: 'all', description: '全部告警操作', enabled: true, min_level: 'INFO', aggregation_enabled: true },
+    ]
+  },
+]
+const levelOptions = [
+  { label: 'DEBUG',   value: 'DEBUG'    },
+  { label: 'INFO',    value: 'INFO'     },
+  { label: 'WARNING', value: 'WARNING'  },
+  { label: 'ERROR',   value: 'ERROR'    },
+  { label: 'CRITICAL', value: 'CRITICAL' },
+]
 
-// ==================== 操作日志 ====================
-const loading = ref(false)
-const operationLogs = ref([])
-const filters = reactive({ keyword: '', action: null, dateRange: null })
+// ==================== 状态 ====================
+const activeCategory = ref('operation')
+const viewMode = ref('group')    // 'group' | 'detail'
+const expandedGroup = ref(null)
 
-const handleLogPageChange = (p) => {
-  logPage.value = p
-  logPagination.page = p
-  logPaginationVersion.value++
-  loadByTab()
+const showConfig = ref(false)
+const saving = ref(false)
+const cleaning = ref(false)
+const logStats = ref(null)
+const loadingGroup = ref(false)
+const loadingItems = ref(false)
+const groups = ref([])
+const groupItems = ref([])
+
+// 过滤器
+const filterKeyword = ref('')
+const filterDateRange = ref(null)
+
+// 分页 refs（用于一级列表的 itemPaginationConfig）
+const itemPage = ref(1)
+const itemPageSize = ref(20)
+const itemTotal = ref(0)
+
+const levelTagType = (lvl) => {
+  const map = { DEBUG: 'default', INFO: 'info', WARNING: 'warning', ERROR: 'error', CRITICAL: 'error' }
+  return map[lvl?.toUpperCase()] || 'default'
 }
-const handleLogPageSizeChange = (s) => {
-  logPageSize.value = s
-  logPage.value = 1
-  logPagination.pageSize = s
-  logPagination.page = 1
-  logPaginationVersion.value++
-  loadByTab()
-}
-// 共享纯 JS 对象 — getLogPagination() 每次返回同一引用
-const logPagination = {
+
+// paginationConfig 纯对象（二级视图）
+const itemPaginationConfig = {
   page: 1,
   pageSize: 20,
   pageCount: 1,
   itemCount: 0,
   showSizePicker: true,
   pageSizes: [10, 20, 50, 100],
-  onChange: handleLogPageChange,
-  onUpdatePageSize: handleLogPageSizeChange,
-}
-const logPaginationVersion = ref(0)
-const getLogPagination = () => {
-  logPaginationVersion.value
-  logPagination.pageCount = Math.max(1, Math.ceil((logTotal.value || 0) / (logPageSize.value || 1)))
-  logPagination.itemCount = logTotal.value
-  return logPagination
-}
-
-// tab 切换时调用对应加载函数
-function loadByTab() {
-  if (activeTab.value === 'operation') loadOperationLogs()
-  else if (activeTab.value === 'system') loadSystemLogs()
-  else if (activeTab.value === 'alert') loadAlertAuditLogs()
-  else if (activeTab.value === 'collection') loadCollectionLogs()
+  onChange: (p) => {
+    itemPage.value = p
+    itemPaginationConfig.page = p
+    loadGroupItems(expandedGroup.value?.id)
+  },
+  onUpdatePageSize: (s) => {
+    itemPageSize.value = s
+    itemPage.value = 1
+    itemPaginationConfig.pageSize = s
+    itemPaginationConfig.page = 1
+    loadGroupItems(expandedGroup.value?.id)
+  },
 }
 
-onMounted(() => {
-  loadOperationLogs()
+const currentTitle = computed(() => {
+  if (viewMode.value === 'detail') {
+    const dim = expandedGroup.value?.dimension || {}
+    const parts = Object.entries(dim).filter(([k]) => k !== 'bucket').map(([k, v]) => `${k}=${v}`)
+    return `归集明细 — ${parts.join(' | ') || '组 #' + expandedGroup.value?.id}`
+  }
+  const cat = categories.find(c => c.key === activeCategory.value)
+  return `${cat?.label || ''} — 归集列表`
 })
 
-watch(activeTab, () => {
-  logPage.value = 1
-  loadByTab()
-})
-
-const actionOptions = [
-  { label: '登录', value: 'login' }, { label: '登出', value: 'logout' },
-  { label: '创建设备', value: 'create_device' }, { label: '更新设备', value: 'update_device' },
-  { label: '删除设备', value: 'delete_device' }, { label: '触发采集', value: 'collect' },
-  { label: '创建工单', value: 'create_workorder' }, { label: '更新工单', value: 'update_workorder' },
-  { label: '更新告警', value: 'update_alert' }, { label: '确认告警', value: 'acknowledge_alert' },
+// ==================== 归集组列定义（一级视图） ====================
+const groupColumns = [
+  {
+    title: '聚合维度',
+    key: 'dimension',
+    ellipsis: { tooltip: true },
+    render: (row) => {
+      const dim = row.dimension || {}
+      return h('div', { style: 'font-size:12px; color:#555; line-height: 1.6' }, [
+        ...Object.entries(dim).filter(([k]) => k !== 'bucket').map(([k, v]) =>
+          h('span', { style: 'margin-right: 10px' }, `${k}: ${v}`)
+        ),
+        h('div', { style: 'color:#aaa; font-size:11px; margin-top: 2px' }, `首次: ${formatDate(row.first_seen)}`)
+      ])
+    }
+  },
+  {
+    title: '次数',
+    key: 'total_count',
+    width: 90,
+    align: 'center',
+    render: (row) => h('span', { style: 'font-size:14px; font-weight:600; color:#18a058' }, row.total_count)
+  },
+  {
+    title: '级别分布',
+    key: 'level_distribution',
+    width: 180,
+    render: (row) => h('n-space', { size: 4 }, Object.entries(row.level_distribution || {}).map(([lvl, cnt]) =>
+      h('n-tag', { size: 'tiny', type: levelTagType(lvl), style: 'margin:1px' }, () => `${lvl} ${cnt}`)
+    ))
+  },
+  {
+    title: '最新出现',
+    key: 'last_seen',
+    width: 160,
+    render: (row) => formatDate(row.last_seen)
+  },
+  {
+    title: '代表性日志',
+    key: 'sample_log',
+    ellipsis: { tooltip: true },
+  },
 ]
 
-const levelTag = (level) => {
-  const map = { DEBUG: 'default', INFO: 'info', WARNING: 'warning', ERROR: 'error', CRITICAL: 'error' }
-  return map[level?.toUpperCase()] || 'default'
-}
-
-const operationColumns = [
-  { title: '时间', key: 'timestamp', width: 170, render: (r) => r.timestamp ? formatDate(r.timestamp) : '-' },
-  { title: '用户', key: 'username', width: 100 },
-  { title: '操作', key: 'action', width: 130, render: (r) => h(NTag, { size: 'small', type: actionOptions.find(o => o.value === r.action) ? 'success' : 'default' }, () => r.action || '-') },
-  { title: '资源', key: 'resource', width: 120, ellipsis: { tooltip: true } },
-  { title: '路径', key: 'path', width: 200, ellipsis: { tooltip: true } },
-  { title: '方法', key: 'method', width: 70 },
-  { title: 'IP', key: 'ip_address', width: 130 },
-  { title: '状态', key: 'response_status', width: 80, render: (r) => {
-    const t = r.response_status >= 400 ? 'error' : r.response_status >= 200 ? 'success' : 'default'
-    return h(NTag, { size: 'small', type: t }, () => r.response_status || '-')
-  }},
-  { title: '耗时', key: 'duration_ms', width: 80, render: (r) => r.duration_ms != null ? `${r.duration_ms}ms` : '-' },
-]
-
-async function loadOperationLogs() {
-  loading.value = true
-  try {
-    const token = localStorage.getItem('token')
-    const params = new URLSearchParams({ page: logPage.value, page_size: logPageSize.value })
-    if (filters.action) params.set('action', filters.action)
-    if (filters.keyword) params.set('operator', filters.keyword)
-
-    const res = await fetch(`/api/v1/admin/logs?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    operationLogs.value = data.items || []
-    logTotal.value = data.total || 0
-    logPaginationVersion.value++  // 触发 Naive UI 重新读取 pageCount/itemCount
-  } catch (e) {
-    message.error(`加载操作日志失败: ${e.message}`)
-  } finally {
-    loading.value = false
-  }
-}
-
-// ==================== 系统日志 ====================
-const systemLoading = ref(false)
-const systemLogs = ref([])
-const systemFilters = reactive({ level: null, keyword: '' })
-const logLevelOptions = [
-  { label: 'DEBUG', value: 'DEBUG' }, { label: 'INFO', value: 'INFO' },
-  { label: 'WARNING', value: 'WARNING' }, { label: 'ERROR', value: 'ERROR' }, { label: 'CRITICAL', value: 'CRITICAL' },
-]
-
-const systemColumns = [
-  { title: '#', key: 'idx', width: 60 },
-  { title: '时间', key: 'time', width: 170 },
-  { title: '级别', key: 'level', width: 90, render: (r) => h(NTag, { size: 'small', type: levelTag(r.level) }, () => r.level || '-') },
-  { title: '来源', key: 'source', width: 150, ellipsis: { tooltip: true } },
-  { title: '日志内容', key: 'message', ellipsis: { tooltip: true } },
-]
-
-async function loadSystemLogs() {
-  systemLoading.value = true
-  try {
-    const token = localStorage.getItem('token')
-    const params = new URLSearchParams({
-      page: logPage.value,
-      page_size: logPageSize.value,
-    })
-    if (systemFilters.level) params.set('level', systemFilters.level)
-    if (systemFilters.keyword) params.set('keyword', systemFilters.keyword)
-    const res = await fetch(`/api/v1/admin/system-logs?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    systemLogs.value = data.items || []
-    logTotal.value = data.total || 0
-    logPaginationVersion.value++  // 触发 Naive UI 重新读取 pageCount/itemCount
-  } catch (e) {
-    message.error(`加载系统日志失败: ${e.message}`)
-  } finally {
-    systemLoading.value = false
-  }
-}
-
-function formatUptime(seconds) {
-  if (!seconds) return '-'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  if (h > 24) return `${Math.floor(h/24)}天${h%24}小时`
-  return `${h}小时${m}分钟`
-}
-
-// ==================== 告警审计日志 ====================
-const alertLoading = ref(false)
-const alertAuditLogs = ref([])
-
-const alertColumns = [
-  { title: '时间', key: 'created_at', width: 170, render: (r) => r.created_at ? formatDate(r.created_at) : '-' },
-  { title: '告警ID', key: 'alert_id', width: 80 },
-  { title: '操作类型', key: 'action', width: 100, render: (r) => {
-    const map = { create: '创建', update: '更新', delete: '删除', acknowledge: '确认', resolve: '解决' }
-    return map[r.action] || r.action || '-'
-  }},
-  { title: '操作人', key: 'operator', width: 100 },
-  { title: '变更字段', key: 'field_name', width: 120 },
-  { title: '原值', key: 'old_value', width: 120, ellipsis: { tooltip: true } },
-  { title: '新值', key: 'new_value', width: 120, ellipsis: { tooltip: true } },
-  { title: '备注/原因', key: 'reason', ellipsis: { tooltip: true } },
-]
-
-async function loadAlertAuditLogs() {
-  alertLoading.value = true
-  try {
-    const token = localStorage.getItem('token')
-    const params = new URLSearchParams({
-      page: logPage.value,
-      page_size: logPageSize.value,
-    })
-    const res = await fetch(`/api/v1/monitoring/audit-logs?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    alertAuditLogs.value = data.items || []
-    logTotal.value = data.total || 0
-    logPaginationVersion.value++  // 触发 Naive UI 重新读取 pageCount/itemCount
-  } catch (e) {
-    message.warning(`告警审计日志接口不可用，显示模拟数据`)
-    const now = new Date()
-    const levels = ['warning', 'critical', 'info', 'warning', 'critical']
-    const messages = [
-      'CPU使用率超过阈值 95%，触发告警',
-      '内存使用率达到 87%，接近阈值',
-      '磁盘空间不足，剩余 8GB',
-      '网络延迟增加至 320ms',
-      '服务响应超时，已自动恢复'
+// ==================== 明细列定义（二级视图） ====================
+const itemColumns = computed(() => {
+  if (activeCategory.value === 'operation') {
+    return [
+      { title: '时间',     key: 'created_at',  width: 170, render: (r) => formatDate(r.created_at) },
+      { title: '用户',     key: 'username',    width: 100 },
+      { title: '级别',     key: 'level',       width: 80,  render: (r) => h(NTag, { size: 'small', type: levelTagType(r.level) }, () => r.level || '-') },
+      { title: '操作',     key: 'message',     ellipsis: { tooltip: true } },
+      { title: 'IP',       key: 'ip_address',  width: 130 },
+      { title: '耗时',     key: 'duration_ms',width: 80,  render: (r) => r.duration_ms != null ? `${r.duration_ms}ms` : '-' },
+      { title: '资源',     key: 'resource_type', width: 100 },
+      { title: '资源ID',   key: 'resource_id', width: 100, ellipsis: { tooltip: true } },
+      { title: '详情',     key: 'detail',      ellipsis: { tooltip: true }, render: (r) => {
+        if (!r.detail) return '-'
+        try {
+          const d = typeof r.detail === 'string' ? JSON.parse(r.detail) : r.detail
+          return h('pre', { style: 'font-size:11px;margin:0;white-space:pre-wrap;max-width:300px' }, JSON.stringify(d, null, 2))
+        } catch { return r.detail }
+      }},
     ]
-    alertAuditLogs.value = Array.from({ length: 5 }, (_, i) => ({
-      idx: i + 1,
-      timestamp: new Date(now - i * 1800000).toISOString(),
-      level: levels[i],
-      message: messages[i],
-      operator: ['admin', 'system', 'admin', 'system', 'admin'][i],
-      action_type: ['告警产生', '告警确认', '告警恢复', '告警升级', '告警处理'][i],
-      note: ['自动触发', '人工确认', '系统自动恢复', '需人工介入', '已处理'][i]
-    }))
-    logTotal.value = alertAuditLogs.value.length
-    logPaginationVersion.value++  // 触发 Naive UI 重新读取 pageCount/itemCount
-  } finally {
-    alertLoading.value = false
   }
+  if (activeCategory.value === 'system') {
+    return [
+      { title: '时间',   key: 'created_at', width: 170, render: (r) => formatDate(r.created_at) },
+      { title: '级别',  key: 'level',      width: 80,  render: (r) => h(NTag, { size: 'small', type: levelTagType(r.level) }, () => r.level || '-') },
+      { title: '来源',  key: 'source',     width: 120, ellipsis: { tooltip: true } },
+      { title: '消息',  key: 'message',    ellipsis: { tooltip: true } },
+      { title: '原始',  key: 'raw_content', ellipsis: { tooltip: true }, render: (r) => r.raw_content ? r.raw_content.slice(0, 80) : '-' },
+    ]
+  }
+  if (activeCategory.value === 'collection') {
+    return [
+      { title: '时间',     key: 'created_at',  width: 170, render: (r) => formatDate(r.created_at) },
+      { title: '级别',    key: 'level',        width: 80,  render: (r) => h(NTag, { size: 'small', type: levelTagType(r.level) }, () => r.level || '-') },
+      { title: '设备',    key: 'resource_id',  width: 130, ellipsis: { tooltip: true } },
+      { title: '消息',    key: 'message',      ellipsis: { tooltip: true } },
+      { title: '耗时',    key: 'duration_ms',  width: 80,  render: (r) => r.duration_ms != null ? `${r.duration_ms}ms` : '-' },
+    ]
+  }
+  return [
+    { title: '时间',   key: 'created_at', width: 170, render: (r) => formatDate(r.created_at) },
+    { title: '级别',  key: 'level',      width: 80,  render: (r) => h(NTag, { size: 'small', type: levelTagType(r.level) }, () => r.level || '-') },
+    { title: '消息',  key: 'message',     ellipsis: { tooltip: true } },
+  ]
+})
+
+// ==================== API ====================
+const apiBase = '/api/v1/admin'
+
+async function fetchApi(path, opts = {}) {
+  const token = localStorage.getItem('token')
+  const res = await fetch(`${apiBase}${path}`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`)
+  return res.json()
 }
 
-// ==================== 采集日志 ====================
-const collectionLoading = ref(false)
-const collectionLogs = ref([])
-const collectionFilters = reactive({ status: null, device: '' })
-const collectionStatusOptions = [
-  { label: '成功', value: 'success' }, { label: '失败', value: 'failed' }, { label: '离线', value: 'offline' },
-]
-
-const collectionColumns = [
-  { title: '#', key: 'idx', width: 60 },
-  { title: '时间', key: 'time', width: 170 },
-  { title: '设备', key: 'device', width: 160, ellipsis: { tooltip: true } },
-  { title: '协议', key: 'protocol', width: 100 },
-  { title: '状态', key: 'status', width: 90, render: (r) => h(NTag, { size: 'small', type: { success: 'success', failed: 'error', offline: 'warning' }[r.status] || 'default' }, () => r.status || '-') },
-  { title: '耗时', key: 'duration', width: 80 },
-  { title: '消息', key: 'message', ellipsis: { tooltip: true } },
-]
-
-async function loadCollectionLogs() {
-  collectionLoading.value = true
+// 加载统计数据
+async function loadStats() {
   try {
-    const token = localStorage.getItem('token')
-    const params = new URLSearchParams({
-      page: logPage.value,
-      page_size: logPageSize.value,
-    })
-    if (collectionFilters.device) params.set('device', collectionFilters.device)
-    if (collectionFilters.status) params.set('status', collectionFilters.status)
-    const res = await fetch(`/api/v1/admin/collection-logs?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    collectionLogs.value = data.items || []
-    logTotal.value = data.total || 0
-    logPaginationVersion.value++  // 触发 Naive UI 重新读取 pageCount/itemCount
+    logStats.value = await fetchApi('/log-stats')
   } catch (e) {
-    message.error(`加载采集日志失败: ${e.message}`)
-  } finally {
-    collectionLoading.value = false
+    console.warn('log-stats failed:', e.message)
+    logStats.value = { operation: { total_items: 0, total_groups: 0 }, system: { total_items: 0, total_groups: 0 }, collection: { total_items: 0, total_groups: 0 }, audit: { total_items: 0, total_groups: 0 } }
   }
 }
 
-// 切 tab 时加载对应数据
-watch(activeTab, () => {
-  logPage.value = 1
-  loadByTab()
+// 加载配置
+async function loadConfigs() {
+  try {
+    const data = await fetchApi('/log-configs')
+    const items = data.items || []
+    // 回填 configCategories
+    for (const cat of configCategories) {
+      for (const sub of cat.items) {
+        const remote = items.find(i => i.category === cat.key && i.sub_category === sub.sub_category)
+        if (remote) {
+          sub.enabled = remote.enabled
+          sub.min_level = remote.min_level
+          sub.aggregation_enabled = remote.aggregation_enabled
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('log-configs failed:', e.message)
+  }
+}
+
+// 保存配置
+async function saveConfigs() {
+  saving.value = true
+  try {
+    const payload = configCategories.flatMap(cat =>
+      cat.items.map(sub => ({
+        category: cat.key,
+        sub_category: sub.sub_category,
+        enabled: sub.enabled,
+        min_level: sub.min_level,
+        aggregation_enabled: sub.aggregation_enabled,
+      }))
+    )
+    await fetchApi('/log-configs', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+    message.success('配置已保存')
+    await loadStats()
+  } catch (e) {
+    message.error(`保存失败: ${e.message}`)
+  } finally {
+    saving.value = false
+  }
+}
+
+function resetConfigs() {
+  dialog.warning({
+    title: '重置默认配置',
+    content: '确定将所有日志配置恢复为默认值？',
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      const defaults = [
+        { cat: 'operation', sub: 'login',         enabled: true,  min_level: 'INFO'     },
+        { cat: 'operation', sub: 'device_crud',   enabled: true,  min_level: 'INFO'     },
+        { cat: 'operation', sub: 'alert_action',  enabled: true,  min_level: 'INFO'     },
+        { cat: 'operation', sub: 'workorder_crud',enabled: true,  min_level: 'INFO'     },
+        { cat: 'operation', sub: 'adapter_credential', enabled: false, min_level: 'INFO' },
+        { cat: 'system',    sub: 'error',          enabled: true,  min_level: 'ERROR'    },
+        { cat: 'system',    sub: 'warning',        enabled: true,  min_level: 'WARNING'  },
+        { cat: 'system',    sub: 'info',          enabled: false, min_level: 'INFO'     },
+        { cat: 'system',    sub: 'debug',         enabled: false, min_level: 'DEBUG'    },
+        { cat: 'collection',sub: 'success',        enabled: false, min_level: 'INFO'     },
+        { cat: 'collection',sub: 'failed',         enabled: true,  min_level: 'ERROR'    },
+        { cat: 'collection',sub: 'offline',        enabled: true,  min_level: 'WARNING'  },
+        { cat: 'audit',     sub: 'all',            enabled: true,  min_level: 'INFO'     },
+      ]
+      for (const cat of configCategories) {
+        for (const sub of cat.items) {
+          const def = defaults.find(d => d.cat === cat.key && d.sub === sub.sub_category)
+          if (def) {
+            sub.enabled = def.enabled
+            sub.min_level = def.min_level
+            sub.aggregation_enabled = true
+          }
+        }
+      }
+      message.info('已恢复默认值，请点击保存')
+    }
+  })
+}
+
+async function handleCleanup() {
+  cleaning.value = true
+  try {
+    await fetchApi('/logs/cleanup', { method: 'POST' })
+    message.success('过期日志已清理')
+    await loadStats()
+  } catch (e) {
+    message.error(`清理失败: ${e.message}`)
+  } finally {
+    cleaning.value = false
+  }
+}
+
+// 切换分类
+function switchCategory(cat) {
+  activeCategory.value = cat
+  viewMode.value = 'group'
+  expandedGroup.value = null
+  itemPage.value = 1
+  itemPageSize.value = 20
+  filterKeyword.value = ''
+  filterDateRange.value = null
+  loadGroups()
+}
+
+// 加载归集组
+async function loadGroups() {
+  loadingGroup.value = true
+  try {
+    const params = new URLSearchParams({
+      category: activeCategory.value,
+      page: 1,
+      page_size: 50,  // 一级列表一次加载多组
+    })
+    if (filterKeyword.value) params.set('keyword', filterKeyword.value)
+    if (filterDateRange.value && filterDateRange.value[0]) {
+      params.set('start_date', new Date(filterDateRange.value[0]).toISOString())
+      params.set('end_date',   new Date(filterDateRange.value[1]).toISOString())
+    }
+    const data = await fetchApi(`/logs/groups?${params}`)
+    groups.value = data.items || []
+    itemTotal.value = data.total || 0
+  } catch (e) {
+    message.error(`加载归集列表失败: ${e.message}`)
+    groups.value = []
+  } finally {
+    loadingGroup.value = false
+  }
+}
+
+// 点击归集组 → 进入明细
+async function openGroup(row) {
+  expandedGroup.value = row
+  viewMode.value = 'detail'
+  itemPage.value = 1
+  itemPageSize.value = 20
+  itemPaginationConfig.page = 1
+  itemPaginationConfig.pageSize = 20
+  itemTotal.value = row.total_count || 0
+  await loadGroupItems(row.id)
+}
+
+// 加载归集明细
+async function loadGroupItems(groupId) {
+  loadingItems.value = true
+  try {
+    const params = new URLSearchParams({
+      page: itemPage.value,
+      page_size: itemPageSize.value,
+    })
+    const data = await fetchApi(`/logs/groups/${groupId}/items?${params}`)
+    groupItems.value = data.items || []
+    itemTotal.value = data.total || 0
+    itemPaginationConfig.itemCount = itemTotal.value
+    itemPaginationConfig.pageCount = Math.max(1, Math.ceil(itemTotal.value / (itemPageSize.value || 1)))
+  } catch (e) {
+    message.error(`加载明细失败: ${e.message}`)
+    groupItems.value = []
+  } finally {
+    loadingItems.value = false
+  }
+}
+
+// ==================== 配置面板操作 ====================
+function toggleEnabled(cat, sub, val) {
+  const item = configCategories.find(c => c.key === cat)?.items.find(i => i.sub_category === sub)
+  if (item) item.enabled = val
+}
+
+function updateLevel(cat, sub, val) {
+  const item = configCategories.find(c => c.key === cat)?.items.find(i => i.sub_category === sub)
+  if (item) item.min_level = val
+}
+
+function toggleAggregation(cat, sub, val) {
+  const item = configCategories.find(c => c.key === cat)?.items.find(i => i.sub_category === sub)
+  if (item) item.aggregation_enabled = val
+}
+
+// ==================== 生命周期 ====================
+onMounted(async () => {
+  await Promise.all([loadStats(), loadConfigs(), loadGroups()])
 })
 </script>
 
 <style scoped>
 .logs-container { padding: 16px; }
+.stat-active { border-color: var(--primary-color, #18a058); }
+.clickable-row { cursor: pointer; }
+.clickable-row:hover td { background: #f0fdf4; }
+.group-tbody { cursor: pointer; }
+.group-tbody:hover td { background: #f0fdf4; }
 </style>

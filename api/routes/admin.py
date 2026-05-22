@@ -8,7 +8,7 @@ from datetime import datetime
 import secrets
 import json
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from pydantic import BaseModel, Field
 
 from api.dependencies import get_db, get_current_user, CurrentUser, PaginationParams, require_role
@@ -1411,3 +1411,102 @@ async def get_backup_config(
         "auto_backup_enabled": config.auto_backup_enabled,
         "backup_schedule": config.backup_schedule,
     }
+
+
+# ============================================================
+# 日志配置与归集 API
+# ============================================================
+
+@router.get("/log-configs", summary="获取日志配置列表")
+async def get_log_configs(
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """获取日志配置列表（操作/系统/采集/审计）"""
+    db = next(get_db())
+    try:
+        LogConfigService.init_defaults(db)
+        configs = LogConfigService.get_all(db)
+        return {"items": configs, "total": len(configs)}
+    finally:
+        db.close()
+
+
+@router.put("/log-configs", summary="批量更新日志配置")
+async def update_log_configs(
+    configs: list = Body(..., description="日志配置列表"),
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """批量更新日志配置（启用/禁用/级别/归集开关）"""
+    db = next(get_db())
+    try:
+        LogConfigService.update_all(db, configs)
+        return {"status": "ok", "updated": len(configs)}
+    finally:
+        db.close()
+
+
+@router.get("/log-stats", summary="获取日志统计")
+async def get_log_stats(
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """获取各分类日志的实时统计"""
+    db = next(get_db())
+    try:
+        return LogAggregationService.get_stats(db)
+    finally:
+        db.close()
+
+
+@router.get("/logs/groups", summary="获取日志归集组列表")
+async def get_log_groups(
+    category: str = Query(..., description="分类: operation/system/collection/audit"),
+    keyword: str = Query(None, description="关键词过滤"),
+    start_date: str = Query(None, description="开始时间 ISO格式"),
+    end_date: str = Query(None, description="结束时间 ISO格式"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """获取日志归集组列表（一级视图）"""
+    db = next(get_db())
+    try:
+        start_dt = datetime.fromisoformat(start_date) if start_date else None
+        end_dt = datetime.fromisoformat(end_date) if end_date else None
+        result = LogAggregationService.get_groups(
+            db, category, keyword, start_dt, end_dt, page, page_size
+        )
+        return result
+    finally:
+        db.close()
+
+
+@router.get("/logs/groups/{group_id}/items", summary="获取归集组内的日志明细")
+async def get_log_group_items(
+    group_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """获取某个归集组内的所有日志明细（二级视图）"""
+    db = next(get_db())
+    try:
+        return LogAggregationService.get_group_items(db, group_id, page, page_size)
+    finally:
+        db.close()
+
+
+@router.post("/logs/cleanup", summary="清理过期日志")
+async def cleanup_logs(
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """根据各配置的 retention_days 清理过期日志"""
+    db = next(get_db())
+    try:
+        LogAggregationService.cleanup_old_logs(db)
+        return {"status": "ok", "message": "日志清理完成"}
+    finally:
+        db.close()
+
+
+from datetime import datetime
+from api.routes.log_service import LogConfigService, LogAggregationService
