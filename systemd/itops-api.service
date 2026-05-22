@@ -1,0 +1,22 @@
+[Unit]
+Description=ITOps Platform API Server
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/itops_platform/api
+EnvironmentFile=/opt/itops_platform/.env
+ExecStart=/opt/itops_platform/api/venv/bin/python -m uvicorn main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 1 \
+    --log-level info
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
