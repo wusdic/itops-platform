@@ -24,6 +24,7 @@ from api.routes import (
     asset_router,
     ai_router,
     admin_router,
+    system_router,
     notification_router,
     device_router,
     device_metrics_router,
@@ -33,6 +34,8 @@ from api.routes import (
     automation_router,
     adapters_router,
     sharding_router,
+    api_keys_router,
+    log_service_router,
 )
 from api.dependencies import get_settings
 from api.middleware.logging import LoggingMiddleware
@@ -291,6 +294,12 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(
+        system_router,
+        prefix="/api/v1/system",
+        tags=["系统适配"],
+    )
+
+    app.include_router(
         adapters_router,
         prefix="/api/v1/admin",
         tags=["适配器管理"],
@@ -310,13 +319,13 @@ def create_app() -> FastAPI:
 
     app.include_router(
         device_metrics_router,
-        prefix="/api/v1/devices",
+        prefix="",
         tags=["采集精细化开关"],
     )
 
     app.include_router(
         device_import_router,
-        prefix="/api/v1/devices",
+        prefix="",
         tags=["设备批量导入"],
     )
 
@@ -367,6 +376,18 @@ def create_app() -> FastAPI:
         vendor_credentials_router,
         prefix="/api/v1/credentials",
         tags=["厂商账密管理"],
+    )
+
+    app.include_router(
+        api_keys_router,
+        prefix="/api/v1/api-keys",
+        tags=["API密钥管理"],
+    )
+
+    app.include_router(
+        log_service_router,
+        prefix="/api/v1/logs",
+        tags=["日志服务"],
     )
 
     # 前端静态文件服务 - 使用中间件方式避免路由冲突

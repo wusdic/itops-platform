@@ -573,7 +573,7 @@ function handleReset() {
     formData.alert_level = null
     previewContent.value = ''
     message.success('表单重置成功')
-  }).catch(() => {})
+  }).catch(e => message.error('重置失败: ' + (e.message || e)))
 }
 
 function handleSaveTemplate() {

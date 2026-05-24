@@ -1183,6 +1183,72 @@ async def execute_rollback(
     }
 
 
+@router.post("/evaluate", summary="评估指标是否超阈值")
+async def evaluate_metric(
+    device_id: int = Query(..., description="设备ID"),
+    metric_name: str = Query(..., description="指标名称"),
+    threshold: Optional[float] = Query(None, description="阈值"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    评估指标是否超过阈值，供自动化规则测试使用。
+    前端传入 device_id + metric_name + 可选 threshold，
+    后端从 metrics 表查最新值，判断是否超阈值。
+    """
+    # 查询设备最新指标
+    try:
+        result = db.execute(
+            text("""
+                SELECT metric_name, value, unit, timestamp
+                FROM metrics
+                WHERE device_id = :device_id AND metric_name = :metric_name
+                ORDER BY timestamp DESC LIMIT 1
+            """),
+            {"device_id": device_id, "metric_name": metric_name}
+        )
+        row = result.fetchone()
+    except Exception:
+        row = None
+
+    if not row:
+        return {
+            "device_id": device_id,
+            "metric_name": metric_name,
+            "current_value": None,
+            "threshold": threshold,
+            "exceeded": None,
+            "message": "未找到该设备该指标的最近数据",
+        }
+
+    current_value = float(row[1]) if row[1] is not None else None
+    unit = row[2]
+    timestamp = row[3]
+
+    if current_value is None:
+        return {
+            "device_id": device_id,
+            "metric_name": metric_name,
+            "current_value": None,
+            "threshold": threshold,
+            "exceeded": None,
+            "message": "指标值为空",
+        }
+
+    exceeded = current_value > threshold if threshold is not None else None
+
+    return {
+        "device_id": device_id,
+        "metric_name": metric_name,
+        "current_value": current_value,
+        "unit": unit,
+        "timestamp": timestamp.isoformat() if timestamp else None,
+        "threshold": threshold,
+        "exceeded": exceeded,
+        "message": f"指标 {'超过' if exceeded else '未超过'}阈值" if threshold is not None else "无阈值参数",
+    }
+
+
 # ============== 辅助函数 ==============
 
 def _script_to_dict(s: AutomationScript) -> Dict:

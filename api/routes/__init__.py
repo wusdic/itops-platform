@@ -12,6 +12,7 @@ from .inspection import router as inspection_router
 from .asset import router as asset_router
 from .ai import router as ai_router
 from .admin import router as admin_router
+from .admin import system_router
 from .notification import router as notification_router
 from .device_api import router as device_router
 from .device_metrics import router as device_metrics_router
@@ -23,6 +24,8 @@ from .adapters import router as adapters_router
 from .sharding import router as sharding_router
 from .deploy import router as deploy_router
 from .watermark import router as watermark_router
+from .api_keys import router as api_keys_router
+from .log_service import router as log_service_router
 
 __all__ = [
     "monitoring_router",
@@ -33,6 +36,7 @@ __all__ = [
     "asset_router",
     "ai_router",
     "admin_router",
+    "system_router",
     "notification_router",
     "device_router",
     "device_metrics_router",
@@ -44,4 +48,6 @@ __all__ = [
     "sharding_router",
     "deploy_router",
     "watermark_router",
+    "api_keys_router",
+    "log_service_router",
 ]

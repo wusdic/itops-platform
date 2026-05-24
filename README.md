@@ -8,8 +8,8 @@
 
 ```bash
 # 克隆代码
-git clone https://github.com/wusdic/itops-deploy.git /opt/itops_platform
-cd /opt/itops_platform
+git clone https://github.com/wusdic/itops-platform.git /opt/itops-platform
+cd /opt/itops-platform
 
 # 安装系统依赖（需要 root）
 sudo bash scripts/install_deps.sh
@@ -26,7 +26,7 @@ sudo bash scripts/deploy.sh
 
 ```bash
 # 下载最新版本
-curl -L https://github.com/wusdic/itops-deploy/releases/latest/download/itops_platform.tar.gz
+curl -L https://github.com/wusdic/itops-platform/releases/latest/download/itops_platform.tar.gz
 tar -xzf itops_platform.tar.gz
 cd itops_platform
 

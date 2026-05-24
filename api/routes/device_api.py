@@ -181,17 +181,19 @@ async def list_devices(
             last_metrics = manager.get_last_metrics(dev.name)
             
             # 优先用数据库中的status，fallback到manager内存状态
-            db_status = dev.status.value if dev.status else "unknown"
+            # 数据库存的是字符串，manager返回的是枚举，安全取值
+            db_status = str(dev.status) if dev.status else "unknown"
             # 如果数据库状态不是真实采集得到的，尝试从manager获取实时状态
-            if db_status in ("unknown", None) and status and status.value != "unknown":
-                final_status = status.value
+            status_str = str(status) if status else None
+            if db_status in ("unknown", None) and status_str and status_str != "unknown":
+                final_status = status_str
             else:
                 final_status = db_status
 
             items.append({
                 "name": dev.name,
                 "ip": dev.ip_address,
-                "type": dev.device_type.value if dev.device_type else "other",
+                "type": str(dev.device_type) if dev.device_type else "other",
                 "os": dev.os_type,
                 "os_version": dev.os_version,
                 "vendor": dev.vendor,
@@ -296,7 +298,7 @@ async def get_device(
             device = {
                 "name": db_device.name,
                 "ip": db_device.ip_address,
-                "type": db_device.device_type.value if db_device.device_type else "other",
+                "type": str(db_device.device_type) if db_device.device_type else "other",
                 "os": db_device.os_type,
                 "os_version": db_device.os_version,
                 "vendor": db_device.vendor,
@@ -309,7 +311,7 @@ async def get_device(
                 "location": db_device.location,
                 "idc": db_device.idc,
                 "cabinet": db_device.cabinet,
-                "status": db_device.status.value if db_device.status else "unknown",
+                "status": str(db_device.status) if db_device.status else "unknown",
                 "cpu": db_device.cpu,
                 "memory": db_device.memory,
                 "disk": db_device.disk,
@@ -339,7 +341,7 @@ async def get_device(
             "kubernetes": device.get("kubernetes", {}),
             "collect": device.get("collect", {}),
             "tags": device.get("tags", {}),
-            "status": status.value if status else "unknown",
+            "status": str(status) if status else "unknown",
             "last_collect_time": last_metrics.timestamp.isoformat() if last_metrics and last_metrics.timestamp else None,
             "last_metrics": last_metrics.metrics if last_metrics else None,
             "config_file": device.get("_config_file"),
@@ -375,7 +377,7 @@ async def collect_device(
             device_ip=metrics.device_ip,
             device_type=metrics.device_type,
             vendor=metrics.vendor,
-            status=metrics.status.value if metrics.status else "unknown",
+            status=str(metrics.status) if metrics.status else "unknown",
             timestamp=metrics.timestamp.isoformat() if metrics.timestamp else "",
             metrics=metrics.metrics,
             error=metrics.error,
@@ -411,7 +413,7 @@ async def collect_all_devices(
                     device_ip=metrics.device_ip,
                     device_type=metrics.device_type,
                     vendor=metrics.vendor,
-                    status=metrics.status.value if metrics.status else "unknown",
+                    status=str(metrics.status) if metrics.status else "unknown",
                     timestamp=metrics.timestamp.isoformat() if metrics.timestamp else "",
                     metrics=metrics.metrics,
                     error=metrics.error,
@@ -420,8 +422,8 @@ async def collect_all_devices(
         return {
             "items": items,
             "total": len(items),
-            "successful": len([m for m in results if m and m.status and m.status.value == "online"]),
-            "failed": len([m for m in results if m and m.status and m.status.value == "offline"]),
+            "successful": len([m for m in results if m and m.status and str(m.status) == "online"]),
+            "failed": len([m for m in results if m and m.status and str(m.status) == "offline"]),
         }
         
     except Exception as e:
@@ -445,7 +447,7 @@ async def get_device_status(
         
         return {
             "device_name": device_name,
-            "status": status.value if status else "unknown",
+            "status": str(status) if status else "unknown",
             "last_update": datetime.now().isoformat(),
         }
         
@@ -477,7 +479,7 @@ async def get_device_metrics(
             "device_type": metrics.device_type,
             "vendor": metrics.vendor,
             "timestamp": metrics.timestamp.isoformat() if metrics.timestamp else None,
-            "status": metrics.status.value if metrics.status else "unknown",
+            "status": str(metrics.status) if metrics.status else "unknown",
             "metrics": metrics.metrics,
             "error": metrics.error,
         }

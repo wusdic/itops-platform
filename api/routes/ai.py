@@ -491,7 +491,7 @@ async def chat(
         }
 
 
-@router.get("/conversation/{conversation_id}", summary="Get conversation history")
+@router.get("/conversations/{conversation_id}", summary="Get conversation history")
 async def get_conversation(
     conversation_id: str,
     limit: int = Query(50, le=100, description="返回message数量"),
@@ -578,7 +578,7 @@ async def get_conversations(
     }
 
 
-@router.delete("/conversation/{conversation_id}", summary="Delete conversation")
+@router.delete("/conversations/{conversation_id}", summary="Delete conversation")
 async def delete_conversation(
     conversation_id: str,
     current_user: CurrentUser = Depends(get_current_user),
@@ -607,7 +607,7 @@ async def delete_conversation(
     }
 
 
-@router.put("/conversation/{conversation_id}/pin", summary="置顶/cancel置顶session")
+@router.put("/conversations/{conversation_id}/pin", summary="置顶/cancel置顶session")
 async def pin_conversation(
     conversation_id: str,
     is_pinned: bool = Query(..., description="是否置顶"),
@@ -636,7 +636,7 @@ async def pin_conversation(
     }
 
 
-@router.post("/conversation/{conversation_id}/messages", summary="savemessage到session")
+@router.post("/conversations/{conversation_id}/messages", summary="savemessage到session")
 async def save_message_to_conversation(
     conversation_id: str,
     role: str = Query(..., description="Message role: user, assistant, system"),

@@ -204,7 +204,7 @@ async function handleDelete(row) {
     } catch (e) {
       ElMessage.error(`删除失败: ${e.message}`)
     }
-  }).catch(() => {})
+  }).catch(e => ElMessage.error(`删除失败: ${e.message}`))
 }
 
 onMounted(loadData)

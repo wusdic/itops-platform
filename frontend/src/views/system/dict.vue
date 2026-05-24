@@ -138,7 +138,7 @@ const fetchData = async () => {
   loading.value = true
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/admin/dicts?page=${pagination.page}&page_size=${pagination.pageSize}`, {
+    const res = await fetch(`/api/v1/admin/dict?page=${pagination.page}&page_size=${pagination.pageSize}`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -178,7 +178,7 @@ const handleDelete = (row) => {
     .then(async () => {
       try {
         const token = localStorage.getItem('token')
-        await fetch(`/api/v1/admin/dicts/${row.id}`, {
+        await fetch(`/api/v1/admin/dict/${row.id}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -189,7 +189,7 @@ const handleDelete = (row) => {
       } catch (error) {
         ElMessage.error('删除失败')
       }
-    }).catch(() => {})
+    }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
 }
 
 const handleItems = (row) => {
@@ -211,7 +211,7 @@ const submitForm = async () => {
     if (!valid) return
 
     const token = localStorage.getItem('token')
-    const url = form.id ? `/api/v1/admin/dicts/${form.id}` : '/api/v1/admin/dicts'
+    const url = form.id ? `/api/v1/admin/dict/${form.id}` : '/api/v1/admin/dict'
     const method = form.id ? 'PUT' : 'POST'
 
     const res = await fetch(url, {

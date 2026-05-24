@@ -287,7 +287,7 @@ async function selectConversation(conv) {
   loading.value = true
   try {
     const username = authStore.userInfo?.username || ''
-    const res = await fetch(`/api/v1/ai/conversation/${conv.conversation_id}?user_id=${encodeURIComponent(username)}`, {
+    const res = await fetch(`/api/v1/ai/conversations/${conv.conversation_id}?user_id=${encodeURIComponent(username)}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
     })
     if (res.status === 401) {
@@ -440,7 +440,7 @@ function handleKeydown(e) {
 
 async function handleDelete(conversation_id) {
   try {
-    const res = await fetch(`/api/v1/ai/conversation/${conversation_id}`, {
+    const res = await fetch(`/api/v1/ai/conversations/${conversation_id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
     })

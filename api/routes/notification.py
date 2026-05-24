@@ -792,3 +792,138 @@ async def delete_notification_target(
         "code": 0,
         "message": "通知对象删除成功",
     }
+
+
+# ============== 站内消息接口 ==============
+
+from modules.business.notification.message_service import NotificationMessageService
+
+
+class MessageCreateRequest(BaseModel):
+    """创建消息请求"""
+    user_id: str = Field(..., description="接收用户ID")
+    title: str = Field(..., description="消息标题")
+    content: str = Field(..., description="消息内容")
+    msg_type: str = Field("system", description="消息类型: system, alert, workorder, device, knowledge, ai")
+    username: Optional[str] = Field(None, description="接收用户名")
+    related_object: Optional[dict] = Field(None, description="关联对象")
+    priority: str = Field("normal", description="优先级: low, normal, high, urgent")
+
+
+@router.get("/messages", summary="获取站内消息列表")
+async def get_messages(
+    msg_type: Optional[str] = Query(None, description="消息类型过滤"),
+    is_read: Optional[bool] = Query(None, description="已读状态过滤"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取当前用户的站内消息列表"""
+    service = NotificationMessageService(db)
+    
+    # 如果不是管理员，只能看自己的消息
+    user_id = current_user.user_id
+    if "admin" not in current_user.roles:
+        user_id = current_user.user_id
+    
+    messages = service.list_messages(
+        user_id=user_id,
+        msg_type=msg_type,
+        is_read=is_read,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+    )
+    
+    total = service.count_messages(
+        user_id=user_id,
+        msg_type=msg_type,
+        is_read=is_read,
+    )
+    
+    return {
+        "items": [msg.to_dict() for msg in messages],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/messages/unread-count", summary="获取未读消息数量")
+async def get_unread_count(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取当前用户的未读消息数量"""
+    service = NotificationMessageService(db)
+    count = service.count_unread(current_user.user_id)
+    return {"unread_count": count}
+
+
+@router.put("/messages/{message_id}/read", summary="标记消息为已读")
+async def mark_message_read(
+    message_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """标记单条站内消息为已读"""
+    service = NotificationMessageService(db)
+    success = service.mark_read(message_id, current_user.user_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    
+    return {"message": "已标记为已读", "id": message_id}
+
+
+@router.put("/messages/read-all", summary="标记全部消息为已读")
+async def mark_all_messages_read(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """标记所有站内消息为已读"""
+    service = NotificationMessageService(db)
+    count = service.mark_all_read(current_user.user_id)
+    return {"message": f"已标记 {count} 条消息为已读", "count": count}
+
+
+@router.delete("/messages/{message_id}", summary="删除消息")
+async def delete_message(
+    message_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除单条站内消息"""
+    service = NotificationMessageService(db)
+    success = service.delete_message(message_id, current_user.user_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    
+    return {"message": "消息已删除", "id": message_id}
+
+
+@router.post("/messages", summary="创建站内消息")
+async def create_message(
+    request: MessageCreateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """创建新的站内消息（仅管理员）"""
+    if "admin" not in current_user.roles:
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    
+    service = NotificationMessageService(db)
+    message = service.create_message(
+        user_id=request.user_id,
+        title=request.title,
+        content=request.content,
+        msg_type=request.msg_type,
+        username=request.username,
+        related_object=request.related_object,
+        priority=request.priority,
+    )
+    
+    return {"id": message.id, "message": "消息创建成功"}

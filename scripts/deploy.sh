@@ -28,7 +28,7 @@ if [ -d "$APP_DIR/.git" ]; then
     cd $APP_DIR && git pull origin main
 else
     echo "[1/7] 从 GitHub 克隆最新代码..."
-    git clone https://github.com/wusdic/itops-deploy.git $APP_DIR --depth=1
+    git clone https://github.com/wusdic/itops-platform.git $APP_DIR --depth=1
 fi
 
 # ============================================================

@@ -244,7 +244,7 @@ function handleDelete(data) {
     remove(menuTree.value)
     ElMessage.success('删除成功')
     drawerVisible.value = false
-  }).catch(() => {})
+  }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
 }
 
 async function submitForm() {

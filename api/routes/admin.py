@@ -1808,4 +1808,529 @@ async def exec_sql(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============== 菜单管理接口 ==============
+
+class MenuCreate(BaseModel):
+    """创建菜单"""
+    name: str = Field(..., description="菜单名称")
+    code: Optional[str] = Field(None, description="菜单代码")
+    icon: Optional[str] = Field(None, description="菜单图标")
+    path: Optional[str] = Field(None, description="路由路径")
+    component: Optional[str] = Field(None, description="组件路径")
+    redirect: Optional[str] = Field(None, description="重定向路径")
+    parent_id: Optional[int] = Field(None, description="父菜单ID")
+    sort_order: int = Field(0, description="排序序号")
+    menu_type: str = Field("menu", description="菜单类型: menu/directory/button")
+    visible: int = Field(1, description="是否显示: 1=显示, 0=隐藏")
+    is_frame: int = Field(1, description="是否外部Frame: 1=是, 0=内部页面")
+    cache: int = Field(0, description="是否缓存: 1=缓存, 0=不缓存")
+    permission: Optional[str] = Field(None, description="权限标识")
+    description: Optional[str] = Field(None, description="描述")
+    status: str = Field("active", description="状态: active/inactive")
+
+
+class MenuUpdate(BaseModel):
+    """更新菜单"""
+    name: Optional[str] = None
+    code: Optional[str] = None
+    icon: Optional[str] = None
+    path: Optional[str] = None
+    component: Optional[str] = None
+    redirect: Optional[str] = None
+    parent_id: Optional[int] = None
+    sort_order: Optional[int] = None
+    menu_type: Optional[str] = None
+    visible: Optional[int] = None
+    is_frame: Optional[int] = None
+    cache: Optional[int] = None
+    permission: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+
+@router.get("/menu", summary="获取菜单树")
+async def get_menus(
+    status: Optional[str] = Query(None, description="状态过滤"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取菜单树形列表"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+    tree = service.get_tree(status=status)
+    return {"items": tree, "total": len(tree)}
+
+
+@router.post("/menu", summary="创建菜单")
+async def create_menu(
+    menu_data: MenuCreate,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """创建新菜单"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+
+    # 检查code唯一性
+    if menu_data.code:
+        existing = service.get_by_code(menu_data.code)
+        if existing:
+            raise HTTPException(status_code=400, detail=f"菜单代码 '{menu_data.code}' 已存在")
+
+    # 检查父菜单
+    if menu_data.parent_id:
+        parent = service.get_by_id(menu_data.parent_id)
+        if not parent:
+            raise HTTPException(status_code=400, detail=f"父菜单ID {menu_data.parent_id} 不存在")
+
+    data = menu_data.model_dump(exclude_none=False)
+    menu = service.create(data)
+    return {"id": menu.id, "name": menu.name, "code": menu.code, "status": "success", "message": "菜单创建成功"}
+
+
+@router.get("/menu/{menu_id}", summary="获取菜单详情")
+async def get_menu(
+    menu_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取菜单详细信息"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+    menu = service.get_by_id(menu_id)
+    if not menu:
+        raise HTTPException(status_code=404, detail="菜单不存在")
+    return service._to_dict(menu)
+
+
+@router.put("/menu/{menu_id}", summary="更新菜单")
+async def update_menu(
+    menu_id: int,
+    menu_data: MenuUpdate,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """更新菜单信息"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+
+    existing = service.get_by_id(menu_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="菜单不存在")
+
+    # 检查code唯一性
+    if menu_data.code:
+        by_code = service.get_by_code(menu_data.code)
+        if by_code and by_code.id != menu_id:
+            raise HTTPException(status_code=400, detail=f"菜单代码 '{menu_data.code}' 已存在")
+
+    data = menu_data.model_dump(exclude_none=True)
+    menu = service.update(menu_id, data)
+    return {"status": "success", "message": "菜单更新成功"}
+
+
+@router.delete("/menu/{menu_id}", summary="删除菜单")
+async def delete_menu(
+    menu_id: int,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """删除菜单"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+    try:
+        ok = service.delete(menu_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="菜单不存在")
+        return {"status": "success", "message": "菜单删除成功"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ============== 字典管理接口 ==============
+
+class DictTypeCreate(BaseModel):
+    """创建字典类型"""
+    name: str = Field(..., description="字典类型名称")
+    code: str = Field(..., description="字典类型代码")
+    description: Optional[str] = Field(None, description="描述")
+    status: str = Field("active", description="状态: active/inactive")
+
+
+class DictTypeUpdate(BaseModel):
+    """更新字典类型"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+
+class DictItemCreate(BaseModel):
+    """创建字典项"""
+    type_id: int = Field(..., description="字典类型ID")
+    label: str = Field(..., description="显示文本")
+    value: str = Field(..., description="字典值")
+    sort_order: int = Field(0, description="排序序号")
+    color: Optional[str] = Field(None, description="颜色标签")
+    css_class: Optional[str] = Field(None, description="CSS样式类")
+    extra_data: Optional[dict] = Field(None, description="扩展数据")
+    status: str = Field("active", description="状态: active/inactive")
+
+
+class DictItemUpdate(BaseModel):
+    """更新字典项"""
+    type_id: Optional[int] = None
+    label: Optional[str] = None
+    value: Optional[str] = None
+    sort_order: Optional[int] = None
+    color: Optional[str] = None
+    css_class: Optional[str] = None
+    extra_data: Optional[dict] = None
+    status: Optional[str] = None
+
+
+@router.get("/dict", summary="获取字典类型列表")
+async def get_dict_types(
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    status: Optional[str] = Query(None, description="状态过滤"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取字典类型分页列表"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+    result = service.get_types(
+        keyword=keyword,
+        status=status,
+        page=pagination.page,
+        page_size=pagination.page_size,
+    )
+    return result
+
+
+@router.post("/dict", summary="创建字典类型")
+async def create_dict_type(
+    dict_data: DictTypeCreate,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """创建新字典类型"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+
+    existing = service.get_type_by_code(dict_data.code)
+    if existing:
+        raise HTTPException(status_code=400, detail=f"字典类型代码 '{dict_data.code}' 已存在")
+
+    data = dict_data.model_dump(exclude_none=False)
+    dict_type = service.create_type(data)
+    return {"id": dict_type.id, "name": dict_type.name, "code": dict_type.code, "status": "success", "message": "字典类型创建成功"}
+
+
+@router.get("/dict/all-items", summary="获取字典项列表")
+async def get_dict_items(
+    type_id: Optional[int] = Query(None, description="字典类型ID"),
+    type_code: Optional[str] = Query(None, description="字典类型代码"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    status: Optional[str] = Query(None, description="状态过滤"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取字典项分页列表"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+    result = service.get_items(
+        type_id=type_id,
+        type_code=type_code,
+        keyword=keyword,
+        status=status,
+        page=pagination.page,
+        page_size=pagination.page_size,
+    )
+    return result
+
+
+@router.get("/dict/{type_code}/items", summary="根据类型代码获取字典项")
+async def get_dict_items_by_type(
+    type_code: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """根据字典类型代码获取字典项列表"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+    items = service.get_items_by_type_code(type_code)
+    return {"items": items, "total": len(items)}
+
+
+@router.post("/dict/all-items", summary="创建字典项")
+async def create_dict_item(
+    item_data: DictItemCreate,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """创建新字典项"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+
+    # 检查类型存在
+    dict_type = service.get_type_by_id(item_data.type_id)
+    if not dict_type:
+        raise HTTPException(status_code=400, detail=f"字典类型ID {item_data.type_id} 不存在")
+
+    data = item_data.model_dump(exclude_none=False)
+    item = service.create_item(data)
+    return {"id": item.id, "label": item.label, "value": item.value, "status": "success", "message": "字典项创建成功"}
+
+
+@router.get("/dict/{type_id}", summary="获取字典类型详情")
+async def get_dict_type(
+    type_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取字典类型详细信息"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+    dict_type = service.get_type_by_id(type_id)
+    if not dict_type:
+        raise HTTPException(status_code=404, detail="字典类型不存在")
+    return service._type_to_dict(dict_type)
+
+
+@router.put("/dict/{type_id}", summary="更新字典类型")
+async def update_dict_type(
+    type_id: int,
+    dict_data: DictTypeUpdate,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """更新字典类型"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+
+    existing = service.get_type_by_id(type_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="字典类型不存在")
+
+    data = dict_data.model_dump(exclude_none=True)
+    updated = service.update_type(type_id, data)
+    return {"status": "success", "message": "字典类型更新成功"}
+
+
+@router.delete("/dict/{type_id}", summary="删除字典类型")
+async def delete_dict_type(
+    type_id: int,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """删除字典类型（同时删除所有字典项）"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+    ok = service.delete_type(type_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="字典类型不存在")
+    return {"status": "success", "message": "字典类型删除成功"}
+
+
+@router.get("/dict/items/{item_id}", summary="获取字典项详情")
+async def get_dict_item(
+    item_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取字典项详细信息"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+    item = service.get_item_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="字典项不存在")
+    return service._item_to_dict(item)
+
+
+@router.put("/dict/items/{item_id}", summary="更新字典项")
+async def update_dict_item(
+    item_id: int,
+    item_data: DictItemUpdate,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """更新字典项"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+
+    existing = service.get_item_by_id(item_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="字典项不存在")
+
+    if item_data.type_id:
+        dict_type = service.get_type_by_id(item_data.type_id)
+        if not dict_type:
+            raise HTTPException(status_code=400, detail=f"字典类型ID {item_data.type_id} 不存在")
+
+    data = item_data.model_dump(exclude_none=True)
+    updated = service.update_item(item_id, data)
+    return {"status": "success", "message": "字典项更新成功"}
+
+
+@router.delete("/dict/items/{item_id}", summary="删除字典项")
+async def delete_dict_item(
+    item_id: int,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """删除字典项"""
+    from modules.business.dict_service import DictService
+    service = DictService(db)
+    ok = service.delete_item(item_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="字典项不存在")
+    return {"status": "success", "message": "字典项删除成功"}
+
+
+# ============== system_router: 前端契约适配层 ==============
+# 前端 system/menu.vue 用 /api/v1/system/menus（key/label模型）
+# 后端已有 /api/v1/admin/menu（id/name模型）
+# 本层做数据格式适配，不重复业务逻辑
+
+system_router = APIRouter()
+
+
+def _admin_menu_to_frontend(admin_menu: dict) -> dict:
+    """将后端菜单格式转为前端期望的 key/label 格式"""
+    return {
+        "key": str(admin_menu.get("id", "")),
+        "label": admin_menu.get("name", ""),
+        "path": admin_menu.get("path") or "",
+        "iconName": admin_menu.get("icon") or admin_menu.get("icon_name") or None,
+        "icon": admin_menu.get("icon") or None,
+        "sort": admin_menu.get("sort_order", 0),
+        "type": admin_menu.get("menu_type", "menu"),
+        "parentKey": str(admin_menu.get("parent_id")) if admin_menu.get("parent_id") else None,
+        "visible": bool(admin_menu.get("visible", 1)),
+        "status": admin_menu.get("status", "active"),
+        "permission": admin_menu.get("permission"),
+        "component": admin_menu.get("component"),
+        "description": admin_menu.get("description"),
+    }
+
+
+@system_router.get("/menus", summary="获取前端菜单树")
+async def get_system_menus(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """适配前端 system/menu.vue 的 key/label 格式"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+    tree = service.get_tree(status="active")
+
+    # 转换为前端格式并构建 children 树
+    items = [_admin_menu_to_frontend(m) for m in tree]
+    mapped = {}
+    for item in items:
+        mapped[item["key"]] = {**item, "children": []}
+
+    result = []
+    for item in items:
+        if item.get("parentKey") and item["parentKey"] in mapped:
+            mapped[item["parentKey"]]["children"].append(item)
+        elif not item.get("parentKey"):
+            result.append(item)
+
+    return result
+
+
+@system_router.post("/menus", summary="创建菜单（前端格式）")
+async def create_system_menu(
+    menu_data: dict,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """接收前端格式 {key, label, parentKey, sort} → 转为后端格式创建"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+
+    # parentKey → parent_id
+    parent_id = None
+    if menu_data.get("parentKey"):
+        parent_menu = service.get_by_id(int(menu_data["parentKey"]))
+        parent_id = parent_menu.id if parent_menu else None
+
+    admin_format = {
+        "name": menu_data.get("label", menu_data.get("name", "")),
+        "code": menu_data.get("key", ""),
+        "path": menu_data.get("path", ""),
+        "icon": menu_data.get("iconName") or menu_data.get("icon"),
+        "sort_order": menu_data.get("sort", 0),
+        "parent_id": parent_id,
+        "menu_type": menu_data.get("type", "menu"),
+        "visible": 1 if menu_data.get("visible", True) else 0,
+        "permission": menu_data.get("permission"),
+        "component": menu_data.get("component"),
+        "description": menu_data.get("description"),
+    }
+
+    created = service.create(admin_format)
+    return {"key": str(created.id), "label": created.name, "status": "success"}
+
+
+@system_router.put("/menus/{menu_key}", summary="更新菜单（前端格式）")
+async def update_system_menu(
+    menu_key: str,
+    menu_data: dict,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """接收前端格式 → 转为后端格式更新"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+
+    menu = service.get_by_id(int(menu_key))
+    if not menu:
+        raise HTTPException(status_code=404, detail="菜单不存在")
+
+    parent_id = None
+    if menu_data.get("parentKey"):
+        parent_menu = service.get_by_id(int(menu_data["parentKey"]))
+        parent_id = parent_menu.id if parent_menu else None
+
+    update_data = {}
+    if "label" in menu_data:
+        update_data["name"] = menu_data["label"]
+    if "key" in menu_data:
+        update_data["code"] = menu_data["key"]
+    if "path" in menu_data:
+        update_data["path"] = menu_data["path"]
+    if "iconName" in menu_data:
+        update_data["icon"] = menu_data["iconName"]
+    if "sort" in menu_data:
+        update_data["sort_order"] = menu_data["sort"]
+    if "parentKey" in menu_data:
+        update_data["parent_id"] = parent_id
+    if "visible" in menu_data:
+        update_data["visible"] = 1 if menu_data["visible"] else 0
+    if "permission" in menu_data:
+        update_data["permission"] = menu_data["permission"]
+
+    service.update(int(menu_key), update_data)
+    return {"status": "success"}
+
+
+@system_router.delete("/menus/{menu_key}", summary="删除菜单（前端格式）")
+async def delete_system_menu(
+    menu_key: str,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """接收前端格式的 key 删除"""
+    from modules.business.menu_service import MenuService
+    service = MenuService(db)
+    ok = service.delete(int(menu_key))
+    if not ok:
+        raise HTTPException(status_code=404, detail="菜单不存在")
+    return {"status": "success"}
+
+
 from api.routes.log_service import LogConfigService, LogAggregationService

@@ -144,6 +144,7 @@ async def scan_and_import_devices(
         from modules.business.device_importer import DeviceImporter
 
         scanner = get_enhanced_scanner()
+        importer = DeviceImporter()
         results = await scanner.scan_and_identify(request.cidr)
 
         # Filter hosts that are up

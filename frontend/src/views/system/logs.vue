@@ -480,7 +480,7 @@ function resetConfigs() {
       }
     }
     ElMessage.info('已恢复默认值，请点击保存')
-  }).catch(() => {})
+  }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
 }
 
 async function handleCleanup() {

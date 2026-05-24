@@ -456,7 +456,7 @@ function handleDelete() {
     } catch (e) {
       message.error('删除失败: ' + e.message)
     }
-  }).catch(() => {})
+    }).catch(e => message.error('删除失败: ' + (e.message || e)))
 }
 
 onMounted(() => {

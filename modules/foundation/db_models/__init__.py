@@ -32,6 +32,8 @@ from .automation import (
     AutomationExecutionLog, AutomationTriggerRule,
     AutomationAIDecision, AutomationScriptVersion
 )
+from .menu import Menu
+from .dict_model import DictType, DictItem
 
 __all__ = [
     'Base',
@@ -76,6 +78,9 @@ __all__ = [
     'AutomationTriggerRule',
     'AutomationAIDecision',
     'AutomationScriptVersion',
+    'Menu',
+    'DictType',
+    'DictItem',
 ]
 
 __version__ = '1.0.0'

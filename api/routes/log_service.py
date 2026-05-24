@@ -9,10 +9,15 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
+from fastapi import APIRouter, Depends
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
+from api.dependencies import get_db, get_current_user, CurrentUser
+
 logger = logging.getLogger("logs")
+
+router = APIRouter(tags=["日志服务"])
 
 # 日志分类定义：category -> sub_category -> (enabled, min_level, description)
 DEFAULT_LOG_CONFIG = {

@@ -272,7 +272,7 @@ const handleAcknowledge = async (alert) => {
     } finally {
       actionLoading.value = false
     }
-  }).catch(() => {})
+  }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
 }
 
 const handleResolve = async (alert) => {
@@ -307,7 +307,7 @@ const handleResolve = async (alert) => {
     } finally {
       actionLoading.value = false
     }
-  }).catch(() => {})
+  }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
 }
 
 const loadAlerts = async () => {

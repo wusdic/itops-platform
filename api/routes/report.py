@@ -360,6 +360,63 @@ async def generate_report(
         }
 
 
+@router.post("/preview", summary="预览报表内容")
+async def preview_report(
+    request: ReportGenerateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """预览报表内容（不保存）"""
+    # 获取模板内容
+    template_content = None
+    template_name = "默认模板"
+    if request.template_id:
+        template = db.query(ReportTemplate).filter(ReportTemplate.id == request.template_id).first()
+        if template:
+            template_content = template.content
+            template_name = template.name
+
+    # 如果没有模板，使用默认内容
+    if not template_content:
+        template_content = """
+        <html>
+        <head><title>{{ name }}</title></head>
+        <body>
+            <h1>{{ name }}</h1>
+            <p>报表周期: {{ start_date }} 至 {{ end_date }}</p>
+            <p>生成时间: {{ report_date }}</p>
+            <p>生成人: {{ generated_by }}</p>
+        </body>
+        </html>
+        """
+
+    # 生成预览数据
+    try:
+        generator = ReportGenerator(output_dir="/tmp/reports")
+        result = generator.generate(
+            template_content=template_content,
+            template_type=request.report_type,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            format=request.format or "html",
+            filters=request.filters,
+            params=request.params,
+        )
+        return {
+            "content": result.get("html", ""),
+            "name": request.name or template_name,
+            "report_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "generated_by": current_user.username,
+        }
+    except Exception as e:
+        return {
+            "content": f"<p>预览生成失败: {str(e)}</p>",
+            "name": request.name or template_name,
+            "report_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "generated_by": current_user.username,
+        }
+
+
 @router.post("/generate/async", summary="异步生成报表")
 async def generate_report_async(
     request: ReportGenerateRequest,

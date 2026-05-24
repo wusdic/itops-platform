@@ -204,7 +204,7 @@ async function loadCategories() {
 async function loadKnowledge(categoryId) {
   try {
     const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/knowledge/list?category_id=${categoryId}&page_size=${CONFIG.MAX_PAGE_SIZE}`, {
+    const res = await fetch(`/api/v1/knowledge/sop?category_id=${categoryId}&page_size=${CONFIG.MAX_PAGE_SIZE}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error()

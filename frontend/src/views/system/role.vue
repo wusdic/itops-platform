@@ -219,7 +219,7 @@ function handleDelete(row) {
       } catch (e) {
         ElMessage.error(`删除失败: ${e.message}`)
       }
-    }).catch(() => {})
+    }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
 }
 
 // 打开权限分配弹窗

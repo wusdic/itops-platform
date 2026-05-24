@@ -188,7 +188,7 @@ const toggleRead = async (row) => {
 const markAllRead = async () => {
   try {
     const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/notifications/history/mark-all-read', {
+    const res = await fetch('/api/v1/notifications/history/read-all', {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}` }
     })

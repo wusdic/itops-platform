@@ -367,7 +367,7 @@ const handleDelete = (row) => {
     } catch (e) {
       ElMessage.error(`删除失败: ${e.message}`)
     }
-  }).catch(() => {})
+    }).catch(e => ElMessage.error(`操作失败: ${e.message}`))
 }
 
 const submitReview = (row) => {
@@ -388,7 +388,7 @@ const submitReview = (row) => {
     } catch (e) {
       ElMessage.error(`提交审核失败: ${e.message}`)
     }
-  }).catch(() => {})
+    }).catch(e => ElMessage.error(`操作失败: ${e.message}`))
 }
 
 const approve = (row) => {
@@ -409,7 +409,7 @@ const approve = (row) => {
     } catch (e) {
       ElMessage.error(`审核操作失败: ${e.message}`)
     }
-  }).catch(() => {})
+    }).catch(e => ElMessage.error(`操作失败: ${e.message}`))
 }
 
 const handlePageChange = (page) => {

@@ -469,6 +469,12 @@ async def login(login_data: LoginRequest):
         "token": access_token,
         "token_type": "bearer",
         "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "user": {
+            "user_id": user["user_id"],
+            "username": user["username"],
+            "email": user.get("email"),
+            "roles": user["roles"],
+        },
     }
 
 

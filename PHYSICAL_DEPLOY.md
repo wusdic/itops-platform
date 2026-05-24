@@ -73,8 +73,8 @@
 
 ```bash
 # 1. 克隆部署仓库
-git clone https://github.com/wusdic/itops-deploy.git /opt/itops_platform
-cd /opt/itops_platform
+git clone https://github.com/wusdic/itops-platform.git /opt/itops-platform
+cd /opt/itops-platform
 
 # 2. 安装系统依赖（需要 root，会安装 MySQL/Nginx/Node.js）
 sudo bash scripts/install_deps.sh
@@ -132,7 +132,7 @@ mysql -u root -p'YourSecurePassword' -e "SHOW DATABASES;" | grep itops_platform
 ### 步骤4：安装后端
 
 ```bash
-cd /opt/itops_platform/api
+cd /opt/itops-platform/api
 
 # 创建 Python 虚拟环境
 python3 -m venv venv
@@ -148,7 +148,7 @@ deactivate
 ### 步骤5：构建前端
 
 ```bash
-cd /opt/itops_platform/frontend
+cd /opt/itops-platform/frontend
 
 # 安装 Node 依赖
 npm install --legacy-peer-deps
@@ -306,7 +306,7 @@ mysql -u root -p'YourPassword' -e "SELECT 1;"
 ### Q: 前端修改后需要重新构建
 
 ```bash
-cd /opt/itops_platform/frontend
+cd /opt/itops-platform/frontend
 npm install --legacy-peer-deps
 npm run build
 sudo systemctl restart itops-api
@@ -315,7 +315,7 @@ sudo systemctl restart itops-api
 ### Q: 如何更新到最新版本
 
 ```bash
-cd /opt/itops_platform
+cd /opt/itops-platform
 git pull origin main
 sudo bash scripts/deploy.sh
 ```
@@ -331,6 +331,6 @@ sudo bash scripts/deploy.sh
 
 下载最新部署包：
 ```bash
-curl -L https://github.com/wusdic/itops-deploy/releases/latest/download/itops_platform.tar.gz -o /tmp/itops.tar.gz
+curl -L https://github.com/wusdic/itops-platform/releases/latest/download/itops_platform.tar.gz -o /tmp/itops.tar.gz
 tar -xzf /tmp/itops.tar.gz -C /opt/
 ```
