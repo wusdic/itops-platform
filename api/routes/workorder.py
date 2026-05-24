@@ -585,7 +585,7 @@ async def update_workorder(
     if not update_data:
         raise HTTPException(status_code=400, detail="没有需要更新的字段")
     
-    success = core.update(workorder_id, **update_data)
+    success = core.update(workorder_id, operator=current_user.username, **update_data)
     
     if not success:
         raise HTTPException(status_code=404, detail="工单不存在")

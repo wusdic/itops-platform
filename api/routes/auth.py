@@ -69,6 +69,7 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=6)
     email: Optional[str] = None
     full_name: Optional[str] = None
+    roles: Optional[list[str]] = None
 
 
 class LoginRequest(BaseModel):
@@ -207,7 +208,7 @@ class DBUserStore:
             "roles": user.roles,
         }
 
-    def create_user(self, username: str, password: str, email: str = None, full_name: str = None) -> dict:
+    def create_user(self, username: str, password: str, email: str = None, full_name: str = None, roles: list = None) -> dict:
         """创建用户"""
         import json
         with self._db_manager.session_scope() as session:
@@ -215,13 +216,14 @@ class DBUserStore:
             existing = session.query(SystemUser).filter_by(username=username).first()
             if existing:
                 raise ValueError("用户名已存在")
+            user_roles = roles if roles else ["viewer"]
             user = SystemUser(
                 id=f"u{secrets.token_hex(4)}",
                 username=username,
                 password_hash=self._password_hasher.hash_password(password),
                 email=email,
                 status="active",
-                roles='["viewer"]',
+                roles=json.dumps(user_roles),
             )
             session.add(user)
             session.commit()
@@ -664,7 +666,8 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             username=user_data.username,
             password=user_data.password,
             email=user_data.email,
-            full_name=user_data.full_name
+            full_name=user_data.full_name,
+            roles=user_data.roles,
         )
     except ValueError as e:
         raise HTTPException(

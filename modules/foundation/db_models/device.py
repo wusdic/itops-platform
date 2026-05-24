@@ -75,7 +75,7 @@ class Device(Base):
     hostname = Column(String(128), unique=True, comment='主机名')
     ip_address = Column(String(64), index=True, comment='IP地址')
     mac_address = Column(String(64), comment='MAC地址')
-    device_type = Column(SQLEnum(DeviceType), nullable=False, index=True, comment='设备类型')
+    device_type = Column(String(50), nullable=False, index=True, comment='设备类型')
     
     # 位置信息
     location = Column(String(256), comment='位置')
@@ -96,7 +96,7 @@ class Device(Base):
     cost = Column(Float, comment='成本')
     
     # 状态
-    status = Column(SQLEnum(DeviceStatus), default=DeviceStatus.UNKNOWN, comment='状态')
+    status = Column(String(50), default='unknown', comment='状态')
     
     # 监控配置
     snmp_enabled = Column(Boolean, default=True, comment='是否启用SNMP')
@@ -156,7 +156,7 @@ class Device(Base):
     # alerts = relationship('Alert', back_populates='device', lazy='dynamic')
     
     def __repr__(self):
-        return f"<Device(id={self.id}, name='{self.name}', ip='{self.ip_address}', type='{self.device_type.value}')>"
+        return f"<Device(id={self.id}, name='{self.name}', ip='{self.ip_address}', type='{str(self.device_type)}')>"
     
     def to_dict(self):
         """转换为字典"""
@@ -166,7 +166,7 @@ class Device(Base):
             'hostname': self.hostname,
             'ip_address': self.ip_address,
             'mac_address': self.mac_address,
-            'device_type': self.device_type.value if self.device_type else None,
+            'device_type': str(self.device_type) if self.device_type else None,
             'location': self.location,
             'idc': self.idc,
             'rack': self.rack,
@@ -176,7 +176,7 @@ class Device(Base):
             'serial_number': self.serial_number,
             'purchase_date': self.purchase_date.isoformat() if self.purchase_date else None,
             'warranty_end': self.warranty_end.isoformat() if self.warranty_end else None,
-            'status': self.status.value if self.status else None,
+            'status': str(self.status) if self.status else None,
             'owner': self.owner,
             'tags': self.tags,
             'created_at': self.created_at.isoformat() if self.created_at else None,

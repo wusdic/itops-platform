@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from pydantic import BaseModel, Field
 
 from api.dependencies import get_db, get_current_user, CurrentUser, PaginationParams, require_role
+from core.config.manager import ConfigManager
 from sqlalchemy.orm import Session
 
 from api.routes.auth import _user_store
@@ -175,20 +176,15 @@ async def create_user(
             username=user.username,
             password=user.password,
             email=user.email,
+            roles=user.roles if user.roles else None,
         )
-        # 更新额外信息
-        existing_user = _user_store.get_user(user.username)
-        if existing_user and hasattr(existing_user, 'metadata'):
-            existing_user.metadata["full_name"] = user.full_name
-            existing_user.metadata["phone"] = user.phone
-            existing_user.roles = user.roles if user.roles else ["viewer"]
         
         return {
-            "id": existing_user.id if existing_user else new_user.get("user_id"),
+            "id": new_user.get("user_id"),
             "username": user.username,
             "email": user.email,
-            "roles": user.roles,
-            "is_active": user.is_active,
+            "roles": new_user.get("roles", user.roles if user.roles else ["viewer"]),
+            "is_active": True,
             "created_at": datetime.now().isoformat(),
         }
     except ValueError as e:
@@ -197,7 +193,7 @@ async def create_user(
 
 @router.get("/users/{user_id}", summary="获取用户详情")
 async def get_user(
-    user_id: int,
+    user_id: str,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -223,7 +219,7 @@ async def get_user(
 
 @router.put("/users/{user_id}", summary="更新用户")
 async def update_user(
-    user_id: int,
+    user_id: str,
     user: UserUpdate,
     current_user: CurrentUser = Depends(require_role("admin")),
     db: Session = Depends(get_db),
@@ -254,7 +250,7 @@ async def update_user(
 
 @router.delete("/users/{user_id}", summary="删除用户")
 async def delete_user(
-    user_id: int,
+    user_id: str,
     current_user: CurrentUser = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ):
@@ -272,7 +268,7 @@ async def delete_user(
 
 @router.post("/users/{user_id}/reset-password", summary="重置密码")
 async def reset_password(
-    user_id: int,
+    user_id: str,
     current_user: CurrentUser = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ):
@@ -439,6 +435,22 @@ async def update_system_config(
     _system_config[config_key]["description"] = config.description or _system_config[config_key].get("description", "")
     
     return {"status": "success", "message": "Configuration updated successfully"}
+
+
+@router.get("/ai/config", summary="获取AI配置")
+async def get_ai_config(
+    current_user: CurrentUser = Depends(require_role("admin")),
+):
+    """获取LLM AI配置"""
+    cfg = ConfigManager().llm
+    return {
+        "provider": cfg.provider,
+        "api_base": cfg.api_base,
+        "api_key": cfg.api_key,
+        "model": cfg.model,
+        "temperature": cfg.temperature,
+        "max_tokens": cfg.max_tokens,
+    }
 
 
 @router.get("/timezones", summary="获取可用时区列表")

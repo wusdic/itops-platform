@@ -201,11 +201,16 @@ async def get_current_user(
                 detail="Invalid token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
+        # 从数据库查询用户完整信息（包括 email）
+        from api.routes.auth import _user_store
+        db_user = _user_store.get_user(username)
+        email = db_user.email if db_user else None
+
         return CurrentUser(
             user_id=user_id or username,
             username=username,
-            email=None,
+            email=email,
             roles=roles,
             permissions=[],
         )

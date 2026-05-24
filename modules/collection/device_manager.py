@@ -311,7 +311,7 @@ class DeviceManager:
                 db_devices = session.query(Device).all()
                 for d in db_devices:
                     # 跳过退役设备
-                    if hasattr(d, 'status') and d.status and d.status.value == 'decommissioned':
+                    if hasattr(d, 'status') and d.status and str(d.status) == 'decommissioned':
                         continue
                     # 跳过未启用监控的设备
                     if d.monitor_enabled is False:
@@ -354,12 +354,12 @@ class DeviceManager:
                 device = session.query(Device).filter(Device.name == device_name).first()
                 if device:
                     old_status = device.status
-                    device.status = db_status.value  # 使用字符串值而非枚举对象
+                    device.status = str(db_status)  # 使用字符串值而非枚举对象
                     device.last_status_check = datetime.now()
                     session.commit()
 
                     # 状态变更时写日志（仅状态实际变化时）
-                    if old_status != db_status.value:
+                    if str(old_status) != str(db_status):
                         if status == CollectionStatus.ONLINE:
                             logger.info(f"[采集] 设备上线: {device_name} (IP: {device.ip_address})")
                         elif status == CollectionStatus.OFFLINE:
@@ -367,9 +367,9 @@ class DeviceManager:
                         elif status == CollectionStatus.ERROR:
                             logger.error(f"[采集] 设备异常: {device_name} (IP: {device.ip_address})")
                         else:
-                            logger.info(f"[采集] 设备状态变更: {device_name} {old_status} → {db_status.value}")
+                            logger.info(f"[采集] 设备状态变更: {device_name} {old_status} → {db_status}")
                     else:
-                        logger.debug(f"[采集] 设备 {device_name} 状态更新为 {status.value}")
+                        logger.debug(f"[采集] 设备 {device_name} 状态更新为 {status}")
         except Exception as e:
             logger.warning(f"更新设备状态到数据库失败: {e}")
 

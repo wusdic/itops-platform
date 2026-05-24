@@ -180,5 +180,42 @@ def track_watermark(
     }
 
 
+@router.get("/list")
+def list_watermarks(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: CurrentUser = Depends(get_current_user),
+    db = Depends(get_db),
+):
+    """
+    分页查询所有水印记录（来自 operation_logs）
+    """
+    from modules.foundation.db_models.system import OperationLog
+
+    query = db.query(OperationLog).filter(
+        OperationLog.watermark_id != None,
+        OperationLog.watermark_id != "",
+    )
+
+    total = query.count()
+    records = query.order_by(OperationLog.timestamp.desc()).offset(offset).limit(limit).all()
+
+    items = []
+    for log in records:
+        items.append({
+            "id": log.id,
+            "username": log.username,
+            "action": log.action,
+            "resource": log.resource,
+            "resource_id": log.resource_id,
+            "watermark_id": log.watermark_id,
+            "method": log.method,
+            "ip_address": log.ip_address,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+        })
+
+    return {"total": total, "limit": limit, "offset": offset, "items": items}
+
+
 # 需要 datetime
 from datetime import datetime

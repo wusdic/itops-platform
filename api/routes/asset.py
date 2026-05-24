@@ -62,6 +62,7 @@ class DeviceCreate(BaseModel):
     cabinet: Optional[str] = Field(None, description="机柜")
     business_id: Optional[int] = Field(None, description="业务系统ID")
     tags: Optional[str] = Field(None, description="标签")
+    status: Optional[str] = Field("offline", description="状态")
 
 
 class DeviceUpdate(BaseModel):
@@ -136,8 +137,8 @@ def _device_to_dict(device: Device) -> dict:
         'name': device.name,
         'hostname': device.hostname,
         'ip_address': device.ip_address,
-        'device_type': device.device_type.value if device.device_type else 'other',
-        'status': device.status.value if device.status else 'offline',
+        'device_type': str(device.device_type) if device.device_type else 'other',
+        'status': str(device.status) if device.status else 'offline',
         'os_type': device.os_type,
         'os_version': device.os_version,
         'manufacturer': device.manufacturer,
@@ -164,7 +165,7 @@ async def _trigger_bg_collect(manager, device_name: str):
     """
     try:
         metrics = await manager.collect_device(device_name)
-        status = metrics.status.value if metrics else 'UNKNOWN'
+        status = metrics.status.value if metrics and metrics.status else 'UNKNOWN'
         logger.info(f"[asset] 后台采集 {device_name} 完成，状态: {status}")
     except Exception as e:
         logger.warning(f"[asset] 后台采集 {device_name} 失败: {e}")
@@ -230,10 +231,10 @@ async def get_devices(
         last_metrics = manager.get_last_metrics(d.name)
 
         # 状态为 UNKNOWN 时，触发一次后台采集
-        if real_status.value == 'unknown' or real_status.value == 'UNKNOWN':
+        if str(real_status) == 'unknown' or str(real_status) == 'UNKNOWN':
             asyncio.create_task(_trigger_bg_collect(manager, d.name))
 
-        device_dict['status'] = real_status.value if real_status else d.status.value
+        device_dict['status'] = real_status.value if real_status else str(d.status)
         device_dict['last_collect_time'] = last_metrics.timestamp.isoformat() if last_metrics and last_metrics.timestamp else None
         # 从采集数据中获取更多字段（metrics为空时fallback到Device表字段）
         if last_metrics and last_metrics.metrics:
@@ -362,12 +363,11 @@ async def create_device(
     db: Session = Depends(get_db),
 ):
     """创建设备记录"""
-    db_device_type = _map_device_type(device.device_type)
-    
     db_device = Device(
+        name=device.hostname,
         hostname=device.hostname,
         ip_address=device.ip_address,
-        device_type=db_device_type,
+        device_type=device.device_type,  # 存储为字符串，由 StringEnum 处理
         os_type=device.os_type,
         os_version=device.os_version,
         manufacturer=device.manufacturer,
@@ -382,7 +382,7 @@ async def create_device(
         cabinet=device.cabinet,
         business_id=device.business_id,
         tags=device.tags,
-        status=DBDeviceStatus.OFFLINE,
+        status=device.status if device.status else 'offline',
     )
     
     db.add(db_device)
@@ -410,7 +410,7 @@ async def get_device(
     manager = get_device_manager()
     real_status = manager.get_device_status(device.name)
     last_metrics = manager.get_last_metrics(device.name)
-    device_dict['status'] = real_status.value if real_status else device.status.value
+    device_dict['status'] = str(real_status) if real_status else str(device.status)
     device_dict['last_collect_time'] = last_metrics.timestamp.isoformat() if last_metrics and last_metrics.timestamp else None
     
     # 从采集数据中获取更多字段
@@ -837,13 +837,13 @@ async def get_asset_stats(
     """获取资产统计信息"""
     total_devices = db.query(Device).count()
     online_devices = db.query(Device).filter(Device.status == DBDeviceStatus.ONLINE).count()
-    offline_devices = db.query(Device).filter(Device.status == DBDeviceStatus.OFFLINE).count()
-    maintenance_devices = db.query(Device).filter(Device.status == DBDeviceStatus.MAINTENANCE).count()
+    offline_devices = db.query(Device).filter(Device.status == 'offline').count()
+    maintenance_devices = db.query(Device).filter(Device.status == 'maintenance').count()
     
     # 按类型统计
     device_type_stats = {}
     for dtype in DBDeviceType:
-        count = db.query(Device).filter(Device.device_type == dtype).count()
+        count = db.query(Device).filter(Device.device_type == dtype.value).count()
         if count > 0:
             device_type_stats[dtype.value] = count
     
