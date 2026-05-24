@@ -182,114 +182,112 @@ class LLMClient:
             
         return payload
     
+    def _get_fallback_chain(self, model: str = None) -> List[str]:
+        """获取模型降级链路，默认从配置读取 fallback_chain，否则按 _models 顺序"""
+        chain = self.ollama_config.get("fallback_chain", [])
+        if not chain:
+            # 按优先级构建降级链路
+            enabled = [m.name for m in self._models.values() if m.enabled]
+            default = model or self._default_model
+            chain = [default] + [m for m in enabled if m != default]
+        return chain
+
+    async def _chat_with_model(self, messages, model: str, temperature: float,
+                                max_tokens: int, **kwargs) -> Dict[str, Any]:
+        """使用指定模型执行一次 chat 请求（不重试）"""
+        payload = self._build_payload(messages, model, stream=False,
+                                      temperature=temperature,
+                                      max_tokens=max_tokens, **kwargs)
+        async with self._get_client() as client:
+            response = await client.post("/v1/chat/completions", json=payload)
+            if response.status_code == 200:
+                result = response.json()
+                return {
+                    "content": result.get("choices", [{}])[0].get("message", {}).get("content", ""),
+                    "done": True,
+                    "model": result.get("model", model),
+                    "total_duration": 0,
+                    "eval_count": 0,
+                    "eval_duration": 0
+                }
+            else:
+                raise Exception(f"HTTP {response.status_code}: {response.text}")
+
     async def chat(self, messages: List[Dict[str, str]], model: str = None,
                    temperature: float = 0.7, max_tokens: int = 8192,
                    **kwargs) -> Dict[str, Any]:
         """
-        同步聊天请求
-        
-        Args:
-            messages: 消息列表 [{"role": "user", "content": "..."}]
-            model: 模型名称
-            temperature: 温度参数
-            max_tokens: 最大token数
-            **kwargs: 其他参数
-            
-        Returns:
-            {"content": "...", "done": true, "model": "...", "total_duration": ...}
+        同步聊天请求（支持模型级联降级）
+
+        模型降级链路：主模型重试 retry_count 次 → 降级到下一个模型重试 → ...
         """
-        model = model or self._default_model
-        
-        for attempt in range(self.retry_count):
-            try:
-                payload = self._build_payload(messages, model, stream=False, 
-                                              temperature=temperature, 
-                                              max_tokens=max_tokens, **kwargs)
-                
-                async with self._get_client() as client:
-                    response = await client.post("/v1/chat/completions", json=payload)
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        return {
-                            "content": result.get("choices", [{}])[0].get("message", {}).get("content", ""),
-                            "done": True,
-                            "model": result.get("model", model),
-                            "total_duration": 0,
-                            "eval_count": 0,
-                            "eval_duration": 0
-                        }
-                    else:
-                        error_msg = f"HTTP {response.status_code}: {response.text}"
-                        logger.error(f"Chat request failed: {error_msg}")
-                        
-            except httpx.TimeoutException:
-                logger.warning(f"Timeout on attempt {attempt + 1}/{self.retry_count}")
-            except Exception as e:
-                logger.error(f"Chat request error: {e}")
-                
-            if attempt < self.retry_count - 1:
-                await asyncio.sleep(self.retry_delay)
-                
-        return {"content": "", "done": False, "error": "Max retries exceeded"}
-    
+        fallback_chain = self._get_fallback_chain(model)
+        last_error = None
+
+        for m in fallback_chain:
+            for attempt in range(self.retry_count):
+                try:
+                    result = await self._chat_with_model(messages, m, temperature, max_tokens, **kwargs)
+                    result["fallback_used"] = m != (model or self._default_model)
+                    return result
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"[Model Fallback] {m} attempt {attempt + 1} failed: {e}")
+                    if attempt < self.retry_count - 1:
+                        await asyncio.sleep(self.retry_delay)
+
+        return {"content": "", "done": False, "error": str(last_error)}
+
+    async def _chat_stream_with_model(self, messages, model: str, temperature: float,
+                                       max_tokens: int, **kwargs) -> AsyncGenerator[str, None]:
+        """使用指定模型执行一次流式 chat 请求（不重试）"""
+        payload = self._build_payload(messages, model, stream=True,
+                                      temperature=temperature,
+                                      max_tokens=max_tokens, **kwargs)
+        async with self._get_client() as client:
+            async with client.stream("POST", "/v1/chat/completions", json=payload) as response:
+                if response.status_code != 200:
+                    raise Exception(f"HTTP {response.status_code}")
+                async for line in response.aiter_lines():
+                    if line and line.startswith("data:"):
+                        try:
+                            data = json.loads(line[5:])
+                            if "choices" in data:
+                                content = data["choices"][0].get("delta", {}).get("content", "")
+                                if content:
+                                    yield content
+                            if data.get("done", False):
+                                break
+                        except json.JSONDecodeError:
+                            continue
+
     async def chat_stream(self, messages: List[Dict[str, str]], model: str = None,
                           temperature: float = 0.7, max_tokens: int = 8192,
                           **kwargs) -> AsyncGenerator[str, None]:
         """
-        流式聊天请求
-        
-        Args:
-            messages: 消息列表
-            model: 模型名称
-            temperature: 温度参数
-            max_tokens: 最大token数
-            **kwargs: 其他参数
-            
-        Yields:
-            流式输出的文本片段
+        流式聊天请求（支持模型级联降级）
+
+        主模型失败后自动切换到降级链路中的下一个模型
         """
-        model = model or self._default_model
-        full_content = ""
-        
-        for attempt in range(self.retry_count):
-            try:
-                payload = self._build_payload(messages, model, stream=True,
-                                              temperature=temperature,
-                                              max_tokens=max_tokens, **kwargs)
-                
-                async with self._get_client() as client:
-                    async with client.stream("POST", "/v1/chat/completions", json=payload) as response:
-                        if response.status_code == 200:
-                            async for line in response.aiter_lines():
-                                if line and line.startswith("data:"):
-                                    try:
-                                        data = json.loads(line[5:])
-                                        if "choices" in data:
-                                            content = data["choices"][0].get("delta", {}).get("content", "")
-                                            if content:
-                                                full_content += content
-                                                yield content
-                                        if data.get("done", False):
-                                            break
-                                    except json.JSONDecodeError:
-                                        continue
-                            break
-                        else:
-                            error_msg = f"HTTP {response.status_code}"
-                            logger.error(f"Stream request failed: {error_msg}")
-                            yield f"[Error: {error_msg}]"
-                            break
-                            
-            except httpx.TimeoutException:
-                logger.warning(f"Stream timeout on attempt {attempt + 1}")
-            except Exception as e:
-                logger.error(f"Stream error: {e}")
-                yield f"[Error: {str(e)}]"
-                break
-                
-            if attempt < self.retry_count - 1:
-                await asyncio.sleep(self.retry_delay)
+        fallback_chain = self._get_fallback_chain(model)
+        last_error = None
+
+        for m in fallback_chain:
+            for attempt in range(self.retry_count):
+                try:
+                    async for chunk in self._chat_stream_with_model(messages, m, temperature, max_tokens, **kwargs):
+                        yield chunk
+                    # 成功完成
+                    return
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"[Model Fallback] {m} stream attempt {attempt + 1} failed: {e}")
+                    if attempt < self.retry_count - 1:
+                        await asyncio.sleep(self.retry_delay)
+            # 当前模型所有重试耗尽，尝试下一个
+            logger.warning(f"[Model Fallback] All retries exhausted for {m}, trying next model")
+
+        yield f"[Error: All models failed - {last_error}]"
     
     async def generate(self, prompt: str, model: str = None,
                        temperature: float = 0.7, **kwargs) -> Dict[str, Any]:

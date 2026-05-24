@@ -558,3 +558,425 @@ def get_scanner() -> IPScanner:
     if _scanner is None:
         _scanner = IPScanner()
     return _scanner
+
+
+# ============== ARP Scanner ==============
+
+class ARPScanner:
+    """
+    ARP-based network discovery scanner.
+
+    Provides active ARP scanning using raw sockets (requires root),
+    and passive ARP cache reading (works without root).
+
+    ARP discovers devices on the same L2 network segment, providing
+    MAC addresses that help identify device vendors and detect IP
+    conflicts.
+    """
+
+    ARP_OP_REQUEST = 1
+    ARP_OP_REPLY = 2
+
+    def __init__(self, timeout: float = 2.0, max_workers: int = 50):
+        self.timeout = timeout
+        self.max_workers = max_workers
+
+    async def scan_ip_range(
+        self,
+        cidr: str,
+        progress_callback: Callable[[int, int, str], None] = None,
+    ) -> List[DiscoveredHost]:
+        """
+        Scan IP range using ARP.
+
+        Uses raw ARP packets when running as root (active scan).
+        Falls back to reading /proc/net/arp cache when not root (passive).
+
+        Args:
+            cidr: CIDR notation (e.g. "192.168.1.0/24")
+            progress_callback: Optional callback(complete, total, current_ip)
+
+        Returns:
+            List of DiscoveredHost with MAC addresses populated
+        """
+        import os
+
+        network = ipaddress.ip_network(cidr, strict=False)
+        hosts = list(network.hosts())
+        total = len(hosts)
+
+        logger.info(f"ARP scanning {cidr}: {total} hosts")
+
+        if os.getuid() == 0:
+            discovered = await self._active_arp_scan(hosts, progress_callback)
+        else:
+            discovered = await self._passive_arp_scan(hosts, progress_callback)
+
+        logger.info(f"ARP discovery complete: {len(discovered)} hosts found")
+        return discovered
+
+    async def _active_arp_scan(
+        self,
+        hosts: List[Any],
+        progress_callback: Callable[[int, int, str], None] = None,
+    ) -> List[DiscoveredHost]:
+        """Send ARP requests using raw sockets (requires root)."""
+        discovered = []
+        completed = 0
+        total = len(hosts)
+        semaphore = asyncio.Semaphore(self.max_workers)
+
+        async def arp_one(host_str: str):
+            nonlocal completed
+            async with semaphore:
+                try:
+                    result = await self._arp_request(str(host_str))
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, total, str(host_str))
+                    return result
+                except Exception as e:
+                    logger.debug(f"ARP failed for {host_str}: {e}")
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, total, str(host_str))
+                    return None
+
+        tasks = [arp_one(h) for h in hosts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, DiscoveredHost) and result.mac:
+                discovered.append(result)
+
+        return discovered
+
+    async def _arp_request(self, ip: str) -> Optional[DiscoveredHost]:
+        """
+        Send a single ARP request via raw socket and wait for reply.
+
+        Returns DiscoveredHost with MAC if target responds, None otherwise.
+        """
+        import os
+        import struct
+        import time
+
+        # Get source IP and MAC of this host on the relevant interface
+        src_ip = self._get_local_ip()
+        src_mac = self._get_local_mac()
+        if not src_ip or not src_mac:
+            return None
+
+        # Build ARP request packet
+        eth_dst = b'\xff\xff\xff\xff\xff\xff'       # Broadcast
+        eth_src = self._mac_str_to_bytes(src_mac)   # Our MAC
+        eth_type = struct.pack('!H', 0x0806)         # ARP
+
+        # ARP header
+        htype = struct.pack('!H', 1)                  # Ethernet
+        ptype = struct.pack('!H', 0x0800)             # IPv4
+        hlen = struct.pack('!B', 6)                   # MAC length
+        plen = struct.pack('!B', 4)                   # IP length
+        oper = struct.pack('!H', self.ARP_OP_REQUEST)
+
+        sha = self._mac_str_to_bytes(src_mac)         # Sender MAC
+        spa = socket.inet_aton(src_ip)                # Sender IP
+        tha = b'\x00\x00\x00\x00\x00\x00'            # Target MAC (unknown)
+        tpa = socket.inet_aton(ip)                    # Target IP
+
+        arp_packet = eth_src + eth_dst + eth_type + htype + ptype + hlen + plen + oper + sha + spa + tha + tpa
+
+        # Build Ethernet frame: dstMAC + srcMAC + ethertype
+        frame = eth_dst + eth_src + eth_type + arp_packet[14:]
+
+        try:
+            sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0806))
+            sock.settimeout(self.timeout)
+
+            # Bind to any interface (or try to find the right one)
+            try:
+                sock.bind(('any', 0))
+            except (OSError, ValueError):
+                # Try default interface
+                try:
+                    sock.bind(('eth0', 0))
+                except (OSError, ValueError):
+                    try:
+                        sock.bind(('ens33', 0))
+                    except (OSError, ValueError):
+                        pass
+
+            start = time.time()
+            sock.send(frame)
+            response = sock.recv(1024)
+            elapsed = (time.time() - start) * 1000
+
+            sock.close()
+
+            # Parse ARP reply: Ethernet(14) + ARP(28)
+            if len(response) < 42:
+                return None
+
+            arp_data = response[14:]
+            ethertype = struct.unpack('!H', arp_data[12:14])[0]
+            if ethertype != 0x0806:
+                return None
+
+            oper = struct.unpack('!H', arp_data[6:8])[0]
+            if oper != self.ARP_OP_REPLY:
+                return None
+
+            sender_mac_bytes = arp_data[8:14]
+            sender_mac = self._mac_bytes_to_str(sender_mac_bytes)
+            sender_ip = socket.inet_ntoa(arp_data[14:18])
+
+            host = DiscoveredHost(
+                ip=sender_ip,
+                mac=sender_mac,
+                status="up",
+                response_time=elapsed,
+                vendor=self._vendor_from_mac(sender_mac),
+            )
+            host.os_type, host.os_version = self._os_hint_from_mac(sender_mac)
+            return host
+
+        except (OSError, Exception) as e:
+            logger.debug(f"Raw ARP socket error for {ip}: {e}")
+            return None
+
+    def _get_local_ip(self) -> Optional[str]:
+        """Get this host's IP address by connecting to an external address."""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(1)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return None
+
+    def _get_local_mac(self) -> str:
+        """Get this host's MAC address from /sys/class/net/*/address."""
+        import glob
+        for path in glob.glob("/sys/class/net/*/address"):
+            try:
+                mac = open(path).read().strip()
+                if mac != "00:00:00:00:00:00":
+                    return mac
+            except Exception:
+                pass
+        return "00:00:00:00:00:00"
+
+    async def _passive_arp_scan(
+        self,
+        hosts: List[Any],
+        progress_callback: Callable[[int, int, str], None] = None,
+    ) -> List[DiscoveredHost]:
+        """
+        Read /proc/net/arp to get ARP cache entries.
+        Works without root, but only shows cached entries.
+        """
+        discovered = []
+        completed = 0
+        total = len(hosts)
+
+        try:
+            with open("/proc/net/arp", "r") as f:
+                lines = f.readlines()[1:]  # Skip header
+
+            host_set = {str(h) for h in hosts}
+            arp_map: Dict[str, str] = {}
+
+            for line in lines:
+                parts = line.split()
+                if len(parts) < 4:
+                    continue
+                ip_addr = parts[0]
+                hw_type = parts[1]
+                mac_addr = parts[3]
+
+                if hw_type != "0x1":
+                    continue  # Not Ethernet
+                if mac_addr in ("00:00:00:00:00:00", "...(ignored)"):
+                    continue
+
+                arp_map[ip_addr] = mac_addr
+
+            for ip_str in host_set:
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total, ip_str)
+
+                if ip_str in arp_map:
+                    mac = arp_map[ip_str]
+                    host = DiscoveredHost(
+                        ip=ip_str,
+                        mac=mac,
+                        status="up",
+                        vendor=self._vendor_from_mac(mac),
+                    )
+                    host.os_type, host.os_version = self._os_hint_from_mac(mac)
+                    discovered.append(host)
+
+        except Exception as e:
+            logger.error(f"Failed to read /proc/net/arp: {e}")
+
+        return discovered
+
+    def _mac_str_to_bytes(self, mac: str) -> bytes:
+        return bytes(int(b, 16) for b in mac.split(':'))
+
+    def _mac_bytes_to_str(self, b: bytes) -> str:
+        return ':'.join(f'{x:02x}' for x in b)
+
+    def _vendor_from_mac(self, mac: str) -> Optional[str]:
+        """Look up vendor OUI from first 3 bytes of MAC."""
+        oui = mac.replace(':', '').upper()[:6]
+        from .scanner import OUI_DATABASE
+        return OUI_DATABASE.get(oui)
+
+    def _os_hint_from_mac(self, mac: str) -> tuple:
+        """Coarse OS hint from MAC prefix (some vendors = network设备)."""
+        oui = mac.replace(':', '').upper()[:6]
+        network_vendors = {
+            '000FE2',  # Cisco
+            '001E68',  # Huawei
+            '00269F',  # Huawei
+            '34A3B8',  # Huawei
+            'D4E949',  # HP
+            '3C4A4B',  # Cisco
+            '00264A',  # Juniper
+        }
+        if oui in network_vendors:
+            return OSType.NETWORK, "network device (ARP)"
+        return OSType.UNKNOWN, None
+
+
+# Global ARP scanner instance
+_arp_scanner: Optional[ARPScanner] = None
+
+
+def get_arp_scanner() -> ARPScanner:
+    """Get or create global ARP scanner instance."""
+    global _arp_scanner
+    if _arp_scanner is None:
+        _arp_scanner = ARPScanner()
+    return _arp_scanner
+
+
+# OUI database — first 3 bytes of MAC -> vendor name
+OUI_DATABASE = {
+    "000000": "Xerox",
+    "0050F2": "Microsoft",
+    "00155D": "Microsoft (Hyper-V)",
+    "00163E": "Xen",
+    "001C42": "Parallels",
+    "001E52": "Cisco",
+    "001E68": "Huawei",
+    "002264": "Cisco",
+    "00264A": "Juniper",
+    "00269F": "Huawei",
+    "00269F": "Huawei",
+    "0027D8": "HP",
+    "00300F": "Cisco",
+    "003065": "Cisco",
+    "00308F": "Cisco",
+    "003EE1": "Apple",
+    "004269": "Cisco",
+    "0050F2": "Microsoft",
+    "006051": "Cisco",
+    "00E04C": "Realtek",
+    "00F76F": "Cisco",
+    "00FEDC": "Apple",
+    "080027": "VirtualBox",
+    "0C8D98": "Apple",
+    "14109F": "Apple",
+    "18AF61": "Cisco",
+    "1C6976": "Cisco",
+    "204E91": "Cisco",
+    "20A2E4": "Google",
+    "246E96": "Juniper",
+    "28CF5B": "Apple",
+    "2C33BE": "Apple",
+    "2C8D9C": "Apple",
+    "30F7C5": "Apple",
+    "34A3B8": "Huawei",
+    "34785A": "Cisco",
+    "3497AF": "Cisco",
+    "34E2FD": "Cisco",
+    "38009C": "Huawei",
+    "3C15C2": "HP",
+    "3C4A4B": "Cisco",
+    "3C5AB4": "Cisco",
+    "3C97BF": "Samsung",
+    "40B395": "Cisco",
+    "440444": "Cisco",
+    "44D884": "Cisco",
+    "4C526F": "Cisco",
+    "50A3C8": "Cisco",
+    "50EDBB": "HP",
+    "54B802": "Cisco",
+    "58556A": "Cisco",
+    "5C005C": "Cisco",
+    "5C1BBE": "Dell",
+    "5C5098": "HP",
+    "5C5182": "Juniper",
+    "5C5EAB": "Cisco",
+    "64776B": "Cisco",
+    "6805CA": "Cisco",
+    "6C40F9": "Cisco",
+    "70A2B3": "Cisco",
+    "70DF2F": "HP",
+    "74A226": "Cisco",
+    "78A3E4": "Cisco",
+    "78S10G": "Dell",
+    "7C5CF8": "Cisco",
+    "80C8A2": "HP",
+    "8425DB": "Cisco",
+    "84841F": "Cisco",
+    "8843F1": "Cisco",
+    "8C851E": "HP",
+    "8CAEC2": "HP",
+    "9062AF": "Cisco",
+    "94A7B1": "Cisco",
+    "9898A6": "D-Link",
+    "9C8E64": "Cisco",
+    "9CAC7C": "Arista",
+    "9CDD0F": "Cisco",
+    "A03D6E": "HP",
+    "A4148A": "Arista",
+    "A447DD": "Cisco",
+    "A8E1EE": "HPE",
+    "ACDE48": "Dell",
+    "B0E1B0": "Cisco",
+    "B4148B": "Arista",
+    "B49691": "Cisco",
+    "B89E7C": "Dell",
+    "BC9FEF": "Cisco",
+    "C026E7": "HP",
+    "C064EB": "HP",
+    "C0C522": "Huawei",
+    "C81F66": "D-Link",
+    "CC4E24": "Arista",
+    "CC6EE0": "HP",
+    "D02EB0": "HP",
+    "D47AE2": "Cisco",
+    "D4C1DE": "Arista",
+    "D4E949": "HP",
+    "D8720B": "Dell",
+    "DC81F2": "Dell",
+    "E01C41": "Arista",
+    "E4C62F": "HP",
+    "E4EAA4": "Huawei",
+    "E8B248": "Dell",
+    "EC8EB8": "Cisco",
+    "F04DB2": "Huawei",
+    "F07689": "Huawei",
+    "F4CF252": "HP",
+    "F4E9D8": "Cisco",
+    "F80F41": "Cisco",
+    "FC15B4": "HP",
+    "FC8F90C": "Huawei",
+}
+

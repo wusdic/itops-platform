@@ -6,30 +6,33 @@
       <p class="subtitle">查看和管理网络设备厂商指纹及默认登录凭据，支持搜索、新增、编辑、删除</p>
     </div>
 
-    <n-grid :cols="4" :x-gap="16" :y-gap="16" class="main-grid">
+    <el-row :gutter="16" class="main-grid">
       <!-- 左侧：厂商列表 -->
-      <n-gi :span="1" class="vendor-list-panel">
-        <n-card title="🏢 厂商列表" size="small">
-          <template #header-extra>
-            <n-tag type="info" size="small">{{ filteredVendors.length }} 个</n-tag>
+      <el-col :span="6" class="vendor-list-panel">
+        <el-card size="small">
+          <template #header>
+            <div class="card-header">
+              <span>🏢 厂商列表</span>
+              <el-tag type="info" size="small">{{ filteredVendors.length }} 个</el-tag>
+            </div>
           </template>
 
           <!-- 搜索框 -->
-          <n-input
-            v-model:value="searchText"
+          <el-input
+            v-model="searchText"
             placeholder="搜索厂商..."
             clearable
             size="small"
             class="search-input"
           >
             <template #prefix>
-              <n-icon><SearchIcon /></n-icon>
+              <el-icon><Search /></el-icon>
             </template>
-          </n-input>
+          </el-input>
 
           <!-- 分类筛选 -->
-          <n-select
-            v-model:value="selectedCategory"
+          <el-select
+            v-model="selectedCategory"
             :options="categoryOptions"
             placeholder="按分类筛选"
             clearable
@@ -46,7 +49,7 @@
               @click="selectVendor(vendor)"
             >
               <div class="vendor-item-header">
-                <n-tag size="tiny" :type="categoryColor(vendor.category)">{{ vendor.category }}</n-tag>
+                <el-tag size="small" :type="categoryColor(vendor.category)">{{ vendor.category }}</el-tag>
                 <span class="vendor-name">{{ vendor.name }}</span>
               </div>
               <div class="vendor-item-meta">
@@ -54,178 +57,189 @@
                 <span>🔍 {{ vendor.fingerprint_count }} 个指纹</span>
               </div>
             </div>
-            <n-empty v-if="filteredVendors.length === 0" description="未找到匹配厂商" />
+            <el-empty v-if="filteredVendors.length === 0" description="未找到匹配厂商" :image-size="60" />
           </div>
-        </n-card>
-      </n-gi>
+        </el-card>
+      </el-col>
 
       <!-- 右侧：厂商详情 -->
-      <n-gi :span="3" class="vendor-detail-panel">
-        <n-card v-if="selectedVendor" :title="`${selectedVendor.name} - 详细信息`" size="small">
-          <template #header-extra>
-            <n-space>
-              <n-button size="small" @click="editMode = !editMode">
-                <template #icon><n-icon><EditIcon /></n-icon></template>
-                {{ editMode ? '取消编辑' : '编辑' }}
-              </n-button>
-              <n-button size="small" type="error" @click="handleDelete">
-                <template #icon><n-icon><DeleteIcon /></n-icon></template>
-                删除
-              </n-button>
-            </n-space>
+      <el-col :span="18" class="vendor-detail-panel">
+        <el-card v-if="selectedVendor" size="small">
+          <template #header>
+            <div class="card-header">
+              <span>{{ selectedVendor.name }} - 详细信息</span>
+              <el-space>
+                <el-button size="small" @click="editMode = !editMode">
+                  <el-icon><Edit /></el-icon>
+                  {{ editMode ? '取消编辑' : '编辑' }}
+                </el-button>
+                <el-button size="small" type="danger" @click="handleDelete">
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </el-button>
+              </el-space>
+            </div>
           </template>
 
-          <n-tabs type="line" size="small">
+          <el-tabs type="border-card" size="small">
             <!-- 基本信息 -->
-            <n-tab-pane name="basic" tab="📄 基本信息">
-              <n-descriptions :column="2" label-placement="left" size="small">
-                <n-descriptions-item label="厂商名称">{{ selectedVendor.name }}</n-descriptions-item>
-                <n-descriptions-item label="简称">{{ selectedVendor.short_name }}</n-descriptions-item>
-                <n-descriptions-item label="分类">
-                  <n-tag size="tiny" :type="categoryColor(selectedVendor.category)">{{ selectedVendor.category }}</n-tag>
-                </n-descriptions-item>
-                <n-descriptions-item label="官网">
+            <el-tab-pane label="📄 基本信息">
+              <el-descriptions :column="2" label-placement="left" size="small" border>
+                <el-descriptions-item label="厂商名称">{{ selectedVendor.name }}</el-descriptions-item>
+                <el-descriptions-item label="简称">{{ selectedVendor.short_name }}</el-descriptions-item>
+                <el-descriptions-item label="分类">
+                  <el-tag size="small" :type="categoryColor(selectedVendor.category)">{{ selectedVendor.category }}</el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="官网">
                   <a :href="selectedVendor.homepage" target="_blank" v-if="selectedVendor.homepage">
                     {{ selectedVendor.homepage }}
                   </a>
                   <span v-else>-</span>
-                </n-descriptions-item>
-                <n-descriptions-item label="描述" :span="2">{{ selectedVendor.description || '-' }}</n-descriptions-item>
-                <n-descriptions-item label="建议协议">{{ selectedVendor.suggested_protocols?.join(', ') || '-' }}</n-descriptions-item>
-                <n-descriptions-item label="探测端口">{{ selectedVendor.probe_ports?.join(', ') || '-' }}</n-descriptions-item>
-              </n-descriptions>
-            </n-tab-pane>
+                </el-descriptions-item>
+                <el-descriptions-item label="描述" :span="2">{{ selectedVendor.description || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="建议协议">{{ selectedVendor.suggested_protocols?.join(', ') || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="探测端口">{{ selectedVendor.probe_ports?.join(', ') || '-' }}</el-descriptions-item>
+              </el-descriptions>
+            </el-tab-pane>
 
             <!-- 指纹模式 -->
-            <n-tab-pane name="fingerprints" tab="🔍 指纹模式">
-              <n-space vertical>
+            <el-tab-pane label="🔍 指纹模式">
+              <el-space direction="vertical" style="width: 100%">
                 <div v-for="(fp, idx) in selectedVendor.fingerprints" :key="idx" class="fingerprint-item">
-                  <n-tag :type="fpTypeColor(fp.type)" size="small">{{ fp.type }}</n-tag>
+                  <el-tag :type="fpTypeColor(fp.type)" size="small">{{ fp.type }}</el-tag>
                   <code class="fp-pattern">{{ fp.pattern || fp.oid_prefix }}</code>
-                  <n-tag size="tiny" type="info">权重: {{ fp.weight }}</n-tag>
+                  <el-tag size="small" type="info">权重: {{ fp.weight }}</el-tag>
                 </div>
-                <n-empty v-if="!selectedVendor.fingerprints?.length" description="暂无指纹模式" />
-              </n-space>
-            </n-tab-pane>
+                <el-empty v-if="!selectedVendor.fingerprints?.length" description="暂无指纹模式" :image-size="60" />
+              </el-space>
+            </el-tab-pane>
 
             <!-- 默认账密 -->
-            <n-tab-pane name="credentials" tab="🔑 默认账密">
-              <n-table :bordered="false" size="small">
-                <thead>
-                  <tr>
-                    <th>协议</th>
-                    <th>用户名</th>
-                    <th>密码</th>
-                    <th>说明</th>
-                    <th>优先级</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(cred, idx) in selectedVendor.default_credentials" :key="idx">
-                    <td><n-tag size="tiny">{{ cred.protocol }}</n-tag></td>
-                    <td><code>{{ cred.username || '-' }}</code></td>
-                    <td><code>{{ cred.password || (cred.community ? `community: ${cred.community}` : '-') }}</code></td>
-                    <td><span class="cred-notes">{{ cred.notes || '-' }}</span></td>
-                    <td><n-tag size="tiny" type="warning">{{ cred.priority }}</n-tag></td>
-                  </tr>
-                </tbody>
-              </n-table>
-              <n-empty v-if="!selectedVendor.default_credentials?.length" description="暂无默认账密" />
-            </n-tab-pane>
-          </n-tabs>
+            <el-tab-pane label="🔑 默认账密">
+              <el-table :border="false" size="small" style="width: 100%">
+                <el-table-column prop="protocol" label="协议" width="100">
+                  <template #default="{ row }">
+                    <el-tag size="small">{{ row.protocol }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="username" label="用户名">
+                  <template #default="{ row }">
+                    <code>{{ row.username || '-' }}</code>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="password" label="密码">
+                  <template #default="{ row }">
+                    <code>{{ row.password || (row.community ? `community: ${row.community}` : '-') }}</code>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="notes" label="说明">
+                  <template #default="{ row }">
+                    <span class="cred-notes">{{ row.notes || '-' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="priority" label="优先级" width="80">
+                  <template #default="{ row }">
+                    <el-tag size="small" type="warning">{{ row.priority }}</el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-empty v-if="!selectedVendor.default_credentials?.length" description="暂无默认账密" :image-size="60" />
+            </el-tab-pane>
+          </el-tabs>
 
           <!-- 编辑模式 -->
           <div v-if="editMode" class="edit-form">
-            <n-divider>编辑模式</n-divider>
-            <n-form :model="editForm" label-placement="left" label-width="100">
-              <n-form-item label="厂商名称">
-                <n-input v-model:value="editForm.name" />
-              </n-form-item>
-              <n-form-item label="简称">
-                <n-input v-model:value="editForm.short_name" />
-              </n-form-item>
-              <n-form-item label="分类">
-                <n-select v-model:value="editForm.category" :options="categoryOptions" />
-              </n-form-item>
-              <n-form-item label="官网">
-                <n-input v-model:value="editForm.homepage" />
-              </n-form-item>
-              <n-form-item label="描述">
-                <n-input v-model:value="editForm.description" type="textarea" />
-              </n-form-item>
-              <n-form-item label="建议协议">
-                <n-dynamic-tags v-model:value="editForm.suggested_protocols" />
-              </n-form-item>
-              <n-form-item label="探测端口">
-                <n-select v-model:value="editForm.probe_ports" multiple :options="portOptions" />
-              </n-form-item>
-            </n-form>
-            <n-space>
-              <n-button type="primary" @click="handleSave" :loading="saving">保存</n-button>
-              <n-button @click="editMode = false">取消</n-button>
-            </n-space>
+            <el-divider>编辑模式</el-divider>
+            <el-form :model="editForm" label-position="left" label-width="100">
+              <el-form-item label="厂商名称">
+                <el-input v-model="editForm.name" />
+              </el-form-item>
+              <el-form-item label="简称">
+                <el-input v-model="editForm.short_name" />
+              </el-form-item>
+              <el-form-item label="分类">
+                <el-select v-model="editForm.category" :options="categoryOptions" />
+              </el-form-item>
+              <el-form-item label="官网">
+                <el-input v-model="editForm.homepage" />
+              </el-form-item>
+              <el-form-item label="描述">
+                <el-input v-model="editForm.description" type="textarea" />
+              </el-form-item>
+              <el-form-item label="建议协议">
+                <el-select v-model="editForm.suggested_protocols" multiple filterable allow-create default-first-option placeholder="输入或选择协议" style="width: 100%">
+                  <el-option v-for="p in protocolOptions" :key="p.value" :label="p.label" :value="p.value" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="探测端口">
+                <el-select v-model="editForm.probe_ports" multiple :options="portOptions" style="width: 100%" />
+              </el-form-item>
+            </el-form>
+            <el-space>
+              <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
+              <el-button @click="editMode = false">取消</el-button>
+            </el-space>
           </div>
-        </n-card>
+        </el-card>
 
         <!-- 无选中 -->
-        <n-card v-else class="empty-detail">
-          <n-empty description="从左侧选择一个厂商查看详情">
+        <el-card v-else class="empty-detail">
+          <el-empty description="从左侧选择一个厂商查看详情">
             <template #extra>
-              <n-button size="small" type="primary" @click="startAddNew">
-                <template #icon><n-icon><PlusIcon /></n-icon></template>
+              <el-button size="small" type="primary" @click="startAddNew">
+                <el-icon><Plus /></el-icon>
                 新增厂商
-              </n-button>
+              </el-button>
             </template>
-          </n-empty>
-        </n-card>
+          </el-empty>
+        </el-card>
 
         <!-- 新增厂商 -->
-        <n-card v-if="addingNew" :title="'➕ 新增厂商'" size="small" class="add-form-card">
-          <n-form :model="addForm" label-placement="left" label-width="120">
-            <n-form-item label="厂商名称" required>
-              <n-input v-model:value="addForm.name" placeholder="例如：Cisco Systems" />
-            </n-form-item>
-            <n-form-item label="简称" required>
-              <n-input v-model:value="addForm.short_name" placeholder="例如：Cisco" />
-            </n-form-item>
-            <n-form-item label="分类" required>
-              <n-select v-model:value="addForm.category" :options="categoryOptions" placeholder="选择分类" />
-            </n-form-item>
-            <n-form-item label="官网">
-              <n-input v-model:value="addForm.homepage" placeholder="https://..." />
-            </n-form-item>
-            <n-form-item label="描述">
-              <n-input v-model:value="addForm.description" type="textarea" />
-            </n-form-item>
-            <n-form-item label="建议协议">
-              <n-select v-model:value="addForm.suggested_protocols" multiple :options="protocolOptions" />
-            </n-form-item>
-            <n-form-item label="探测端口">
-              <n-select v-model:value="addForm.probe_ports" multiple :options="portOptions" />
-            </n-form-item>
-          </n-form>
-          <n-space class="add-form-actions">
-            <n-button type="primary" @click="handleAdd" :loading="saving">创建</n-button>
-            <n-button @click="addingNew = false">取消</n-button>
-          </n-space>
-        </n-card>
-      </n-gi>
-    </n-grid>
+        <el-card v-if="addingNew" size="small" class="add-form-card">
+          <template #header>
+            <span>➕ 新增厂商</span>
+          </template>
+          <el-form :model="addForm" label-position="left" label-width="120">
+            <el-form-item label="厂商名称" required>
+              <el-input v-model="addForm.name" placeholder="例如：Cisco Systems" />
+            </el-form-item>
+            <el-form-item label="简称" required>
+              <el-input v-model="addForm.short_name" placeholder="例如：Cisco" />
+            </el-form-item>
+            <el-form-item label="分类" required>
+              <el-select v-model="addForm.category" :options="categoryOptions" placeholder="选择分类" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="官网">
+              <el-input v-model="addForm.homepage" placeholder="https://..." />
+            </el-form-item>
+            <el-form-item label="描述">
+              <el-input v-model="addForm.description" type="textarea" />
+            </el-form-item>
+            <el-form-item label="建议协议">
+              <el-select v-model="addForm.suggested_protocols" multiple filterable allow-create default-first-option placeholder="输入或选择协议" style="width: 100%">
+                <el-option v-for="p in protocolOptions" :key="p.value" :label="p.label" :value="p.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="探测端口">
+              <el-select v-model="addForm.probe_ports" multiple :options="portOptions" style="width: 100%" />
+            </el-form-item>
+          </el-form>
+          <el-space class="add-form-actions">
+            <el-button type="primary" @click="handleAdd" :loading="saving">创建</el-button>
+            <el-button @click="addingNew = false">取消</el-button>
+          </el-space>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import {
-  NGrid, NGi, NCard, NInput, NSelect, NButton, NIcon, NTag,
-  NTabs, NTabPane, NDescriptions, NDescriptionsItem, NSpace,
-  NEmpty, NTable, NDivider, NForm, NFormItem, NDynamicTags,
-  useMessage, useDialog,
-} from 'naive-ui'
-import { SearchOutline as SearchIcon, AddOutline as PlusIcon } from '@vicons/ionicons5'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Plus, Edit, Delete } from '@element-plus/icons-vue'
 
-const message = useMessage()
-const dialog = useDialog()
+const message = ElMessage
 
 // 数据
 const vendors = ref([])
@@ -306,21 +320,21 @@ const filteredVendors = computed(() => {
 // 方法
 function categoryColor(cat) {
   const colors = {
-    switch: 'success', router: 'warning', firewall: 'error',
+    switch: 'success', router: 'warning', firewall: 'danger',
     server: 'info', wireless: 'success', ups: 'warning',
-    storage: 'default', camera: 'error', printer: 'default',
+    storage: 'info', camera: 'danger', printer: 'info',
     loadbalancer: 'info', virtualization: 'info', cloud: 'success',
-    iot: 'warning', other: 'default',
+    iot: 'warning', other: 'info',
   }
-  return colors[cat] || 'default'
+  return colors[cat] || 'info'
 }
 
 function fpTypeColor(type) {
   const colors = {
     ssh_banner: 'success', http_header: 'info', snmp_sysObjectID: 'warning',
-    snmp_sysDesc: 'warning', dns_reverse: 'default',
+    snmp_sysDesc: 'warning', dns_reverse: 'info',
   }
-  return colors[type] || 'default'
+  return colors[type] || 'info'
 }
 
 async function loadVendors() {
@@ -419,28 +433,30 @@ async function handleSave() {
 
 function handleDelete() {
   if (!selectedVendor.value) return
-  dialog.warning({
-    title: '确认删除',
-    content: `确定要删除厂商「${selectedVendor.value.name}」吗？`,
-    positiveText: '确认删除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const res = await fetch(`/api/v1/credentials/vendors/${encodeURIComponent(selectedVendor.value.name)}`, {
-          method: 'DELETE',
-        })
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.detail || '删除失败')
-        }
-        message.success('删除成功')
-        selectedVendor.value = null
-        await loadVendors()
-      } catch (e) {
-        message.error('删除失败: ' + e.message)
+  ElMessageBox.confirm(
+    `确定要删除厂商「${selectedVendor.value.name}」吗？`,
+    '确认删除',
+    {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(async () => {
+    try {
+      const res = await fetch(`/api/v1/credentials/vendors/${encodeURIComponent(selectedVendor.value.name)}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '删除失败')
       }
-    },
-  })
+      message.success('删除成功')
+      selectedVendor.value = null
+      await loadVendors()
+    } catch (e) {
+      message.error('删除失败: ' + e.message)
+    }
+  }).catch(() => {})
 }
 
 onMounted(() => {
@@ -479,12 +495,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.vendor-list-panel :deep(.n-card) {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
 .vendor-list {
   flex: 1;
   overflow-y: auto;
@@ -494,6 +504,7 @@ onMounted(() => {
 .search-input,
 .category-select {
   margin-bottom: 8px;
+  width: 100%;
 }
 
 .vendor-item {
@@ -582,5 +593,11 @@ onMounted(() => {
 
 .add-form-actions {
   margin-top: 16px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 </style>

@@ -21,6 +21,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["设备管理"], prefix="/api/v1/devices")
 
 
+# ============== 敏感字段脱敏 ==============
+
+SENSITIVE_CREDENTIAL_KEYS = frozenset({
+    "password", "password_hash", "secret", "api_key", "api_secret",
+    "access_key", "access_secret", "private_key", "community",
+    "token", "auth_key",
+})
+
+# 不脱敏的 credential key（只读信息可展示）
+SAFE_CREDENTIAL_KEYS = frozenset({
+    "username", "protocol", "port", "priority", "notes",
+})
+
+
+def _mask_credentials(credentials: dict) -> dict:
+    """
+    脱敏敏感 credential 字段
+    已在 SAFE_CREDENTIAL_KEYS 中的字段直接返回
+    其余字段隐藏具体值，显示为 "******"
+    """
+    if not isinstance(credentials, dict):
+        return credentials
+    masked = {}
+    for k, v in credentials.items():
+        if k in SAFE_CREDENTIAL_KEYS:
+            masked[k] = v
+        else:
+            # 显示类型信息，但隐藏具体值
+            masked[k] = "******"
+    return masked
+
+
 # ============== 请求/响应模型 ==============
 
 class DeviceCollectRequest(BaseModel):
@@ -302,7 +334,7 @@ async def get_device(
             "os_version": device.get("os_version"),
             "vendor": device.get("vendor"),
             "protocols": device.get("protocols", {}),
-            "credentials": device.get("credentials", {}),
+            "credentials": _mask_credentials(device.get("credentials", {})),
             "api": device.get("api", {}),
             "kubernetes": device.get("kubernetes", {}),
             "collect": device.get("collect", {}),

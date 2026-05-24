@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum, Text, Float, Boolean, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum, Text, Float, Boolean, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -51,6 +51,9 @@ class Alert(Base):
     
     # 主键
     id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # 租户隔离
+    tenant_id = Column(String(64), index=True)  # TODO: 迁移时取消注释
     
     # 告警标识
     alert_key = Column(String(256), index=True, comment='告警唯一标识')
@@ -153,6 +156,9 @@ class AlertRule(Base):
     
     # 主键
     id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # 租户隔离
+    tenant_id = Column(String(64), index=True)  # TODO: 迁移时取消注释
     
     # 规则基本信息
     name = Column(String(128), nullable=False, unique=True, comment='规则名称')
@@ -270,3 +276,48 @@ class AlertAuditLog(Base):
 
     def __repr__(self):
         return f"<AlertAuditLog(id={self.id}, alert_id={self.alert_id}, action='{self.action}')>"
+
+
+class MaintenanceWindow(Base):
+    """
+    维护时段模型
+
+    用于在指定时间范围内屏蔽指定设备/规则/标签的告警。
+    支持按设备ID、告警规则ID、告警标签进行匹配。
+    """
+    __tablename__ = 'maintenance_windows'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # 维护时段名称和描述
+    name = Column(String(128), nullable=False, comment='维护时段名称')
+    description = Column(Text, comment='维护原因/描述')
+
+    # 目标类型: device / rule / tag / ip_range
+    target_type = Column(String(32), nullable=False, comment='目标类型')
+    target_id = Column(String(128), comment='目标ID (device_id/rule_id/tag_key)')
+    target_value = Column(String(256), comment='目标值 (设备IP/标签值/IP段)')
+
+    # 时间范围 (UTC 时间)
+    start_time = Column(DateTime, nullable=False, comment='开始时间 (UTC)')
+    end_time = Column(DateTime, nullable=False, comment='结束时间 (UTC)')
+
+    # 状态
+    is_active = Column(Boolean, default=True, comment='是否启用')
+
+    # 创建者
+    created_by = Column(String(64), comment='创建人')
+
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    # 索引
+    __table_args__ = (
+        Index('idx_mw_time_range', 'start_time', 'end_time'),
+        Index('idx_mw_target', 'target_type', 'target_id'),
+        Index('idx_mw_active', 'is_active'),
+    )
+
+    def __repr__(self):
+        return f"<MaintenanceWindow(id={self.id}, name='{self.name}', target={self.target_type}:{self.target_id})>"

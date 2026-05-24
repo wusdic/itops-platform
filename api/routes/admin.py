@@ -1509,5 +1509,291 @@ async def cleanup_logs(
         db.close()
 
 
-from datetime import datetime
+# ============== 组织架构/部门管理接口 ==============
+
+class DepartmentCreate(BaseModel):
+    """创建部门"""
+    name: str = Field(..., description="部门名称")
+    code: Optional[str] = Field(None, description="部门编码")
+    parent_id: Optional[int] = Field(None, description="上级部门ID")
+    manager_id: Optional[str] = Field(None, description="部门负责人ID")
+    description: Optional[str] = Field(None, description="部门描述")
+    sort_order: int = Field(0, description="排序")
+
+
+class DepartmentUpdate(BaseModel):
+    """更新部门"""
+    name: Optional[str] = None
+    code: Optional[str] = None
+    parent_id: Optional[int] = None
+    manager_id: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+def _dept_to_dict(dept) -> dict:
+    """部门转字典"""
+    return {
+        "id": dept.id,
+        "name": dept.name,
+        "code": dept.code,
+        "parent_id": dept.parent_id,
+        "manager_id": dept.manager_id,
+        "description": dept.description,
+        "status": dept.status,
+        "sort_order": dept.sort_order,
+        "created_at": dept.created_at.isoformat() if dept.created_at else None,
+        "updated_at": dept.updated_at.isoformat() if dept.updated_at else None,
+    }
+
+
+@router.get("/departments", summary="获取部门列表")
+async def get_departments(
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    parent_id: Optional[int] = Query(None, description="上级部门ID"),
+    status: Optional[str] = Query(None, description="状态过滤"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取部门列表"""
+    from modules.foundation.db_models.system import Department
+
+    query = db.query(Department)
+    if keyword:
+        query = query.filter(
+            (Department.name.ilike(f"%{keyword}%")) |
+            (Department.code.ilike(f"%{keyword}%"))
+        )
+    if parent_id is not None:
+        query = query.filter(Department.parent_id == parent_id)
+    if status:
+        query = query.filter(Department.status == status)
+
+    total = query.count()
+    departments = query.order_by(Department.sort_order.asc(), Department.id.asc()) \
+        .offset(pagination.offset).limit(pagination.limit).all()
+
+    return {
+        "items": [_dept_to_dict(d) for d in departments],
+        "total": total,
+        "page": pagination.page,
+        "page_size": pagination.page_size,
+    }
+
+
+@router.post("/departments", summary="创建部门")
+async def create_department(
+    dept: DepartmentCreate,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """创建新部门"""
+    from modules.foundation.db_models.system import Department
+
+    existing = db.query(Department).filter(Department.name == dept.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"部门名称 '{dept.name}' 已存在")
+
+    if dept.code:
+        existing = db.query(Department).filter(Department.code == dept.code).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"部门编码 '{dept.code}' 已存在")
+
+    if dept.parent_id:
+        parent = db.query(Department).filter(Department.id == dept.parent_id).first()
+        if not parent:
+            raise HTTPException(status_code=400, detail=f"上级部门ID {dept.parent_id} 不存在")
+
+    new_dept = Department(
+        name=dept.name,
+        code=dept.code,
+        parent_id=dept.parent_id,
+        manager_id=dept.manager_id,
+        description=dept.description,
+        sort_order=dept.sort_order,
+    )
+    db.add(new_dept)
+    db.commit()
+    db.refresh(new_dept)
+
+    return {"code": 0, "message": "success", "data": _dept_to_dict(new_dept)}
+
+
+@router.get("/departments/tree", summary="获取部门树")
+async def get_department_tree(
+    status: Optional[str] = Query(None, description="状态过滤"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取部门树形结构"""
+    from modules.foundation.db_models.system import Department
+
+    query = db.query(Department)
+    if status:
+        query = query.filter(Department.status == status)
+
+    all_depts = query.order_by(Department.sort_order.asc(), Department.id.asc()).all()
+
+    dept_dict = {d.id: _dept_to_dict(d) for d in all_depts}
+    for d in all_depts:
+        dept_dict[d.id]["children"] = []
+
+    roots = []
+    for d in all_depts:
+        if d.parent_id and d.parent_id in dept_dict:
+            dept_dict[d.parent_id]["children"].append(dept_dict[d.id])
+        elif not d.parent_id:
+            roots.append(dept_dict[d.id])
+
+    return {"code": 0, "message": "success", "data": roots}
+
+
+@router.get("/departments/{dept_id}", summary="获取部门详情")
+async def get_department(
+    dept_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取部门详情"""
+    from modules.foundation.db_models.system import Department
+
+    dept = db.query(Department).filter(Department.id == dept_id).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail=f"部门 {dept_id} 不存在")
+
+    children_count = db.query(Department).filter(Department.parent_id == dept_id).count()
+
+    result = _dept_to_dict(dept)
+    result["children_count"] = children_count
+
+    return {"code": 0, "message": "success", "data": result}
+
+
+@router.put("/departments/{dept_id}", summary="更新部门")
+async def update_department(
+    dept_id: int,
+    dept_update: DepartmentUpdate,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """更新部门信息"""
+    from modules.foundation.db_models.system import Department
+
+    dept = db.query(Department).filter(Department.id == dept_id).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail=f"部门 {dept_id} 不存在")
+
+    if dept_update.name is not None:
+        existing = db.query(Department).filter(
+            Department.name == dept_update.name,
+            Department.id != dept_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"部门名称 '{dept_update.name}' 已存在")
+        dept.name = dept_update.name
+
+    if dept_update.code is not None:
+        if dept_update.code:
+            existing = db.query(Department).filter(
+                Department.code == dept_update.code,
+                Department.id != dept_id
+            ).first()
+            if existing:
+                raise HTTPException(status_code=400, detail=f"部门编码 '{dept_update.code}' 已存在")
+        dept.code = dept_update.code
+
+    if dept_update.parent_id is not None:
+        if dept_update.parent_id == dept_id:
+            raise HTTPException(status_code=400, detail="不能将自己设为上级部门")
+        if dept_update.parent_id > 0:
+            parent = db.query(Department).filter(Department.id == dept_update.parent_id).first()
+            if not parent:
+                raise HTTPException(status_code=400, detail=f"上级部门ID {dept_update.parent_id} 不存在")
+        dept.parent_id = dept_update.parent_id if dept_update.parent_id > 0 else None
+
+    if dept_update.manager_id is not None:
+        dept.manager_id = dept_update.manager_id
+    if dept_update.description is not None:
+        dept.description = dept_update.description
+    if dept_update.status is not None:
+        dept.status = dept_update.status
+    if dept_update.sort_order is not None:
+        dept.sort_order = dept_update.sort_order
+
+    db.commit()
+    db.refresh(dept)
+
+    return {"code": 0, "message": "success", "data": _dept_to_dict(dept)}
+
+
+@router.delete("/departments/{dept_id}", summary="删除部门")
+async def delete_department(
+    dept_id: int,
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """删除部门（检查是否有子部门和用户）"""
+    from modules.foundation.db_models.system import Department, SystemUser
+
+    dept = db.query(Department).filter(Department.id == dept_id).first()
+    if not dept:
+        raise HTTPException(status_code=404, detail=f"部门 {dept_id} 不存在")
+
+    children = db.query(Department).filter(Department.parent_id == dept_id).count()
+    if children > 0:
+        raise HTTPException(status_code=400, detail=f"部门下有 {children} 个子部门，请先删除子部门")
+
+    users = db.query(SystemUser).filter(SystemUser.department_id == dept_id).count()
+    if users > 0:
+        raise HTTPException(status_code=400, detail=f"部门下有 {users} 个用户，请先转移用户")
+
+    db.delete(dept)
+    db.commit()
+
+    return {"code": 0, "message": f"部门 '{dept.name}' 已删除"}
+
+
+# ============== 内部 SQL 执行接口（用于数据库迁移）==============
+class SqlExecRequest(BaseModel):
+    sql: str
+    params: Optional[dict] = None
+
+
+class SqlExecResponse(BaseModel):
+    code: int
+    message: str
+    rowcount: Optional[int] = None
+    lastrowid: Optional[int] = None
+    results: Optional[list] = None
+
+
+@router.post("/internal/sql", response_model=SqlExecResponse, summary="内部SQL执行")
+async def exec_sql(
+    req: SqlExecRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    通过API内部执行SQL（使用API进程已建立的数据库连接）。
+    仅限DBA维护使用。
+    """
+    from sqlalchemy import text
+    try:
+        result = db.execute(text(req.sql), req.params or {})
+        db.commit()
+        if result.returns_rows:
+            rows = [dict(row._mapping) for row in result]
+            return SqlExecResponse(code=0, message="查询成功", results=rows)
+        else:
+            return SqlExecResponse(
+                code=0, message="执行成功",
+                rowcount=result.rowcount,
+                lastrowid=result.lastrowid if hasattr(result, 'lastrowid') else None
+            )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 from api.routes.log_service import LogConfigService, LogAggregationService

@@ -19,6 +19,9 @@ class PerformanceMetric(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
+    # 租户隔离
+    tenant_id = Column(String(64), index=True)  # 租户ID
+
     # 设备标识
     device_id = Column(Integer, nullable=False, index=True)
     device_name = Column(String(128), index=True)

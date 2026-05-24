@@ -16,6 +16,7 @@ from modules.business.knowledge_base.models import (
     SOPDocument, FaultCase, Category, Tag,
     DocumentStatus, FaultLevel, FaultStatus, ReviewStatus
 )
+from modules.business.knowledge.knowledge_graph import get_knowledge_graph
 
 
 router = APIRouter()
@@ -76,6 +77,14 @@ class CategoryCreate(BaseModel):
     description: Optional[str] = Field(None, description="描述")
 
 
+class TagCreate(BaseModel):
+    """创建标签请求"""
+    name: str = Field(..., max_length=50, description="标签名称")
+    color: Optional[str] = Field(None, max_length=20, description="标签颜色")
+    category_id: Optional[int] = Field(None, description="分类ID")
+    description: Optional[str] = Field(None, description="描述")
+
+
 def _sop_to_dict(sop: SOPDocument) -> dict:
     """SOP文档转字典"""
     return {
@@ -86,11 +95,11 @@ def _sop_to_dict(sop: SOPDocument) -> dict:
         'category_id': sop.category_id,
         'tags': sop.tags.split(',') if sop.tags else [],
         'version': sop.version,
-        'status': sop.status.value if sop.status else 'draft',
+        'status': str(sop.status) if sop.status else 'DRAFT',
         'author': sop.author,
         'reviewer': sop.reviewer,
         'approver': sop.approver,
-        'review_status': sop.review_status.value if sop.review_status else None,
+        'review_status': str(sop.review_status) if sop.review_status else None,
         'effective_date': sop.effective_date.isoformat() if sop.effective_date else None,
         'view_count': sop.view_count,
         'like_count': sop.like_count,
@@ -105,8 +114,8 @@ def _case_to_dict(case: FaultCase) -> dict:
         'id': case.id,
         'case_no': case.case_no,
         'title': case.title,
-        'fault_level': case.fault_level.value if case.fault_level else None,
-        'fault_status': case.fault_status.value if case.fault_status else None,
+        'fault_level': str(case.fault_level) if case.fault_level else None,
+        'fault_status': str(case.fault_status) if case.fault_status else None,
         'fault_category': case.fault_category,
         'symptom': case.symptom,
         'root_cause': case.root_cause,
@@ -293,7 +302,7 @@ async def create_sop_document(
     db: Session = Depends(get_db),
 ):
     """创建新的SOP文档"""
-    doc_no = f"SOP-{datetime.now().strftime('%Y')}-{datetime.now().strftime('%m%d%H%M%S')}"
+    doc_no = f"SOP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{datetime.now().microsecond:04d}"
     
     db_sop = SOPDocument(
         doc_no=doc_no,
@@ -481,7 +490,7 @@ async def create_fault_case(
     db: Session = Depends(get_db),
 ):
     """创建新的故障案例"""
-    case_no = f"CASE-{datetime.now().strftime('%Y')}-{datetime.now().strftime('%m%d%H%M%S')}"
+    case_no = f"CASE-{datetime.now().strftime('%Y%m%d%H%M%S')}-{datetime.now().microsecond:04d}"
     
     try:
         level_enum = FaultLevel(case.fault_level.lower())
@@ -564,6 +573,112 @@ async def update_fault_case(
     return _case_to_dict(db_case)
 
 
+# ============== AI 案例推荐接口 ==============
+
+# 模块级同步 LLM 客户端（避免在 async context 中创建 event loop）
+_sync_llm_client = None
+
+def _get_sync_llm_client():
+    global _sync_llm_client
+    if _sync_llm_client is None:
+        from modules.business.ai_copilot.llm_client import SyncLLMClient
+        from api.start import get_config_manager
+        cm = get_config_manager()
+        ai_config = cm.get("ai_copilot", {}) if cm else {}
+        _sync_llm_client = SyncLLMClient(ai_config)
+    return _sync_llm_client
+
+
+class SimilarCaseRecommendRequest(BaseModel):
+    """推荐请求模型"""
+    top_n: int = Field(default=5, ge=1, le=20, description="推荐数量")
+    min_score: float = Field(default=0.3, ge=0.0, le=1.0, description="最低相似度阈值")
+
+
+@router.post("/fault-case/{case_id}/recommend-similar", summary="AI推荐相似故障案例")
+async def recommend_similar_cases(
+    case_id: int,
+    body: SimilarCaseRecommendRequest = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    基于 LLM 语义分析，推荐与指定故障案例相似的历史案例。
+
+    - 阶段1：基于关键词 + 分类 + 级别初筛候选案例
+    - 阶段2：调用 LLM 对候选案例进行语义相似度评分
+    - 返回 Top 推荐，按相似度降序排列
+    """
+    from modules.business.knowledge_base.case import CaseRecommender
+
+    top_n = body.top_n if body else 5
+    min_score = body.min_score if body else 0.3
+
+    from modules.business.knowledge_base.case import CaseRecommender
+
+    # CaseRecommender 需要同步 db，LLM 调用在外部通过 executor 执行
+    # 先创建无 llm_client 的 recommender 来获取候选
+    recommender_no_llm = CaseRecommender(db, llm_client=None)
+    candidates_result = recommender_no_llm._get_candidates(case_id, top_n=top_n)
+
+    if not candidates_result.get("success"):
+        raise HTTPException(status_code=400, detail=candidates_result.get("error", "获取候选失败"))
+
+    candidate_cases = candidates_result.get("candidate_cases", [])
+    query_dict = candidates_result.get("query_dict", {})
+
+    if not candidate_cases:
+        return {
+            "success": True, "case_id": case_id, "recommendations": [],
+            "analysis_summary": "候选案例库为空", "total_candidates": 0
+        }
+
+    # 构建 prompt
+    prompt = recommender_no_llm._build_similarity_prompt(query_dict, candidate_cases)
+
+    # 通过线程池执行同步 LLM 调用
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FUTimeoutError
+    _llm_executor = ThreadPoolExecutor(max_workers=2)
+
+    def _do_chat():
+        client = _get_sync_llm_client()
+        return client.chat([{"role": "user", "content": prompt}])
+
+    future = _llm_executor.submit(_do_chat)
+    try:
+        response = future.result(timeout=60)
+    except FUTimeoutError:
+        response = {"content": "", "error": "LLM调用超时"}
+
+    response_text = response.get("content", "") if isinstance(response, dict) else str(response)
+    llm_result = recommender_no_llm._parse_llm_response(response_text)
+
+    recommendations = []
+    for rec in llm_result.get("recommendations", []):
+        if rec.get("similarity_score", 0) < min_score:
+            continue
+        matched = next((c for c in candidate_cases if c["id"] == rec["id"]), None)
+        if matched:
+            recommendations.append({
+                "id": rec["id"],
+                "similarity_score": round(rec.get("similarity_score", 0), 3),
+                "match_reason": rec.get("match_reason", ""),
+                "title": matched["title"],
+                "symptom": matched["symptom"],
+                "root_cause": matched["root_cause"],
+                "solution": matched["solution"],
+            })
+
+    return {
+        "success": True,
+        "case_id": case_id,
+        "recommendations": sorted(recommendations, key=lambda x: x["similarity_score"], reverse=True),
+        "analysis_summary": llm_result.get("analysis_summary", ""),
+        "total_candidates": len(candidate_cases),
+        "llm_fallback": False,
+    }
+
+
 # ============== 分类接口 ==============
 
 @router.get("/category", summary="获取分类列表")
@@ -636,6 +751,29 @@ async def get_tags(
         "items": [_tag_to_dict(t) for t in tags],
         "total": len(tags),
     }
+
+
+@router.post("/tag", summary="创建标签")
+async def create_tag(
+    tag: TagCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """创建新的标签"""
+    existing = db.query(Tag).filter(Tag.name == tag.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="标签已存在")
+
+    db_tag = Tag(
+        name=tag.name,
+        color=tag.color,
+        category_id=tag.category_id,
+        description=tag.description,
+    )
+    db.add(db_tag)
+    db.commit()
+    db.refresh(db_tag)
+    return db_tag.to_dict()
 
 
 # ============== 统计接口 ==============
@@ -1021,3 +1159,146 @@ async def get_pending_reviews(
         "items": [r.to_dict() for r in pending],
         "total": len(pending),
     }
+
+
+# ============== 知识图谱接口 (P2-20) ==============
+
+class GraphNodeCreate(BaseModel):
+    """创建图节点"""
+    label: str = Field(..., description="节点标签")
+    properties: dict = Field(default_factory=dict, description="节点属性")
+
+
+class GraphRelCreate(BaseModel):
+    """创建图关系"""
+    start_node_id: str = Field(..., description="起始节点ID")
+    end_node_id: str = Field(..., description="终止节点ID")
+    rel_type: str = Field(..., description="关系类型")
+    properties: dict = Field(default_factory=dict, description="关系属性")
+    weight: float = Field(1.0, description="关系权重")
+
+
+class GraphSimilarityQuery(BaseModel):
+    """图谱相似度查询"""
+    case_id: int = Field(..., description="故障案例ID")
+    max_depth: int = Field(3, description="最大遍历深度")
+    limit: int = Field(10, description="返回结果数量")
+
+
+@router.get("/graph/stats", summary="图谱统计")
+async def get_graph_stats(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """获取知识图谱统计信息"""
+    kg = get_knowledge_graph()
+    return kg.stats()
+
+
+@router.post("/graph/build", summary="构建筑识图谱")
+async def build_graph(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    从数据库中的故障案例、告警等数据构建筑识图谱
+    节点：故障案例、设备、告警
+    关系：案例-设备、案例-告警、案例-相似案例
+    """
+    kg = get_knowledge_graph()
+    result = kg.build_graph_from_cases(db)
+    return {
+        "message": "图谱构建完成",
+        **result,
+        "graph_stats": kg.stats(),
+    }
+
+
+@router.post("/graph/nodes", summary="创建图节点")
+async def create_graph_node(
+    node: GraphNodeCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """创建知识图谱节点"""
+    kg = get_knowledge_graph()
+    created = kg.graph.create_node(label=node.label, properties=node.properties)
+    return {"node": created.to_dict()}
+
+
+@router.get("/graph/nodes", summary="查询图节点")
+async def query_graph_nodes(
+    label: Optional[str] = Query(None, description="节点标签过滤"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """按标签查询图节点"""
+    kg = get_knowledge_graph()
+    nodes = kg.graph.find_nodes(label=label or "FaultCase", limit=100)
+    return {"nodes": [n.to_dict() for n in nodes], "total": len(nodes)}
+
+
+@router.post("/graph/relationships", summary="创建图关系")
+async def create_graph_relationship(
+    rel: GraphRelCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """创建知识图谱关系"""
+    kg = get_knowledge_graph()
+    created = kg.graph.create_relationship(
+        start_node_id=rel.start_node_id,
+        end_node_id=rel.end_node_id,
+        rel_type=rel.rel_type,
+        properties=rel.properties,
+        weight=rel.weight,
+    )
+    if not created:
+        raise HTTPException(status_code=400, detail="创建关系失败，节点可能不存在")
+    return {"relationship": created.to_dict()}
+
+
+@router.get("/graph/case/{case_id}/similar", summary="图谱相似案例查询")
+async def get_graph_similar_cases(
+    case_id: int,
+    max_depth: int = Query(3, description="遍历深度"),
+    limit: int = Query(10, description="返回数量"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    基于知识图谱查找与指定案例相似的其他案例
+    使用 BFS 遍历 + 相似度传播算法
+    """
+    kg = get_knowledge_graph()
+    similar = kg.find_similar_cases(
+        case_id=case_id,
+        max_depth=max_depth,
+        limit=limit,
+    )
+    return {
+        "case_id": case_id,
+        "similar_cases": similar,
+        "total": len(similar),
+    }
+
+
+@router.get("/graph/case/{case_id}/context", summary="案例图谱上下文")
+async def get_case_graph_context(
+    case_id: int,
+    depth: int = Query(2, description="查询深度"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """获取案例的完整图谱上下文（周围节点和关系）"""
+    kg = get_knowledge_graph()
+    context = kg.get_case_graph_context(case_id=case_id, depth=depth)
+    return context
+
+
+@router.get("/graph/path/{case_a_id}/{case_b_id}", summary="两案例关联路径")
+async def get_path_between_cases(
+    case_a_id: int,
+    case_b_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """查找两个故障案例之间的关联路径"""
+    kg = get_knowledge_graph()
+    path = kg.find_path_between_cases(case_a_id, case_b_id)
+    if path is None:
+        return {"path": None, "message": "两点之间无关联路径"}
+    return {"path": path}

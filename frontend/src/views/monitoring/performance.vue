@@ -6,43 +6,43 @@
         <p class="page-subtitle">实时监控系统性能指标</p>
       </div>
       <div class="page-actions">
-        <n-button @click="loadDevices" :loading="loading">
-          <template #icon>
-            <n-icon><Refresh /></n-icon>
-          </template>
-          刷新
-        </n-button>
+        <el-button @click="loadDevices" :loading="loading">
+          <el-icon><Refresh /></el-icon> 刷新
+        </el-button>
       </div>
     </div>
 
     <!-- 设备选择 -->
-    <n-card title="选择设备" class="mb-4">
-      <n-space align="center" :wrap="true" :size="12">
-        <n-select
-          v-model:value="selectedDeviceId"
+    <el-card class="mb-4">
+      <template #header>
+        <span>选择设备</span>
+      </template>
+      <el-space align="center" :wrap="true" :size="12">
+        <el-select
+          v-model="selectedDeviceId"
           :options="deviceOptions"
           placeholder="请选择设备"
           filterable
           style="width: 300px"
-          @update:value="handleDeviceChange"
+          @change="handleDeviceChange"
         />
-        <n-date-picker
-          v-model:value="timeRange"
+        <el-date-picker
+          v-model="timeRange"
           type="datetimerange"
           clearable
           style="width: 380px"
         />
-        <n-button type="primary" @click="loadMetrics" :loading="loading">
+        <el-button type="primary" @click="loadMetrics" :loading="loading">
           查询
-        </n-button>
-      </n-space>
-    </n-card>
+        </el-button>
+      </el-space>
+    </el-card>
 
     <!-- 性能概览 -->
     <div v-if="selectedDeviceId" class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon" style="background: #e8f0ff">
-          <n-icon size="24" color="#165dff"><HardwareChipOutline /></n-icon>
+          <el-icon size="24" color="#165dff"><Monitor /></el-icon>
         </div>
         <div class="stat-content">
           <div class="stat-value" :class="{ loading: loading }">
@@ -53,7 +53,7 @@
       </div>
       <div class="stat-card">
         <div class="stat-icon" style="background: #e8ffea">
-          <n-icon size="24" color="#00b42a"><TicketOutline /></n-icon>
+          <el-icon size="24" color="#00b42a"><TicketOutline /></el-icon>
         </div>
         <div class="stat-content">
           <div class="stat-value" :class="{ loading: loading }">
@@ -64,7 +64,7 @@
       </div>
       <div class="stat-card">
         <div class="stat-icon" style="background: #fff7e6">
-          <n-icon size="24" color="#ff7d00"><FolderOpenOutline /></n-icon>
+          <el-icon size="24" color="#ff7d00"><Folder /></el-icon>
         </div>
         <div class="stat-content">
           <div class="stat-value" :class="{ loading: loading }">
@@ -75,7 +75,7 @@
       </div>
       <div class="stat-card">
         <div class="stat-icon" style="background: #fff1f0">
-          <n-icon size="24" color="#f53f3f"><CloudOutline /></n-icon>
+          <el-icon size="24" color="#f53f3f"><Cloudy /></el-icon>
         </div>
         <div class="stat-content">
           <div class="stat-value" :class="{ loading: loading }">
@@ -87,42 +87,51 @@
     </div>
 
     <!-- 空状态：未选择设备 -->
-    <n-card v-if="!selectedDeviceId" class="empty-state-card">
+    <el-card v-if="!selectedDeviceId" class="empty-state-card">
+      <template #header>
+        <span></span>
+      </template>
       <div class="empty-state">
-        <n-icon size="64" color="#c0c4cc"><ServerOutline /></n-icon>
+        <el-icon size="64" color="#c0c4cc"><Odometer /></el-icon>
         <p class="empty-title">请选择设备</p>
         <p class="empty-desc">从上方下拉框选择一个设备，即可查看其性能指标和历史趋势</p>
       </div>
-    </n-card>
+    </el-card>
 
     <!-- 性能图表 -->
     <div v-if="selectedDeviceId" class="performance-grid">
-      <n-card title="CPU使用率趋势">
-        <template #header-extra>
-          <span v-if="lastUpdateTime" class="update-time">更新于 {{ lastUpdateTime }}</span>
+      <el-card>
+        <template #header>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>CPU使用率趋势</span>
+            <span v-if="lastUpdateTime" class="update-time">更新于 {{ lastUpdateTime }}</span>
+          </div>
         </template>
         <div ref="cpuChartRef" class="chart-container"></div>
-      </n-card>
-      <n-card title="内存使用率趋势">
-        <template #header-extra>
-          <span v-if="lastUpdateTime" class="update-time">更新于 {{ lastUpdateTime }}</span>
+      </el-card>
+      <el-card>
+        <template #header>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>内存使用率趋势</span>
+            <span v-if="lastUpdateTime" class="update-time">更新于 {{ lastUpdateTime }}</span>
+          </div>
         </template>
         <div ref="memoryChartRef" class="chart-container"></div>
-      </n-card>
+      </el-card>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
-import { NIcon, useMessage } from 'naive-ui'
+import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import {
-  HardwareChipOutline, FolderOpenOutline, CloudOutline, Refresh, ServerOutline
-} from '@vicons/ionicons5'
+  Monitor, Folder, Cloudy, Refresh, Odometer
+} from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
 
-const message = useMessage()
+const message = ElMessage
 
 const cpuChartRef = ref(null)
 const memoryChartRef = ref(null)
@@ -138,24 +147,6 @@ const deviceOptions = ref([])
 const lastUpdateTime = ref('')
 
 const metrics = reactive({ cpu: null, memory: null, disk: null, network: null })
-
-const columns = [
-  { title: '序号', type: 'index', width: 60 },
-  { title: '设备名称', key: 'name', width: 150 },
-  { title: 'IP地址', key: 'ip_address', width: 140 },
-  { title: '操作系统', key: 'os_type', width: 100 },
-  { title: '系统版本', key: 'os_version', width: 120 },
-  { title: '厂商', key: 'manufacturer', width: 120 },
-  { title: '型号', key: 'model', width: 120 },
-  { title: '状态', key: 'status', width: 100,
-    render: (row) => {
-      const statusMap = { online: '在线', offline: '离线', warning: '告警' }
-      return statusMap[row.status] || row.status
-    }
-  },
-  { title: '最后采集', key: 'last_collect_time', width: 180 },
-  { title: '位置', key: 'location', width: 150 }
-]
 
 onMounted(() => {
   loadDevices()
@@ -187,7 +178,6 @@ const loadDevices = async () => {
     const data = await res.json()
     if (!data || typeof data !== 'object') throw new Error('响应格式异常')
     const newDevices = data.items || data.data?.items || []
-    // Replace device list with fresh data
     deviceList.value = newDevices
     deviceOptions.value = deviceList.value.map(d => ({
       label: `${d.name} (${d.ip_address})`,
@@ -203,7 +193,6 @@ const loadDevices = async () => {
 
 const handleDeviceChange = (value) => {
   selectedDeviceId.value = value
-  // Reset metrics display to null (will show '--')
   metrics.cpu = null
   metrics.memory = null
   metrics.disk = null
@@ -261,7 +250,6 @@ const loadMetrics = async () => {
 }
 
 const updateCharts = (data) => {
-  // Generate time labels from actual data length
   const dataLen = (data.cpu_history || []).length || 24
   const hours = Array.from({ length: dataLen }, (_, i) => {
     const totalPoints = dataLen
@@ -343,7 +331,6 @@ const stopRefresh = () => {
   }
 }
 </script>
-
 
 <style lang="scss" scoped>
 .mb-4 { margin-bottom: 16px; }

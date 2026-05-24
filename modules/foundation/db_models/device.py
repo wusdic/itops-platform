@@ -67,6 +67,9 @@ class Device(Base):
     # 主键
     id = Column(Integer, primary_key=True, autoincrement=True)
     
+    # 租户隔离
+    tenant_id = Column(String(64), index=True)  # 租户ID
+    
     # 基本信息
     name = Column(String(128), nullable=False, index=True, comment='设备名称')
     hostname = Column(String(128), unique=True, comment='主机名')

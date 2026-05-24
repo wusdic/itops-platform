@@ -105,12 +105,19 @@ def get_db() -> Generator[Session, None, None]:
     except Exception as e:
         import sys
         import traceback
+        import sqlalchemy.exc
         logger = logging.getLogger(__name__)
-        logger.warning(f"Database not available: {type(e).__name__}: {e}")
-        sys.stderr.write(f"get_db EXCEPTION: {type(e).__name__}: {e}\n")
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
-        raise HTTPException(status_code=503, detail="数据库服务不可用，请检查数据库连接")
+        # 只对真正的数据库连接错误返回503，SQL语句错误（如唯一键冲突）应该让调用方处理
+        if isinstance(e, sqlalchemy.exc.OperationalError):
+            logger.warning(f"Database connection error: {type(e).__name__}: {e}")
+            sys.stderr.write(f"get_db CONNECTION ERROR: {type(e).__name__}: {e}\n")
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+            raise HTTPException(status_code=503, detail="数据库服务不可用，请检查数据库连接")
+        else:
+            # 其他错误（约束冲突、类型错误等）让调用方自行处理，不要返回误导的503
+            logger.warning(f"Database session error (re-raising): {type(e).__name__}: {e}")
+            raise
 
 
 # ============== 认证相关 ==============
@@ -127,6 +134,7 @@ class CurrentUser:
     email: Optional[str] = None
     roles: List[str] = None
     permissions: List[str] = None
+    tenant_id: Optional[str] = None  # 当前用户所属租户
     
     def __post_init__(self):
         if self.roles is None:
@@ -252,19 +260,22 @@ def require_permission(permission: str):
     return check_permission
 
 
-def require_role(role: str):
+def require_role(role: str, *additional_roles: str):
     """
     角色检查依赖装饰器
     使用示例:
-        @router.get("/admin", dependencies=[Depends(require_role("admin"))])
+        require_role("admin")
+        require_role("admin", "operator")  # 满足任一角色即可
     """
+    allowed_roles = [role] + list(additional_roles)
+
     async def check_role(
         current_user: CurrentUser = Depends(get_current_user),
     ) -> CurrentUser:
-        if not current_user.has_role(role):
+        if not any(current_user.has_role(r) for r in allowed_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Role required: {role}",
+                detail=f"Role required: one of {allowed_roles}",
             )
         return current_user
     return check_role

@@ -9,9 +9,11 @@ import os
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
+
+from api.dependencies import get_current_user, CurrentUser
 
 # 尝试导入配置加载模块
 try:
@@ -27,6 +29,10 @@ try:
         add_vendor,
         update_vendor,
         delete_vendor,
+        create_version,
+        list_versions,
+        get_version,
+        rollback_version,
     )
     _config_available = True
 except ImportError as e:
@@ -55,6 +61,22 @@ class CredentialItem(BaseModel):
     notes: Optional[str] = None
     priority: int = 99
 
+    class Config:
+        # 允许额外字段
+        extra = "allow"
+
+    def to_masked(self) -> "CredentialItem":
+        """返回脱敏版本（用于API响应）"""
+        return CredentialItem(
+            protocol=self.protocol,
+            username=self.username,
+            password="******",
+            password_hash="******",
+            community="******",
+            notes=self.notes,
+            priority=self.priority,
+        )
+
 
 class VendorIn(BaseModel):
     name: str
@@ -79,6 +101,28 @@ class VendorOut(BaseModel):
     suggested_protocols: List[str]
     probe_ports: List[int]
 
+    @classmethod
+    def from_vendor(cls, vendor_data: dict) -> "VendorOut":
+        """
+        从 vendor_data 创建 VendorOut，自动脱敏 default_credentials 中的敏感字段
+        """
+        credentials = vendor_data.get("default_credentials", [])
+        masked_credentials = [
+            CredentialItem(**c).to_masked() if isinstance(c, dict) else c.to_masked()
+            for c in credentials
+        ]
+        return cls(
+            name=vendor_data["name"],
+            short_name=vendor_data["short_name"],
+            category=vendor_data["category"],
+            homepage=vendor_data.get("homepage", ""),
+            description=vendor_data.get("description", ""),
+            fingerprints=[FingerprintRule(**fp) for fp in vendor_data.get("fingerprints", [])],
+            default_credentials=masked_credentials,
+            suggested_protocols=vendor_data.get("suggested_protocols", []),
+            probe_ports=vendor_data.get("probe_ports", []),
+        )
+
 
 class VendorListItem(BaseModel):
     name: str
@@ -95,7 +139,12 @@ class VendorListItem(BaseModel):
 # =============================================================================
 
 def _vendor_to_out(v: Dict) -> VendorOut:
-    """将厂商字典转为 VendorOut 模型"""
+    """将厂商字典转为 VendorOut 模型（敏感字段已脱敏）"""
+    credentials = v.get("default_credentials", [])
+    masked_credentials = [
+        CredentialItem(**c).to_masked() if isinstance(c, dict) else c.to_masked()
+        for c in credentials
+    ]
     return VendorOut(
         name=v.get("name", ""),
         short_name=v.get("short_name", ""),
@@ -103,7 +152,7 @@ def _vendor_to_out(v: Dict) -> VendorOut:
         homepage=v.get("homepage", ""),
         description=v.get("description", ""),
         fingerprints=[FingerprintRule(**fp) for fp in v.get("fingerprints", [])],
-        default_credentials=[CredentialItem(**c) for c in v.get("default_credentials", [])],
+        default_credentials=masked_credentials,
         suggested_protocols=v.get("suggested_protocols", []),
         probe_ports=v.get("probe_ports", []),
     )
@@ -251,3 +300,61 @@ async def probe_by_mac(oui: str = Query(..., description="MAC 地址前6位 OUI"
     if not result:
         return {"matched": False, "message": "未匹配到已知 OUI"}
     return {"matched": True, "vendor": result}
+
+
+# =============================================================================
+# 版本管理 API - P0-6 设备指纹模板版本管理
+# =============================================================================
+
+@router.post("/versions", summary="创建版本快照")
+async def create_version_snapshot(
+    body: dict,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """手动创建当前模板的版本快照（不修改模板内容）"""
+    if not _config_available:
+        raise HTTPException(status_code=503, detail="配置模块不可用")
+    description = body.get("description", "")
+    version = create_version(description=description, operator=current_user.username)
+    return {"status": "success", "version": version}
+
+
+@router.get("/versions", summary="列出版本列表")
+async def list_template_versions(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """列出所有版本快照（最新在前）"""
+    if not _config_available:
+        raise HTTPException(status_code=503, detail="配置模块不可用")
+    return list_versions(limit=limit, offset=offset)
+
+
+@router.get("/versions/{version}", summary="获取指定版本内容")
+async def get_template_version(
+    version: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """获取指定版本的完整模板内容"""
+    if not _config_available:
+        raise HTTPException(status_code=503, detail="配置模块不可用")
+    result = get_version(version)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"版本 '{version}' 不存在")
+    return result
+
+
+@router.post("/versions/{version}/rollback", summary="回滚到指定版本")
+async def rollback_template_version(
+    version: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """回滚模板到指定版本（回滚前自动保存当前状态为新版本）"""
+    if not _config_available:
+        raise HTTPException(status_code=503, detail="配置模块不可用")
+    try:
+        rollback_version(version, operator=current_user.username)
+        return {"status": "success", "message": f"已回滚到版本 '{version}'"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

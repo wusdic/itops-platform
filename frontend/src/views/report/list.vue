@@ -1,169 +1,201 @@
 <template>
   <div class="report-list-container">
     <!-- Statistics Summary Cards -->
-    <n-grid :cols="4" :x-gap="16" :y-gap="16" class="stats-grid">
-      <n-gi>
-        <n-card class="stat-card">
+    <el-row :gutter="16" class="stats-grid">
+      <el-col :span="6">
+        <el-card class="stat-card">
           <div class="stat-content">
             <div class="stat-icon total">
-              <n-icon :size="32"><DocumentTextOutline /></n-icon>
+              <el-icon :size="32"><Document /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stats.total || 0 }}</div>
               <div class="stat-label">报表总数</div>
             </div>
           </div>
-        </n-card>
-      </n-gi>
-      <n-gi>
-        <n-card class="stat-card">
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
           <div class="stat-content">
             <div class="stat-icon completed">
-              <n-icon :size="32"><PlayOutline /></n-icon>
+              <el-icon :size="32"><CircleCheck /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stats.completed || 0 }}</div>
               <div class="stat-label">已完成</div>
             </div>
           </div>
-        </n-card>
-      </n-gi>
-      <n-gi>
-        <n-card class="stat-card">
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
           <div class="stat-content">
             <div class="stat-icon failed">
-              <n-icon :size="32"><TrashOutline /></n-icon>
+              <el-icon :size="32"><CircleClose /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stats.failed || 0 }}</div>
               <div class="stat-label">失败</div>
             </div>
           </div>
-        </n-card>
-      </n-gi>
-      <n-gi>
-        <n-card class="stat-card">
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="stat-card">
           <div class="stat-content">
             <div class="stat-icon generating">
-              <n-icon :size="32"><RefreshOutline /></n-icon>
+              <el-icon :size="32"><RefreshRight /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stats.generating || 0 }}</div>
               <div class="stat-label">生成中</div>
             </div>
           </div>
-        </n-card>
-      </n-gi>
-    </n-grid>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <!-- Filter Bar -->
-    <n-card class="filter-card" :content-style="{ padding: '16px' }">
-      <n-space :size="16" align="center" justify="space-between">
-        <n-space :size="12" align="center">
-          <n-select
-            v-model:value="filters.type"
+    <el-card class="filter-card">
+      <el-space :size="16" align="center" style="width: 100%; justify-content: space-between;">
+        <el-space :size="12" align="center">
+          <el-select
+            v-model="filters.type"
             :options="typeOptions"
             placeholder="报表类型"
             clearable
             style="width: 150px"
           />
-          <n-select
-            v-model:value="filters.status"
+          <el-select
+            v-model="filters.status"
             :options="statusOptions"
             placeholder="状态"
             clearable
             style="width: 140px"
           />
-          <n-date-picker
-            v-model:value="filters.dateRange"
+          <el-date-picker
+            v-model="filters.dateRange"
             type="daterange"
             range
             clearable
             placeholder="日期范围"
             style="width: 280px"
           />
-        </n-space>
-        <n-space :size="12" align="center">
-          <n-button type="primary" @click="handleSearch">
-            <template #icon>
-              <n-icon><DocumentTextOutline /></n-icon>
-            </template>
+        </el-space>
+        <el-space :size="12" align="center">
+          <el-button type="primary" @click="handleSearch">
+            <el-icon><Search /></el-icon>
             搜索
-          </n-button>
-          <n-button @click="handleReset">重置</n-button>
-          <n-button type="primary" @click="handleRefresh">
-            <template #icon>
-              <n-icon><RefreshOutline /></n-icon>
-            </template>
-          </n-button>
-        </n-space>
-      </n-space>
-    </n-card>
+          </el-button>
+          <el-button @click="handleReset">重置</el-button>
+          <el-button type="primary" @click="handleRefresh">
+            <el-icon><Refresh /></el-icon>
+          </el-button>
+        </el-space>
+      </el-space>
+    </el-card>
 
     <!-- Reports Data Table -->
-    <n-card class="table-card">
-      <n-data-table
-        :columns="columns"
-        :data="reportList"
-        :loading="loading"
-        :pagination="pagination"
-        :row-key="row => row.id"
+    <el-card class="table-card">
+      <el-table :data="reportList" v-loading="loading" style="width: 100%">
+        <el-table-column prop="name" label="报表名称" width="200" show-overflow-tooltip />
+        <el-table-column prop="type" label="类型" width="120">
+          <template #default="{ row }">
+            {{ getTypeLabel(row.type) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="template_name" label="模板" width="150" show-overflow-tooltip />
+        <el-table-column prop="status" label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="getStatusConfig(row.status).type" :disable-transitions="true">{{ getStatusConfig(row.status).label }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="format" label="格式" width="90">
+          <template #default="{ row }">
+            {{ row.format?.toUpperCase() || 'PDF' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="180">
+          <template #default="{ row }">
+            {{ formatDateLocal(row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180" fixed="right">
+          <template #default="{ row }">
+            <div class="action-buttons">
+              <el-button size="small" quaternary @click="handlePreview(row)">
+                <el-icon><View /></el-icon>
+              </el-button>
+              <el-button size="small" quaternary :disabled="row.status !== 'completed'" @click="handleDownload(row.id)">
+                <el-icon><Download /></el-icon>
+              </el-button>
+              <el-button size="small" quaternary type="danger" @click="handleDelete(row)">
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.pageSize"
+        :total="pagination.total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @size-change="fetchReportList"
+        @current-change="fetchReportList"
+        style="margin-top: 16px; justify-content: flex-end;"
       />
-    </n-card>
+    </el-card>
 
     <!-- Preview Modal -->
-    <n-modal
-      v-model:show="previewModal.show"
-      preset="card"
+    <el-dialog
+      v-model="previewModal.show"
       title="报表预览"
-      :style="{ width: '80%', maxWidth: '1000px' }"
-      :segmented="{ content: true, footer: true }"
+      width="80%"
+      style="max-width: 1000px"
     >
       <div class="preview-content">
-        <n-spin :show="previewModal.loading">
+        <div v-loading="previewModal.loading">
           <div v-html="previewModal.content" class="preview-html"></div>
-        </n-spin>
+        </div>
       </div>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="previewModal.show = false">关闭</n-button>
-          <n-button type="primary" @click="handleDownload(previewModal.reportId)">
-            <template #icon>
-              <n-icon><DownloadOutline /></n-icon>
-            </template>
+        <el-space justify="end">
+          <el-button @click="previewModal.show = false">关闭</el-button>
+          <el-button type="primary" @click="handleDownload(previewModal.reportId)">
+            <el-icon><Download /></el-icon>
             下载
-          </n-button>
-        </n-space>
+          </el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
 
     <!-- Delete Confirmation Modal -->
-    <n-modal
-      v-model:show="deleteModal.show"
-      preset="dialog"
+    <el-dialog
+      v-model="deleteModal.show"
       title="确认删除"
-      :content="deleteModal.message"
-      positive-text="删除"
-      negative-text="取消"
-      @positive-click="handleConfirmDelete"
-      @negative-click="deleteModal.show = false"
-    />
+      width="400px"
+    >
+      <p>{{ deleteModal.message }}</p>
+      <template #footer>
+        <el-button @click="deleteModal.show = false">取消</el-button>
+        <el-button type="danger" @click="handleConfirmDelete">删除</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { useMessage } from 'naive-ui'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
-  DocumentTextOutline,
-  DownloadOutline,
-  TrashOutline,
-  PlayOutline,
-  EyeOutline,
-  RefreshOutline
-} from '@vicons/ionicons5'
+  Document, CircleCheck, CircleClose, RefreshRight, Refresh, Search, View, Download, Delete
+} from '@element-plus/icons-vue'
 
-const message = useMessage()
+const message = ElMessage
 const loading = ref(false)
 const reportList = ref([])
 const stats = ref({})
@@ -176,21 +208,11 @@ const filters = reactive({
 })
 
 // Pagination
-const pagination = {
+const pagination = reactive({
   page: 1,
   pageSize: 10,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (page) => {
-    pagination.page = page
-    fetchReportList()
-  },
-  onUpdatePageSize: (pageSize) => {
-    pagination.pageSize = pageSize
-    pagination.page = 1
-    fetchReportList()
-  }
-}
+  total: 0
+})
 
 // Options
 const typeOptions = [
@@ -224,119 +246,29 @@ const deleteModal = reactive({
   reportId: null
 })
 
-// Table Columns
-const columns = [
-  {
-    title: '报表名称',
-    key: 'name',
-    width: 200,
-    ellipsis: { tooltip: true }
-  },
-  {
-    title: '类型',
-    key: 'type',
-    width: 120,
-    render(row) {
-      const typeLabels = {
-        daily: '日报',
-        weekly: '周报',
-        monthly: '月报',
-        quarterly: '季报',
-        annual: '年报',
-        custom: '自定义'
-      }
-      return typeLabels[row.type] || row.type
-    }
-  },
-  {
-    title: '模板',
-    key: 'template_name',
-    width: 150,
-    ellipsis: { tooltip: true }
-  },
-  {
-    title: '状态',
-    key: 'status',
-    width: 110,
-    render(row) {
-      const statusConfig = {
-        completed: { type: 'success', label: '已完成' },
-        failed: { type: 'error', label: '失败' },
-        generating: { type: 'info', label: '生成中' },
-        pending: { type: 'warning', label: '待处理' }
-      }
-      const config = statusConfig[row.status] || { type: 'default', label: row.status }
-      return h(
-        NTag,
-        { type: config.type, bordered: false },
-        { default: () => config.label }
-      )
-    }
-  },
-  {
-    title: '格式',
-    key: 'format',
-    width: 90,
-    render(row) {
-      return row.format?.toUpperCase() || 'PDF'
-    }
-  },
-  {
-    title: '创建时间',
-    key: 'created_at',
-    width: 180,
-    render(row) {
-      return formatDateLocal(row.created_at)
-    }
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 180,
-    fixed: 'right',
-    render(row) {
-      return h('div', { class: 'action-buttons' }, [
-        h(
-          NButton,
-          {
-            size: 'small',
-            quaternary: true,
-            onClick: () => handlePreview(row)
-          },
-          {
-            icon: () => h(NIcon, null, { default: () => h(EyeOutline) })
-          }
-        ),
-        h(
-          NButton,
-          {
-            size: 'small',
-            quaternary: true,
-            disabled: row.status !== 'completed',
-            onClick: () => handleDownload(row.id)
-          },
-          {
-            icon: () => h(NIcon, null, { default: () => h(DownloadOutline) })
-          }
-        ),
-        h(
-          NButton,
-          {
-            size: 'small',
-            quaternary: true,
-            type: 'error',
-            onClick: () => handleDelete(row)
-          },
-          {
-            icon: () => h(NIcon, null, { default: () => h(TrashOutline) })
-          }
-        )
-      ])
-    }
-  }
-]
-
 // Helper Functions
+function getTypeLabel(type) {
+  const labels = {
+    daily: '日报',
+    weekly: '周报',
+    monthly: '月报',
+    quarterly: '季报',
+    annual: '年报',
+    custom: '自定义'
+  }
+  return labels[type] || type
+}
+
+function getStatusConfig(status) {
+  const config = {
+    completed: { type: 'success', label: '已完成' },
+    failed: { type: 'danger', label: '失败' },
+    generating: { type: 'primary', label: '生成中' },
+    pending: { type: 'warning', label: '待处理' }
+  }
+  return config[status] || { type: 'info', label: status }
+}
+
 function formatDateLocal(dateStr) {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
@@ -395,7 +327,7 @@ async function fetchReportList() {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     const data = await response.json()
     reportList.value = data.items || data
-    pagination.itemCount = data.total || reportList.value.length
+    pagination.total = data.total || reportList.value.length
   } catch (error) {
     message.error('加载报表列表失败')
     reportList.value = []
@@ -416,7 +348,7 @@ async function fetchReportPreview(id) {
     previewModal.content = data.content || data.html || '<p>暂无预览</p>'
   } catch (error) {
     message.error('加载报表预览失败')
-    previewModal.content = '<n-empty description="预览不可用" />'
+    previewModal.content = '<p>预览不可用</p>'
   } finally {
     previewModal.loading = false
   }

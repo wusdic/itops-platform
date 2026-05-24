@@ -12,7 +12,30 @@ from sqlalchemy import (
     ForeignKey, JSON, Float, Enum as SQLEnum, Index
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import TypeDecorator, String
 from modules.foundation.db_models.base import Base
+
+
+class StringEnum(TypeDecorator):
+    """绕过MySQL ENUM类型验证的装饰器"""
+    impl = String(50)
+    cache_ok = True
+
+    def __init__(self, enum_class=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.enum_class = enum_class
+
+    def process_bind_param(self, value, dialect):
+        """写入DB时：Python enum → 字符串"""
+        if value is None:
+            return None
+        if hasattr(value, 'value'):
+            return value.value
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        """从DB读时：直接返回字符串，不做ENUM验证"""
+        return value  # 不转换成enum对象，避免反射值不匹配
 
 
 class DocumentType(str, Enum):
@@ -27,12 +50,12 @@ class DocumentType(str, Enum):
 
 class DocumentStatus(str, Enum):
     """文档状态"""
-    DRAFT = 'draft'                  # 草稿
-    PENDING_REVIEW = 'pending_review'  # 待审核
-    APPROVED = 'approved'            # 已通过
-    REJECTED = 'rejected'            # 已拒绝
-    ARCHIVED = 'archived'            # 已归档
-    OBSOLETE = 'obsolete'            # 已废弃
+    DRAFT = 'DRAFT'                  # 草稿
+    PENDING_REVIEW = 'PENDING_REVIEW'  # 待审核
+    APPROVED = 'APPROVED'            # 已通过
+    REJECTED = 'REJECTED'            # 已拒绝
+    ARCHIVED = 'ARCHIVED'            # 已归档
+    OBSOLETE = 'OBSOLETE'            # 已废弃
 
 
 class ReviewStatus(str, Enum):
@@ -72,11 +95,11 @@ class SOPDocument(Base):
     category_id = Column(Integer, ForeignKey('kb_categories.id'))
     tags = Column(String(500))                     # 逗号分隔的标签
     version = Column(String(20), default='1.0.0')   # 当前版本
-    status = Column(SQLEnum(DocumentStatus), default=DocumentStatus.DRAFT)
+    status = Column(StringEnum(DocumentStatus), default=DocumentStatus.DRAFT, index=True)
     author = Column(String(100))                   # 作者
     reviewer = Column(String(100))                  # 审核人
     approver = Column(String(100))                  # 审批人
-    review_status = Column(SQLEnum(ReviewStatus), default=ReviewStatus.PENDING)
+    review_status = Column(StringEnum(ReviewStatus), default=ReviewStatus.PENDING)
     review_comment = Column(Text)                   # 审核意见
     effective_date = Column(DateTime)               # 生效日期
     review_date = Column(DateTime)                  # 审核日期
@@ -149,7 +172,7 @@ class SOPReview(Base):
     document_id = Column(Integer, ForeignKey('kb_sop_documents.id'), nullable=False)
     review_type = Column(String(20))               # review/approve
     reviewer = Column(String(100), nullable=False)
-    status = Column(SQLEnum(ReviewStatus), default=ReviewStatus.PENDING)
+    status = Column(StringEnum(ReviewStatus), default=ReviewStatus.PENDING)
     comment = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
 
@@ -165,8 +188,8 @@ class FaultCase(Base):
     title = Column(String(200), nullable=False)
     
     # 故障基本信息
-    fault_level = Column(SQLEnum(FaultLevel), default=FaultLevel.P3)
-    fault_status = Column(SQLEnum(FaultStatus), default=FaultStatus.OPEN)
+    fault_level = Column(StringEnum(FaultLevel), default=FaultLevel.P3, index=True)
+    fault_status = Column(StringEnum(FaultStatus), default=FaultStatus.OPEN, index=True)
     fault_category = Column(String(100))            # 故障分类
     symptom = Column(Text)                          # 故障现象
     root_cause = Column(Text)                      # 根本原因
@@ -283,7 +306,7 @@ class Tag(Base):
     color = Column(String(20))                      # 标签颜色
     category_id = Column(Integer, ForeignKey('kb_categories.id'))
     description = Column(Text)
-    usage_count = Column(Integer, default=0)
+    usage_count = Column('use_count', Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
 
     category = relationship('Category', back_populates='tags')
@@ -313,7 +336,7 @@ class Document(Base):
     category_id = Column(Integer, ForeignKey('kb_categories.id'))
     tags = Column(String(500))
     version = Column(String(20), default='1.0.0')
-    status = Column(SQLEnum(DocumentStatus), default=DocumentStatus.DRAFT)
+    status = Column(StringEnum(DocumentStatus), default=DocumentStatus.DRAFT, index=True)
     author = Column(String(100))
     language = Column(String(10), default='zh-CN')
     is_public = Column(Boolean, default=True)       # 是否公开

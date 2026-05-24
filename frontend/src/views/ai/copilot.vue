@@ -4,13 +4,13 @@
       <!-- 左侧：知识库分类选择 -->
       <div class="category-sider">
         <div class="sider-header">
-          <n-button type="primary" block @click="createCategory" size="small">
-            <template #icon><n-icon><AddOutline /></n-icon></template>
+          <el-button type="primary" plain @click="createCategory" size="small">
+            <el-icon><Plus /></el-icon>
             新建分类
-          </n-button>
-          <n-input v-model:value="searchText" placeholder="搜索分类" size="small" clearable style="margin-top: 8px">
-            <template #prefix><n-icon><SearchOutline /></n-icon></template>
-          </n-input>
+          </el-button>
+          <el-input v-model="searchText" placeholder="搜索分类" size="small" clearable style="margin-top: 8px">
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
         </div>
         <div class="category-list">
           <div
@@ -20,13 +20,13 @@
             :class="{ active: selectedCategory?.id === cat.id }"
             @click="selectCategory(cat)"
           >
-            <n-icon size="16" color="#18a058"><BookOutline /></n-icon>
+            <el-icon size="16" color="#18a058"><Document /></el-icon>
             <div class="cat-info">
               <div class="cat-name">{{ cat.name }}</div>
               <div class="cat-meta">{{ cat.description || '暂无描述' }}</div>
             </div>
           </div>
-          <n-empty v-if="filteredCategories.length === 0" description="暂无分类" size="small" style="padding: 20px" />
+          <el-empty v-if="filteredCategories.length === 0" description="暂无分类" :image-size="60" style="padding: 20px" />
         </div>
       </div>
 
@@ -34,41 +34,41 @@
       <div class="qa-content">
         <template v-if="selectedCategory">
           <div class="qa-header">
-            <n-space align="center">
-              <n-icon size="20" color="#18a058"><SparklesOutline /></n-icon>
+            <div class="header-left">
+              <el-icon size="20" color="#18a058"><MagicStick /></el-icon>
               <span style="font-weight: 600; font-size: 15px">{{ selectedCategory.name }} 智能问答</span>
-            </n-space>
-            <n-tag type="success" size="small">{{ filteredKnowledgeCount }} 条知识</n-tag>
+            </div>
+            <el-tag type="success" size="small">{{ filteredKnowledgeCount }} 条知识</el-tag>
           </div>
 
           <!-- 知识片段列表（可折叠）-->
-          <n-collapse class="knowledge-collapse" v-if="knowledgeItems.length > 0">
-            <n-collapse-item title="查看知识库内容" name="kb">
+          <el-collapse class="knowledge-collapse" v-if="knowledgeItems.length > 0">
+            <el-collapse-item title="查看知识库内容" name="kb">
               <div class="knowledge-chips">
-                <n-tag v-for="item in knowledgeItems.slice(0, 20)" :key="item.id" size="small" style="margin: 4px">
+                <el-tag v-for="item in knowledgeItems.slice(0, 20)" :key="item.id" size="small" style="margin: 4px">
                   {{ item.title || item.content?.slice(0, 30) || '条目' + item.id }}
-                </n-tag>
-                <n-tag v-if="knowledgeItems.length > 20" size="small" type="info" style="margin: 4px">
+                </el-tag>
+                <el-tag v-if="knowledgeItems.length > 20" size="small" type="info" style="margin: 4px">
                   还有 {{ knowledgeItems.length - 20 }} 条...
-                </n-tag>
+                </el-tag>
               </div>
-            </n-collapse-item>
-          </n-collapse>
+            </el-collapse-item>
+          </el-collapse>
 
           <!-- 问答历史 -->
           <div class="messages" ref="messagesRef">
             <template v-for="msg in qaHistory" :key="msg.id">
               <div class="message message-user">
-                <n-avatar round size="small" :style="{ background: '#2080f0' }">{{ userInitial }}</n-avatar>
+                <el-avatar :style="{ background: '#2080f0' }" size="small">{{ userInitial }}</el-avatar>
                 <div class="bubble bubble-user">{{ msg.question }}</div>
               </div>
               <div class="message message-ai">
-                <n-avatar round size="small" :style="{ background: '#18a058' }">AI</n-avatar>
+                <el-avatar :style="{ background: '#18a058' }" size="small">AI</el-avatar>
                 <div class="bubble bubble-ai" v-html="renderMarkdown(msg.answer)"></div>
               </div>
             </template>
             <div v-if="loading" class="message message-ai">
-              <n-avatar round size="small" :style="{ background: '#18a058' }">AI</n-avatar>
+              <el-avatar :style="{ background: '#18a058' }" size="small">AI</el-avatar>
               <div class="bubble bubble-ai">
                 <span style="color:#999">正在检索知识库并生成回答<span class="typing-cursor"></span></span>
               </div>
@@ -77,22 +77,22 @@
 
           <!-- 输入框 -->
           <div class="chat-input">
-            <n-input
-              v-model:value="inputText"
+            <el-input
+              v-model="inputText"
               type="textarea"
               placeholder="基于当前分类的知识库提问，按 Enter 发送"
               :autosize="{ minRows: 1, maxRows: 4 }"
-              @keydown="handleKeydown"
+              @keydown.enter="handleKeydown"
             />
-            <n-button type="primary" :disabled="!inputText.trim() || loading" :loading="loading" @click="askQuestion" circle class="send-btn">
-              <template #icon><n-icon><SendOutline /></n-icon></template>
-            </n-button>
+            <el-button type="primary" :disabled="!inputText.trim() || loading" :loading="loading" @click="askQuestion" circle class="send-btn">
+              <el-icon><Promotion /></el-icon>
+            </el-button>
           </div>
         </template>
 
         <!-- 空状态 -->
         <div v-else class="empty-state">
-          <n-icon size="80" color="#ddd"><SparklesOutline /></n-icon>
+          <el-icon size="80" color="#ddd"><MagicStick /></el-icon>
           <p style="color: #999; margin-top: 16px; text-align: center">
             选择左侧分类，基于知识库进行智能问答
           </p>
@@ -110,38 +110,35 @@
     </div>
 
     <!-- 新建/编辑分类弹窗 -->
-    <n-modal v-model:show="dialogVisible" preset="card" :title="dialogTitle" style="width: 480px">
-      <n-form :model="form" label-placement="left" label-width="90">
-        <n-form-item label="分类名称" required>
-          <n-input v-model:value="form.name" placeholder="如：服务器故障、数据库运维" />
-        </n-form-item>
-        <n-form-item label="分类编码" required>
-          <n-input v-model:value="form.code" placeholder="如：server_fault, db_ops" :disabled="!!form.id" />
-        </n-form-item>
-        <n-form-item label="描述">
-          <n-input v-model:value="form.description" type="textarea" :rows="2" placeholder="描述该知识分类的用途" />
-        </n-form-item>
-      </n-form>
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="480px" :close-on-click-modal="false">
+      <el-form :model="form" label-position="left" label-width="90">
+        <el-form-item label="分类名称" required>
+          <el-input v-model="form.name" placeholder="如：服务器故障、数据库运维" />
+        </el-form-item>
+        <el-form-item label="分类编码" required>
+          <el-input v-model="form.code" placeholder="如：server_fault, db_ops" :disabled="!!form.id" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="描述该知识分类的用途" />
+        </el-form-item>
+      </el-form>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="dialogVisible = false">取消</n-button>
-          <n-button type="primary" @click="submitCategory" :loading="submitting">保存</n-button>
-        </n-space>
+        <div class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitCategory" :loading="submitting">保存</el-button>
+        </div>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, reactive, onMounted, nextTick } from 'vue'
-import { NIcon, useMessage, NButton, NSpace, NTag, NModal, NForm, NFormItem, NInput, NEmpty, NCollapse, NCollapseItem, NAvatar } from 'naive-ui'
-import {
-  AddOutline, SearchOutline, BookOutline, SparklesOutline,
-  SendOutline
-} from '@vicons/ionicons5'
+import { ElMessage } from 'element-plus'
+import { Plus, Search, Document, MagicStick, Promotion } from '@element-plus/icons-vue'
 import { CONFIG } from '@/config/constants'
 
-const message = useMessage()
+const message = ElMessage
 
 const userInitial = computed(() => {
   try {
@@ -370,6 +367,11 @@ onMounted(loadCategories)
   border-bottom: 1px solid #eee;
   background: #fff;
 }
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .knowledge-collapse { margin: 8px 16px; }
 .knowledge-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0; }
 
@@ -397,7 +399,7 @@ onMounted(loadCategories)
   border-top: 1px solid #eee;
   background: #fff;
 }
-.chat-input .n-input { flex: 1; }
+.chat-input .el-textarea { flex: 1; }
 .send-btn { flex-shrink: 0; }
 
 .empty-state {
@@ -407,5 +409,10 @@ onMounted(loadCategories)
   align-items: center;
   justify-content: center;
   padding: 40px;
+}
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>

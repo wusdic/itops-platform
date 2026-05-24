@@ -121,14 +121,15 @@ def init_redis(config: dict):
     初始化Redis连接
     """
     try:
-        from modules.foundation.redis_client.redis_client import RedisClient
+        from modules.storage.redis_client.client import RedisClient
         
         redis_client = RedisClient(
             host=config["redis_host"],
             port=config["redis_port"],
             db=config["redis_db"],
         )
-        
+        global _redis_client
+        _redis_client = redis_client
         logger.info("Redis initialized successfully")
         return redis_client
     except Exception as e:
@@ -155,8 +156,47 @@ def init_monitoring(config: dict):
         return None
 
 
+# 全局配置管理器
+_config_manager = None
+
+
+def init_config_hot_reload(config: dict):
+    """
+    初始化配置热更新
+    监控 config/ 目录下配置文件变化，自动 reload 并通知所有监听者
+    """
+    global _config_manager
+    if not config.get("hot_reload", True):
+        logger.info("Config hot reload is disabled")
+        return None
+
+    try:
+        from core.config.manager import ConfigManager
+        _config_manager = ConfigManager()
+        _config_manager.load()
+        _config_manager.start_watching(interval=2.0)
+        logger.info("Config hot reload initialized successfully")
+        return _config_manager
+    except Exception as e:
+        logger.warning(f"Config hot reload initialization failed: {e}")
+        return None
+
+
+def get_config_manager():
+    """获取全局配置管理器"""
+    return _config_manager
+
+
 # 全局 LLM 客户端
 _llm_client = None
+
+# 全局 Redis 客户端
+_redis_client = None
+
+
+def get_redis_client():
+    """获取全局 Redis 客户端"""
+    return _redis_client
 
 
 def init_ai(config: dict):
@@ -257,7 +297,10 @@ def main():
     
     # 初始化AI
     init_ai(config)
-    
+
+    # 初始化配置热更新
+    init_config_hot_reload(config)
+
     # 启动服务器
     logger.info("=" * 60)
     logger.info("Initialization complete. Starting server...")

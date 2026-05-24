@@ -6,27 +6,25 @@
         <h2>报表模板</h2>
         <p class="header-desc">管理和配置报表模板以实现自动化生成</p>
       </div>
-      <n-button type="primary" @click="handleCreate">
-        <template #icon>
-          <n-icon><AddOutline /></n-icon>
-        </template>
+      <el-button type="primary" @click="handleCreate">
+        <el-icon><Plus /></el-icon>
         创建模板
-      </n-button>
+      </el-button>
     </div>
 
     <!-- Templates Grid -->
-    <n-grid :cols="3" :x-gap="20" :y-gap="20" v-if="templateList.length > 0">
-      <n-gi v-for="template in templateList" :key="template.id">
-        <n-card class="template-card" hoverable>
+    <el-row :gutter="20" v-if="templateList.length > 0">
+      <el-col :span="8" v-for="template in templateList" :key="template.id">
+        <el-card class="template-card" shadow="hover">
           <div class="template-header">
             <div class="template-icon">
-              <n-icon :size="28"><DocumentTextOutline /></n-icon>
+              <el-icon :size="28"><Document /></el-icon>
             </div>
             <div class="template-info">
               <h3 class="template-name">{{ template.name }}</h3>
-              <n-tag :type="getTypeColor(template.type)" size="small">
+              <el-tag :type="getTypeColor(template.type)" size="small">
                 {{ formatType(template.type) }}
-              </n-tag>
+              </el-tag>
             </div>
           </div>
           
@@ -41,126 +39,115 @@
             </div>
             <div class="meta-item">
               <span class="meta-label">状态:</span>
-              <n-tag :type="template.active ? 'success' : 'default'" size="small">
+              <el-tag :type="template.active ? 'success' : 'info'" size="small">
                 {{ template.active ? '启用' : '禁用' }}
-              </n-tag>
+              </el-tag>
             </div>
           </div>
 
           <div class="template-actions">
-            <n-button size="small" @click="handleEdit(template)">
-              <template #icon>
-                <n-icon><CreateOutline /></n-icon>
-              </template>
+            <el-button size="small" @click="handleEdit(template)">
+              <el-icon><Edit /></el-icon>
               编辑
-            </n-button>
-            <n-button size="small" type="error" @click="handleDelete(template)">
-              <template #icon>
-                <n-icon><TrashOutline /></n-icon>
-              </template>
+            </el-button>
+            <el-button size="small" type="danger" @click="handleDelete(template)">
+              <el-icon><Delete /></el-icon>
               删除
-            </n-button>
+            </el-button>
           </div>
-        </n-card>
-      </n-gi>
-    </n-grid>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <!-- Empty State -->
-    <n-empty v-else description="暂无模板" class="empty-state">
+    <el-empty v-else description="暂无模板" class="empty-state">
       <template #extra>
-        <n-button size="small" @click="handleCreate">创建第一个模板</n-button>
+        <el-button size="small" @click="handleCreate">创建第一个模板</el-button>
       </template>
-    </n-empty>
+    </el-empty>
 
-    <!-- Create/Edit Modal -->
-    <n-modal
-      v-model:show="modal.show"
-      preset="card"
+    <!-- Create/Edit Dialog -->
+    <el-dialog
+      v-model="modal.show"
       :title="modal.isEdit ? '编辑模板' : '创建模板'"
-      :style="{ width: '600px' }"
-      :segmented="{ content: true, footer: true }"
+      width="600px"
     >
-      <n-form
+      <el-form
         ref="formRef"
         :model="formData"
         :rules="formRules"
         label-placement="top"
       >
-        <n-form-item label="模板名称" path="name">
-          <n-input
-            v-model:value="formData.name"
+        <el-form-item label="模板名称" prop="name">
+          <el-input
+            v-model="formData.name"
             placeholder="请输入模板名称"
           />
-        </n-form-item>
+        </el-form-item>
 
-        <n-form-item label="报表类型" path="type">
-          <n-select
-            v-model:value="formData.type"
+        <el-form-item label="报表类型" prop="type">
+          <el-select
+            v-model="formData.type"
             :options="typeOptions"
             placeholder="请选择报表类型"
+            style="width: 100%"
           />
-        </n-form-item>
+        </el-form-item>
 
-        <n-form-item label="描述" path="description">
-          <n-input
-            v-model:value="formData.description"
+        <el-form-item label="描述" prop="description">
+          <el-input
+            v-model="formData.description"
             type="textarea"
             placeholder="请输入模板描述"
             :rows="3"
           />
-        </n-form-item>
+        </el-form-item>
 
-        <n-form-item label="模板内容" path="content">
-          <n-input
-            v-model:value="formData.content"
+        <el-form-item label="模板内容" prop="content">
+          <el-input
+            v-model="formData.content"
             type="textarea"
             placeholder="请输入HTML模板内容，占位符如 {{device_name}}, {{metric_value}}"
             :rows="8"
-            monospaced
           />
-        </n-form-item>
+        </el-form-item>
 
-        <n-form-item label="启用状态">
-          <n-switch v-model:value="formData.active" />
-        </n-form-item>
-      </n-form>
+        <el-form-item label="启用状态">
+          <el-switch v-model="formData.active" />
+        </el-form-item>
+      </el-form>
 
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="modal.show = false">取消</n-button>
-          <n-button type="primary" @click="handleSubmit" :loading="modal.loading">
+        <el-space justify="end">
+          <el-button @click="modal.show = false">取消</el-button>
+          <el-button type="primary" @click="handleSubmit" :loading="modal.loading">
             {{ modal.isEdit ? '更新' : '创建' }}
-          </n-button>
-        </n-space>
+          </el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
 
-    <!-- Delete Confirmation Modal -->
-    <n-modal
-      v-model:show="deleteModal.show"
-      preset="dialog"
+    <!-- Delete Confirmation Dialog -->
+    <el-dialog
+      v-model="deleteModal.show"
       title="确认删除"
-      :content="deleteModal.message"
-      positive-text="删除"
-      negative-text="取消"
-      type="error"
-      @positive-click="handleConfirmDelete"
-      @negative-click="deleteModal.show = false"
-    />
+      width="400px"
+    >
+      <p>{{ deleteModal.message }}</p>
+      <template #footer>
+        <el-button @click="deleteModal.show = false">取消</el-button>
+        <el-button type="danger" @click="handleConfirmDelete">删除</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
-import {
-  AddOutline,
-  DocumentTextOutline,
-  CreateOutline,
-  TrashOutline
-} from '@vicons/ionicons5'
+import { ElMessage } from 'element-plus'
+import { Plus, Document, Edit, Delete } from '@element-plus/icons-vue'
 
-const message = useMessage()
+const message = ElMessage
 const loading = ref(false)
 const templateList = ref([])
 const formRef = ref(null)
@@ -192,7 +179,7 @@ const formData = reactive({
 // Form rules
 const formRules = {
   name: { required: true, message: '请输入模板名称', trigger: 'blur' },
-  type: { required: true, type: 'string', message: '请选择报表类型', trigger: 'change' },
+  type: { required: true, message: '请选择报表类型', trigger: 'change' },
   content: { required: true, message: '请输入模板内容', trigger: 'blur' }
 }
 
@@ -209,14 +196,14 @@ const typeOptions = [
 // Helper functions
 function getTypeColor(type) {
   const colors = {
-    daily: 'info',
+    daily: 'primary',
     weekly: 'success',
     monthly: 'warning',
-    quarterly: 'error',
-    annual: 'info',
-    custom: 'default'
+    quarterly: 'danger',
+    annual: 'primary',
+    custom: 'info'
   }
-  return colors[type] || 'default'
+  return colors[type] || 'info'
 }
 
 function formatType(type) {
@@ -407,6 +394,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
+  margin-bottom: 20px;
 }
 
 .template-card:hover {

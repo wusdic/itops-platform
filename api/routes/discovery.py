@@ -5,6 +5,7 @@ Device Discovery API Routes
 Provides IP range scanning and SNMP scanning endpoints for device auto-discovery.
 """
 
+import asyncio
 import json
 import logging
 from typing import Optional, List
@@ -226,6 +227,73 @@ async def start_ip_scan(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"启动IP扫描失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== ARP 扫描接口 ==============
+
+class ARPScanRequest(BaseModel):
+    """ARP扫描请求"""
+    cidr: str = Field(..., description="CIDR notation (e.g. 192.168.1.0/24)")
+
+
+class ARPScanResponse(BaseModel):
+    """ARP扫描响应"""
+    total: int
+    discovered: int
+    hosts: List[dict]
+
+
+@router.post("/arp/scan", summary="ARP扫描网段")
+async def arp_scan(
+    request: ARPScanRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    使用 ARP 协议扫描指定网段的设备。
+
+    ARP 扫描通过发送 ARP 请求探测同网段所有活跃主机的 MAC 地址，
+    返回包括 IP、MAC、厂商信息。适用于发现同一 L2 网段内的所有设备。
+
+    - 需要 root 权限：使用原始套接字发送 ARP 请求（主动扫描）
+    - 无 root 权限：读取 /proc/net/arp 缓存（被动模式）
+
+    与 IP ping 扫描互补：ARP 更可靠（所有设备都响应 ARP），但仅限本地网段。
+    """
+    try:
+        from modules.collection.discovery.scanner import get_arp_scanner
+
+        scanner = get_arp_scanner()
+
+        # Run ARP scan synchronously in thread pool to avoid blocking
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                asyncio.run,
+                scanner.scan_ip_range(request.cidr)
+            )
+            hosts = future.result(timeout=120)
+
+        return ARPScanResponse(
+            total=len(hosts),
+            discovered=len([h for h in hosts if h.mac]),
+            hosts=[{
+                "ip": h.ip,
+                "mac": h.mac,
+                "vendor": h.vendor,
+                "os_type": h.os_type.value if hasattr(h.os_type, 'value') else str(h.os_type),
+                "os_version": h.os_version,
+                "status": h.status,
+                "response_time": h.response_time,
+            } for h in hosts],
+        )
+
+    except concurrent.futures.TimeoutError:
+        raise HTTPException(status_code=504, detail="ARP scan timeout (>120s)")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"ARP扫描失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

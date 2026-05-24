@@ -95,6 +95,7 @@ def _alert_to_dict(alert: Alert) -> dict:
         'resolved_at': alert.resolved_at.isoformat() if alert.resolved_at else None,
         'acknowledged_by': alert.acknowledged_by,
         'resolved_by': alert.resolved_by,
+        'assignee': alert.assignee,
         'resolution_note': alert.resolution_note,
         'created_at': alert.created_at.isoformat() if alert.created_at else None,
         'updated_at': alert.updated_at.isoformat() if alert.updated_at else None,
@@ -645,6 +646,57 @@ async def resolve_alert(
     return {"status": "success", "message": "Alert resolved"}
 
 
+class AlertTransferRequest(BaseModel):
+    """告警转派请求"""
+    assignee: str = Field(..., description="新的处理人/接收人")
+    reason: Optional[str] = Field(None, description="转派原因")
+
+
+@router.post("/alerts/{alert_id}/transfer", summary="转派告警")
+async def transfer_alert(
+    alert_id: int,
+    transfer: AlertTransferRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    将告警转派给其他处理人
+    
+    - 更新 assignee 字段
+    - 记录审计日志
+    - 不改变告警状态
+    """
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    
+    if not alert:
+        raise HTTPException(status_code=404, detail="告警不存在")
+    
+    old_assignee = alert.assignee
+    alert.assignee = transfer.assignee
+    alert.updated_at = datetime.now()
+    db.commit()
+    
+    # 创建审计日志
+    try:
+        from modules.business.monitoring.alert_audit_service import AlertAuditService, AuditAction
+        audit_service = AlertAuditService(db)
+        audit_service.create_assignment_log(
+            alert_id=alert_id,
+            old_assignee=old_assignee,
+            new_assignee=transfer.assignee,
+            operator=current_user.username,
+            reason=transfer.reason or '',
+        )
+    except Exception as e:
+        logger.warning(f"Failed to create audit log: {e}")
+    
+    return {
+        "status": "success",
+        "message": f"告警已转派给 {transfer.assignee}",
+        "assignee": transfer.assignee,
+    }
+
+
 @router.delete("/alerts/{alert_id}", summary="删除告警")
 async def delete_alert(
     alert_id: int,
@@ -675,6 +727,272 @@ async def delete_alert(
     db.commit()
     
     return {"status": "success", "message": "Alert deleted"}
+
+
+# ============== 维护时段接口 ==============
+
+class MaintenanceWindowCreate(BaseModel):
+    """创建维护时段"""
+    name: str = Field(..., description="维护时段名称")
+    description: Optional[str] = Field(None, description="维护原因")
+    target_type: str = Field(..., description="目标类型: device / rule / tag / ip_range")
+    target_id: Optional[str] = Field(None, description="目标ID")
+    target_value: Optional[str] = Field(None, description="目标值(设备IP/标签值)")
+    start_time: datetime = Field(..., description="开始时间 (ISO格式)")
+    end_time: datetime = Field(..., description="结束时间 (ISO格式)")
+    is_active: bool = Field(True, description="是否启用")
+
+
+class MaintenanceWindowUpdate(BaseModel):
+    """更新维护时段"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+    target_value: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
+
+@router.post("/maintenance-windows", summary="创建维护时段")
+async def create_maintenance_window(
+    window: MaintenanceWindowCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """创建新的维护时段"""
+    from modules.foundation.db_models.alert import MaintenanceWindow
+
+    mw = MaintenanceWindow(
+        name=window.name,
+        description=window.description,
+        target_type=window.target_type,
+        target_id=window.target_id,
+        target_value=window.target_value,
+        start_time=window.start_time,
+        end_time=window.end_time,
+        is_active=window.is_active,
+        created_by=current_user.username,
+    )
+    db.add(mw)
+    db.commit()
+    db.refresh(mw)
+
+    return {
+        "status": "success",
+        "id": mw.id,
+        "message": f"维护时段 '{mw.name}' 已创建",
+    }
+
+
+@router.get("/maintenance-windows", summary="获取维护时段列表")
+async def list_maintenance_windows(
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取维护时段列表"""
+    from modules.foundation.db_models.alert import MaintenanceWindow
+
+    query = db.query(MaintenanceWindow)
+    if is_active is not None:
+        query = query.filter(MaintenanceWindow.is_active == is_active)
+
+    total = query.count()
+    items = query.order_by(MaintenanceWindow.created_at.desc()).offset(pagination.offset).limit(pagination.limit).all()
+
+    return {
+        "items": [
+            {
+                "id": mw.id,
+                "name": mw.name,
+                "description": mw.description,
+                "target_type": mw.target_type,
+                "target_id": mw.target_id,
+                "target_value": mw.target_value,
+                "start_time": mw.start_time.isoformat() if mw.start_time else None,
+                "end_time": mw.end_time.isoformat() if mw.end_time else None,
+                "is_active": mw.is_active,
+                "created_by": mw.created_by,
+                "created_at": mw.created_at.isoformat() if mw.created_at else None,
+            }
+            for mw in items
+        ],
+        "total": total,
+        "page": pagination.page,
+        "page_size": pagination.page_size,
+    }
+
+
+@router.get("/maintenance-windows/{window_id}", summary="获取维护时段详情")
+async def get_maintenance_window(
+    window_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取指定维护时段详情"""
+    from modules.foundation.db_models.alert import MaintenanceWindow
+
+    mw = db.query(MaintenanceWindow).filter(MaintenanceWindow.id == window_id).first()
+    if not mw:
+        raise HTTPException(status_code=404, detail="维护时段不存在")
+
+    return {
+        "id": mw.id,
+        "name": mw.name,
+        "description": mw.description,
+        "target_type": mw.target_type,
+        "target_id": mw.target_id,
+        "target_value": mw.target_value,
+        "start_time": mw.start_time.isoformat() if mw.start_time else None,
+        "end_time": mw.end_time.isoformat() if mw.end_time else None,
+        "is_active": mw.is_active,
+        "created_by": mw.created_by,
+        "created_at": mw.created_at.isoformat() if mw.created_at else None,
+        "updated_at": mw.updated_at.isoformat() if mw.updated_at else None,
+    }
+
+
+@router.put("/maintenance-windows/{window_id}", summary="更新维护时段")
+async def update_maintenance_window(
+    window_id: int,
+    update: MaintenanceWindowUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """更新维护时段"""
+    from modules.foundation.db_models.alert import MaintenanceWindow
+
+    mw = db.query(MaintenanceWindow).filter(MaintenanceWindow.id == window_id).first()
+    if not mw:
+        raise HTTPException(status_code=404, detail="维护时段不存在")
+
+    update_data = update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(mw, key, value)
+
+    db.commit()
+    db.refresh(mw)
+
+    return {"status": "success", "message": f"维护时段 '{mw.name}' 已更新"}
+
+
+@router.delete("/maintenance-windows/{window_id}", summary="删除维护时段")
+async def delete_maintenance_window(
+    window_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除维护时段"""
+    from modules.foundation.db_models.alert import MaintenanceWindow
+
+    mw = db.query(MaintenanceWindow).filter(MaintenanceWindow.id == window_id).first()
+    if not mw:
+        raise HTTPException(status_code=404, detail="维护时段不存在")
+
+    db.delete(mw)
+    db.commit()
+
+    return {"status": "success", "message": "维护时段已删除"}
+
+
+# ============== 告警屏蔽/恢复接口 ==============
+
+class AlertSuppressRequest(BaseModel):
+    """告警屏蔽请求"""
+    reason: Optional[str] = Field(None, description="屏蔽原因")
+
+
+class AlertRestoreRequest(BaseModel):
+    """告警恢复请求"""
+    reason: Optional[str] = Field(None, description="恢复原因")
+
+
+@router.post("/alerts/{alert_id}/suppress", summary="屏蔽告警")
+async def suppress_alert(
+    alert_id: int,
+    request: AlertSuppressRequest = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """手动屏蔽指定告警"""
+    from modules.foundation.db_models.alert import Alert, AlertStatus, MaintenanceWindow
+
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="告警不存在")
+
+    if alert.status == AlertStatus.SUPPRESSED:
+        raise HTTPException(status_code=400, detail="告警已经是屏蔽状态")
+
+    old_status = alert.status
+    alert.status = AlertStatus.SUPPRESSED
+    db.commit()
+
+    # 写审计日志
+    try:
+        from modules.business.monitoring.alert_audit_service import AlertAuditService, AuditAction
+        audit_service = AlertAuditService(db)
+        audit_service.create_log(
+            alert_id=alert_id,
+            action=AuditAction.SUPPRESS,
+            alert_key=alert.alert_key,
+            operator=current_user.username,
+            reason=request.reason if request else "手动屏蔽告警",
+        )
+    except Exception as e:
+        logger.warning(f"Failed to create suppress audit log: {e}")
+
+    return {
+        "status": "success",
+        "message": f"告警 #{alert_id} 已屏蔽",
+        "old_status": old_status.value if hasattr(old_status, 'value') else old_status,
+        "new_status": AlertStatus.SUPPRESSED.value,
+    }
+
+
+@router.post("/alerts/{alert_id}/restore", summary="恢复告警")
+async def restore_alert(
+    alert_id: int,
+    request: AlertRestoreRequest = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """将屏蔽状态的告警恢复为活跃"""
+    from modules.foundation.db_models.alert import Alert, AlertStatus
+
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="告警不存在")
+
+    if alert.status != AlertStatus.SUPPRESSED:
+        raise HTTPException(status_code=400, detail="告警不是屏蔽状态")
+
+    alert.status = AlertStatus.ACTIVE
+    db.commit()
+
+    # 写审计日志
+    try:
+        from modules.business.monitoring.alert_audit_service import AlertAuditService, AuditAction
+        audit_service = AlertAuditService(db)
+        audit_service.create_log(
+            alert_id=alert_id,
+            action=AuditAction.RESTORE,
+            alert_key=alert.alert_key,
+            operator=current_user.username,
+            reason=request.reason if request else "手动恢复告警",
+        )
+    except Exception as e:
+        logger.warning(f"Failed to create restore audit log: {e}")
+
+    return {
+        "status": "success",
+        "message": f"告警 #{alert_id} 已恢复",
+        "old_status": AlertStatus.SUPPRESSED.value,
+        "new_status": AlertStatus.ACTIVE.value,
+    }
 
 
 # ============== 告警审计日志接口 ==============

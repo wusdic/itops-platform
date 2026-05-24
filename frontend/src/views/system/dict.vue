@@ -1,104 +1,116 @@
 <template>
   <div class="page-container">
-    <n-card title="字典管理" class="page-card">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon>
-            <n-icon><AddOutline /></n-icon>
-          </template>
-          添加字典
-        </n-button>
+    <el-card>
+      <template #header>
+        <div class="card-header">
+          <span>字典管理</span>
+          <el-button type="primary" @click="handleAdd">
+            <el-icon><Plus /></el-icon> 添加字典
+          </el-button>
+        </div>
       </template>
 
       <div class="filter-bar">
-        <n-input
-          v-model:value="searchKeyword"
+        <el-input
+          v-model="searchKeyword"
           placeholder="搜索字典名称/编码"
           style="width: 200px"
           clearable
           @keyup.enter="handleSearch"
         />
-        <n-button type="primary" @click="handleSearch">搜索</n-button>
+        <el-button type="primary" @click="handleSearch">搜索</el-button>
       </div>
 
-      <n-data-table
-        :columns="columns"
-        :data="dictList"
-        :loading="loading"
-        :pagination="pagination"
-        :row-key="(row) => row.id"
-      />
+      <el-table :data="dictList" v-loading="loading" style="width: 100%">
+        <el-table-column prop="name" label="字典名称" width="180" />
+        <el-table-column prop="code" label="字典编码" width="150" />
+        <el-table-column prop="description" label="描述" :show-overflow-tooltip="true" />
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === '1' ? 'success' : 'danger'" size="small">
+              {{ row.status === '1' ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="handleItems(row)">字典项</el-button>
+            <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
-      <n-modal
-        v-model:show="dialogVisible"
-        preset="card"
-        :title="dialogTitle"
-        style="width: 500px"
-      >
-        <n-form
-          :model="form"
-          :rules="rules"
-          ref="formRef"
-          label-placement="left"
-          label-width="100px"
-        >
-          <n-form-item label="字典名称" path="name">
-            <n-input v-model:value="form.name" placeholder="请输入字典名称" />
-          </n-form-item>
-          <n-form-item label="字典编码" path="code">
-            <n-input v-model:value="form.code" placeholder="请输入字典编码" />
-          </n-form-item>
-          <n-form-item label="描述">
-            <n-input
-              v-model:value="form.description"
-              type="textarea"
-              :rows="3"
-              placeholder="请输入描述"
-            />
-          </n-form-item>
-          <n-form-item label="状态">
-            <n-select
-              v-model:value="form.status"
-              :options="statusOptions"
-              placeholder="请选择状态"
-            />
-          </n-form-item>
-        </n-form>
-        <template #footer>
-          <n-space justify="end">
-            <n-button @click="dialogVisible = false">取消</n-button>
-            <n-button type="primary" @click="submitForm">确定</n-button>
-          </n-space>
-        </template>
-      </n-modal>
-
-      <n-modal
-        v-model:show="itemsDialogVisible"
-        preset="card"
-        title="字典项管理"
-        style="width: 700px"
-      >
-        <n-data-table
-          :columns="itemColumns"
-          :data="dictItems"
-          :row-key="(row) => row.id"
+      <div class="pagination">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          @size-change="fetchData"
+          @current-change="fetchData"
         />
-        <template #footer>
-          <n-button type="primary" size="small" @click="handleAddItem">添加字典项</n-button>
-        </template>
-      </n-modal>
-    </n-card>
+      </div>
+    </el-card>
+
+    <!-- 创建/编辑字典 -->
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" label-position="left">
+        <el-form-item label="字典名称" prop="name">
+          <el-input v-model="form.name" placeholder="请输入字典名称" />
+        </el-form-item>
+        <el-form-item label="字典编码" prop="code">
+          <el-input v-model="form.code" placeholder="请输入字典编码" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="form.status" placeholder="请选择状态" style="width: 100%">
+            <el-option label="启用" value="1" />
+            <el-option label="禁用" value="0" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitForm">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 字典项管理 -->
+    <el-dialog v-model="itemsDialogVisible" title="字典项管理" width="700px">
+      <el-table :data="dictItems" style="width: 100%">
+        <el-table-column prop="label" label="标签" min-width="120" />
+        <el-table-column prop="value" label="值" min-width="120" />
+        <el-table-column prop="sort" label="排序" width="80" />
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === '1' ? 'success' : 'danger'" size="small">
+              {{ row.status === '1' ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="handleEditItem(row)">编辑</el-button>
+            <el-button type="danger" link size="small" @click="handleDeleteItem(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button type="primary" size="small" @click="handleAddItem">添加字典项</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { useMessage, useDialog } from 'naive-ui'
-import { AddOutline, CreateOutline, TrashOutline } from '@vicons/ionicons5'
-import { NTag, NButton } from 'naive-ui'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 
-const message = useMessage()
-const dialog = useDialog()
 const loading = ref(false)
 const searchKeyword = ref('')
 const dictList = ref([])
@@ -109,105 +121,18 @@ const formRef = ref(null)
 const dictItems = ref([])
 const currentDictId = ref(null)
 
-const pagination = {
+const pagination = reactive({
   page: 1,
   pageSize: 10,
-  total: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (page) => { pagination.page = page; loadData(); },
-  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
-}
-const form = reactive({ id: null, name: '', code: '', description: '', status: '1' })
+  total: 0
+})
 
-const statusOptions = [
-  { label: '启用', value: '1' },
-  { label: '禁用', value: '0' }
-]
+const form = reactive({ id: null, name: '', code: '', description: '', status: '1' })
 
 const rules = {
   name: [{ required: true, message: '请输入字典名称', trigger: 'blur' }],
   code: [{ required: true, message: '请输入字典编码', trigger: 'blur' }]
 }
-
-const columns = [
-  { title: '字典名称', key: 'name', width: 180 },
-  { title: '字典编码', key: 'code', width: 150 },
-  { title: '描述', key: 'description', ellipsis: { tooltip: true } },
-  {
-    title: '状态',
-    key: 'status',
-    width: 100,
-    render(row) {
-      return h(
-        NTag,
-        { type: row.status === '1' ? 'success' : 'error', size: 'small' },
-        { default: () => row.status === '1' ? '启用' : '禁用' }
-      )
-    }
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 200,
-    render(row) {
-      return h('div', { style: { display: 'flex', gap: '8px' } }, [
-        h(
-          NButton,
-          { size: 'small', type: 'primary', quaternary: true, onClick: () => handleItems(row) },
-          { default: () => '字典项' }
-        ),
-        h(
-          NButton,
-          { size: 'small', type: 'primary', quaternary: true, onClick: () => handleEdit(row) },
-          { default: () => '编辑' }
-        ),
-        h(
-          NButton,
-          { size: 'small', type: 'error', quaternary: true, onClick: () => handleDelete(row) },
-          { default: () => '删除' }
-        )
-      ])
-    }
-  }
-]
-
-const itemColumns = [
-  { title: '标签', key: 'label', width: 120 },
-  { title: '值', key: 'value', width: 120 },
-  { title: '排序', key: 'sort', width: 80 },
-  {
-    title: '状态',
-    key: 'status',
-    width: 100,
-    render(row) {
-      return h(
-        NTag,
-        { type: row.status === '1' ? 'success' : 'error', size: 'small' },
-        { default: () => row.status === '1' ? '启用' : '禁用' }
-      )
-    }
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 120,
-    render(row) {
-      return h('div', { style: { display: 'flex', gap: '8px' } }, [
-        h(
-          NButton,
-          { size: 'small', type: 'primary', quaternary: true, onClick: () => handleEditItem(row) },
-          { default: () => '编辑' }
-        ),
-        h(
-          NButton,
-          { size: 'small', type: 'error', quaternary: true, onClick: () => handleDeleteItem(row) },
-          { default: () => '删除' }
-        )
-      ])
-    }
-  }
-]
 
 const fetchData = async () => {
   loading.value = true
@@ -223,7 +148,7 @@ const fetchData = async () => {
     dictList.value = data.items || []
     pagination.total = data.total || 0
   } catch (error) {
-    message.error('加载字典列表失败')
+    ElMessage.error('加载字典列表失败')
   } finally {
     loading.value = false
   }
@@ -249,12 +174,8 @@ const handleEdit = (row) => {
 }
 
 const handleDelete = (row) => {
-  dialog.warning({
-    title: '提示',
-    content: `确定删除字典 "${row.name}" 吗?`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
+  ElMessageBox.confirm(`确定删除字典 "${row.name}" 吗?`, '提示', { type: 'warning' })
+    .then(async () => {
       try {
         const token = localStorage.getItem('token')
         await fetch(`/api/v1/admin/dicts/${row.id}`, {
@@ -263,13 +184,12 @@ const handleDelete = (row) => {
             'Authorization': `Bearer ${token}`
           }
         })
-        message.success('删除成功')
+        ElMessage.success('删除成功')
         fetchData()
       } catch (error) {
-        message.error('删除失败')
+        ElMessage.error('删除失败')
       }
-    }
-  })
+    }).catch(() => {})
 }
 
 const handleItems = (row) => {
@@ -281,9 +201,9 @@ const handleItems = (row) => {
   itemsDialogVisible.value = true
 }
 
-const handleAddItem = () => { message.info('字典项管理功能需后端提供独立 API 接口支持') }
-const handleEditItem = (row) => { message.info(`编辑字典项「${row.label}」（${row.value}）需后端 API 支持`) }
-const handleDeleteItem = (row) => { message.info(`删除字典项「${row.label}」需后端 API 支持`) }
+const handleAddItem = () => { ElMessage.info('字典项管理功能需后端提供独立 API 接口支持') }
+const handleEditItem = (row) => { ElMessage.info(`编辑字典项「${row.label}」（${row.value}）需后端 API 支持`) }
+const handleDeleteItem = (row) => { ElMessage.info(`删除字典项「${row.label}」需后端 API 支持`) }
 
 const submitForm = async () => {
   try {
@@ -305,23 +225,18 @@ const submitForm = async () => {
 
     if (!res.ok) throw new Error('请求失败')
 
-    message.success(form.id ? '更新成功' : '创建成功')
+    ElMessage.success(form.id ? '更新成功' : '创建成功')
     dialogVisible.value = false
     fetchData()
   } catch (error) {
-    message.error('操作失败')
+    ElMessage.error('操作失败')
   }
 }
 </script>
 
 <style lang="scss" scoped>
-.page-container {
-  padding: 16px;
-}
-
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-}
+.page-container { padding: 16px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; }
+.filter-bar { display: flex; gap: 12px; margin-bottom: 16px; }
+.pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 </style>

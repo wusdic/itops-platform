@@ -19,6 +19,7 @@ export const workorder = {
   getTrend: () => request.get('/workorders/stats/trend'),
   getFlows: (id) => request.get(`/workorders/${id}/flows`),
   addFlow: (id, data) => request.post(`/workorders/${id}/flows`, data),
+  getApprovalFlow: (id) => request.get(`/workorders/${id}/approval-flow`),
   getDraftList: () => request.get('/workorders/draft/list'),
   getDraft: (id) => request.get(`/workorders/draft/${id}`),
   saveDraft: (data) => request.post('/workorders/draft/save', data),

@@ -1,77 +1,73 @@
 <template>
   <div class="chat-page">
-    <n-layout has-sider class="chat-layout" :collapsed="sidebarCollapsed" collapsible @update:collapsed="sidebarCollapsed = $event">
+    <el-container class="chat-layout" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
       <!-- 左侧会话列表 -->
-      <n-layout-sider
-        bordered
-        :width="280"
-        :collapsed-width="0"
-        :native-scrollbar="false"
-        class="conversation-sider"
-        :collapsed="sidebarCollapsed"
+      <el-aside
+        :width="sidebarCollapsed ? '0px' : '280px'"
+        class="conversation-aside"
+        :class="{ collapsed: sidebarCollapsed }"
       >
-        <div class="sider-header">
-          <n-button type="primary" block @click="createConversation">
-            <template #icon><n-icon><CreateOutline /></n-icon></template>
-            新建会话
-          </n-button>
-          <n-input
-            v-model:value="searchText"
-            placeholder="搜索会话..."
-            size="small"
-            style="margin-top: 8px"
-            clearable
-          >
-            <template #prefix><n-icon><SearchOutline /></n-icon></template>
-          </n-input>
-        </div>
-        <n-list class="conversation-list" hoverable clickable>
-          <n-spin size="small" v-if="conversationsLoading" style="padding: 20px; display: block; text-align: center" />
-          <template v-else>
-          <n-list-item
-            v-for="conv in filteredConversations"
-            :key="conv.conversation_id"
-            class="conversation-item"
-            :class="{ active: currentConversation?.conversation_id === conv.conversation_id }"
-            @click="selectConversation(conv)"
-          >
-            <template #prefix>
-              <n-icon :component="StarOutline" v-if="conv.is_pinned" color="#f0a020" />
-              <n-icon :component="ChatbubbleOutline" v-else color="#999" />
-            </template>
-            <div class="conv-info">
-              <div class="conv-title">{{ conv.title || '新对话' }}</div>
-              <div class="conv-time">{{ formatDate(conv.last_message_at || conv.created_at) }}</div>
+        <div class="aside-content">
+          <div class="sider-header">
+            <el-button type="primary" plain @click="createConversation" style="width: 100%">
+              <el-icon><Plus /></el-icon>
+              新建会话
+            </el-button>
+            <el-input
+              v-model="searchText"
+              placeholder="搜索会话..."
+              size="small"
+              style="margin-top: 8px"
+              clearable
+            >
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+          </div>
+
+          <div class="conversation-list" v-loading="conversationsLoading" element-loading-text="加载中...">
+            <div v-if="!conversationsLoading">
+              <div
+                v-for="conv in filteredConversations"
+                :key="conv.conversation_id"
+                class="conversation-item"
+                :class="{ active: currentConversation?.conversation_id === conv.conversation_id }"
+                @click="selectConversation(conv)"
+              >
+                <div class="conv-icon">
+                  <el-icon v-if="conv.is_pinned" color="#f0a020"><Star /></el-icon>
+                  <el-icon v-else color="#999"><ChatDotRound /></el-icon>
+                </div>
+                <div class="conv-info">
+                  <div class="conv-title">{{ conv.title || '新对话' }}</div>
+                  <div class="conv-time">{{ formatDate(conv.last_message_at || conv.created_at) }}</div>
+                </div>
+                <div class="conv-actions">
+                  <el-tooltip :content="conv.is_pinned ? '取消置顶' : '置顶'" placement="top">
+                    <el-button text size="small" @click.stop="handlePin(conv)">
+                      <el-icon><Star /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-popconfirm title="确定删除此会话？" @confirm="handleDelete(conv.conversation_id)">
+                    <template #reference>
+                      <el-button text size="small" @click.stop>
+                        <el-icon color="#d03050"><Delete /></el-icon>
+                      </el-button>
+                    </template>
+                  </el-popconfirm>
+                </div>
+              </div>
             </div>
-            <template #suffix>
-              <n-space>
-                <n-tooltip :content="conv.is_pinned ? '取消置顶' : '置顶'" placement="top">
-                  <n-button text size="tiny" @click.stop="handlePin(conv)">
-                    <n-icon><StarOutline /></n-icon>
-                  </n-button>
-                </n-tooltip>
-                <n-popconfirm @positive-click="handleDelete(conv.conversation_id)">
-                  <template #trigger>
-                    <n-button text size="tiny" @click.stop>
-                      <n-icon color="#d03050"><TrashOutline /></n-icon>
-                    </n-button>
-                  </template>
-                  确定删除此会话？
-                </n-popconfirm>
-              </n-space>
-            </template>
-          </n-list-item>
-          </template>
-        </n-list>
-      </n-layout-sider>
+          </div>
+        </div>
+      </el-aside>
 
       <!-- 右侧聊天界面 -->
-      <n-layout-content class="chat-content" :native-scrollbar="false" ref="chatContentRef">
+      <el-main class="chat-content" ref="chatContentRef">
         <div class="chat-main" v-if="currentConversation">
           <div class="chat-header">
-            <n-button text @click="sidebarCollapsed = !sidebarCollapsed" class="collapse-btn">
-              <n-icon size="20"><MenuOutline /></n-icon>
-            </n-button>
+            <el-button text @click="sidebarCollapsed = !sidebarCollapsed" class="collapse-btn">
+              <el-icon size="20"><Menu /></el-icon>
+            </el-button>
             <h3>{{ currentConversation.title || '智能问答' }}</h3>
           </div>
 
@@ -83,45 +79,37 @@
               class="message"
               :class="msg.role === 'user' ? 'message-user' : 'message-ai'"
             >
-              <n-avatar
+              <el-avatar
                 v-if="msg.role === 'ai'"
-                round
-                size="small"
-                :style="{ background: '#18a058' }"
-              >AI</n-avatar>
+                :size="32"
+                style="background: #18a058; flex-shrink: 0"
+              >AI</el-avatar>
               <div class="bubble" :class="msg.role === 'user' ? 'bubble-user' : 'bubble-ai'">
                 <div class="bubble-text" :class="{ 'bubble-text-ai': msg.role === 'ai' }" v-html="msg.role === 'ai' ? renderMarkdown(msg.content) : msg.content"></div>
                 <div class="bubble-footer">
                   <span class="bubble-time">{{ formatTime(msg.created_at) }}</span>
-                  <n-tooltip trigger="hover">
-                    <template #trigger>
-                      <n-button text size="tiny" @click.stop="copyMessage(msg.content)" class="copy-btn">
-                        <n-icon size="12"><CopyOutline /></n-icon>
-                      </n-button>
-                    </template>
-                    复制
-                  </n-tooltip>
-                  <n-tooltip trigger="hover">
-                    <template #trigger>
-                      <n-button text size="tiny" @click.stop="resendMessage(msg)" class="copy-btn">
-                        <n-icon size="12"><RefreshOutline /></n-icon>
-                      </n-button>
-                    </template>
-                    重发
-                  </n-tooltip>
+                  <el-tooltip content="复制" placement="top">
+                    <el-button text size="small" @click.stop="copyMessage(msg.content)" class="copy-btn">
+                      <el-icon size="12"><CopyDocument /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip content="重发" placement="top">
+                    <el-button text size="small" @click.stop="resendMessage(msg)" class="copy-btn">
+                      <el-icon size="12"><RefreshRight /></el-icon>
+                    </el-button>
+                  </el-tooltip>
                 </div>
               </div>
-              <n-avatar
+              <el-avatar
                 v-if="msg.role === 'user'"
-                round
-                size="small"
-                :style="{ background: '#2080f0' }"
-              >{{ userInitial }}</n-avatar>
+                :size="32"
+                style="background: #2080f0; flex-shrink: 0"
+              >{{ userInitial }}</el-avatar>
             </div>
 
             <!-- 加载状态 -->
             <div v-if="loading" class="message message-ai">
-              <n-avatar round size="small" :style="{ background: '#18a058' }">AI</n-avatar>
+              <el-avatar :size="32" style="background: #18a058; flex-shrink: 0">AI</el-avatar>
               <div class="bubble bubble-ai">
                 <div class="bubble-text bubble-text-ai" v-html="streamingContent ? renderMarkdown(streamingContent) + '<span class=\'typing-cursor\'></span>' : '<span style=\'color:#999\'>正在思考<span class=\'typing-cursor\'></span></span>'"></div>
               </div>
@@ -130,15 +118,15 @@
 
           <!-- 输入框 -->
           <div class="chat-input">
-            <n-input
-              v-model:value="inputText"
+            <el-input
+              v-model="inputText"
               type="textarea"
               placeholder="输入你的问题，按 Enter 发送（Shift+Enter 换行）"
               :autosize="{ minRows: 1, maxRows: 6 }"
               @keydown="handleKeydown"
               class="input-area"
             />
-            <n-button
+            <el-button
               type="primary"
               :disabled="!inputText.trim()"
               :loading="loading"
@@ -146,49 +134,45 @@
               circle
               class="send-btn"
             >
-              <template #icon><n-icon><SendOutline /></n-icon></template>
-            </n-button>
+              <el-icon><Promotion /></el-icon>
+            </el-button>
           </div>
         </div>
 
         <!-- 空状态 -->
         <div v-else class="empty-state">
-          <n-icon size="80" color="#ddd"><ChatbubbleEllipsesOutline /></n-icon>
+          <el-icon :size="80" color="#ddd"><ChatDotSquare /></el-icon>
           <p style="color: #999; margin-top: 16px">选择一个会话或创建新会话开始对话</p>
-          <n-space vertical size="medium" align="center" style="margin-top: 20px; max-width: 400px;">
-            <n-space vertical size="small" align="start">
-              <div style="font-size: 13px; color: #666; line-height: 1.6;">
-                <p style="margin: 0 0 8px 0; font-weight: 600;">💡 我可以帮你：</p>
-                <ul style="margin: 0; padding-left: 20px;">
-                  <li>解答IT运维相关问题</li>
-                  <li>分析设备故障和告警原因</li>
-                  <li>提供系统配置优化建议</li>
-                  <li>协助编写运维脚本和文档</li>
-                </ul>
-              </div>
-            </n-space>
-            <n-button type="primary" @click="inputText = ''; createConversation(); nextTick(() => { document.querySelector('.chat-input textarea')?.focus() })" style="margin-top: 8px">
+          <el-space direction="vertical" :size="12" align="center" style="margin-top: 20px; max-width: 400px;">
+            <div style="font-size: 13px; color: #666; line-height: 1.6; text-align: left;">
+              <p style="margin: 0 0 8px 0; font-weight: 600;">💡 我可以帮你：</p>
+              <ul style="margin: 0; padding-left: 20px;">
+                <li>解答IT运维相关问题</li>
+                <li>分析设备故障和告警原因</li>
+                <li>提供系统配置优化建议</li>
+                <li>协助编写运维脚本和文档</li>
+              </ul>
+            </div>
+            <el-button type="primary" @click="inputText = ''; createConversation(); nextTick(() => { document.querySelector('.chat-input textarea')?.focus() })" style="margin-top: 8px">
               开启新对话
-            </n-button>
-          </n-space>
+            </el-button>
+          </el-space>
         </div>
-      </n-layout-content>
-    </n-layout>
+      </el-main>
+    </el-container>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
-import { useMessage } from 'naive-ui'
+import { ElMessage } from 'element-plus'
 import {
-  CreateOutline, SearchOutline, StarOutline, ChatbubbleOutline,
-  TrashOutline, SendOutline, ChatbubbleEllipsesOutline, CopyOutline,
-  RefreshOutline, MenuOutline
-} from '@vicons/ionicons5'
+  Plus, Search, Star, ChatDotRound, Delete, Menu,
+  CopyDocument, RefreshRight, Promotion, ChatDotSquare
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate, formatTime } from '@/utils/date'
 
-const message = useMessage()
 const authStore = useAuthStore()
 
 const userInitial = computed(() => authStore.userInfo?.username?.charAt(0)?.toUpperCase() || 'U')
@@ -256,9 +240,9 @@ function renderMarkdown(text) {
 async function copyMessage(content) {
   try {
     await navigator.clipboard.writeText(content)
-    message.success('已复制')
+    ElMessage.success('已复制')
   } catch {
-    message.error('复制失败')
+    ElMessage.error('复制失败')
   }
 }
 
@@ -279,7 +263,7 @@ async function loadConversations() {
       headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
     })
     if (res.status === 401) {
-      message.warning('登录已过期，请重新登录')
+      ElMessage.warning('登录已过期，请重新登录')
       localStorage.removeItem('token')
       window.location.href = '/login'
       return
@@ -288,10 +272,10 @@ async function loadConversations() {
       const data = await res.json()
       conversations.value = data.items || data || []
     } else {
-      message.error('加载会话列表失败')
+      ElMessage.error('加载会话列表失败')
     }
   } catch (e) {
-    message.error('加载会话列表失败')
+    ElMessage.error('加载会话列表失败')
   } finally {
     conversationsLoading.value = false
   }
@@ -307,7 +291,7 @@ async function selectConversation(conv) {
       headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
     })
     if (res.status === 401) {
-      message.warning('登录已过期，请重新登录')
+      ElMessage.warning('登录已过期，请重新登录')
       localStorage.removeItem('token')
       window.location.href = '/login'
       return
@@ -323,12 +307,12 @@ async function selectConversation(conv) {
         }))
       }
     } else {
-      message.error('加载会话失败')
+      ElMessage.error('加载会话失败')
     }
     await nextTick()
     scrollToBottom()
   } catch (e) {
-    message.error('加载会话失败')
+    ElMessage.error('加载会话失败')
   } finally {
     loading.value = false
   }
@@ -359,11 +343,11 @@ async function sendMessage() {
 
   try {
     const username = authStore.userInfo?.username || 'unknown'
-    const payload = { 
-      message: text, 
+    const payload = {
+      message: text,
       user_id: username,
       stream: false,
-      conversation_id: currentConversation.value?.conversation_id || undefined 
+      conversation_id: currentConversation.value?.conversation_id || undefined
     }
     const res = await fetch('/api/v1/ai/chat', {
       method: 'POST',
@@ -374,7 +358,7 @@ async function sendMessage() {
       body: JSON.stringify(payload)
     })
     if (res.status === 401) {
-      message.warning('登录已过期，请重新登录')
+      ElMessage.warning('登录已过期，请重新登录')
       localStorage.removeItem('token')
       window.location.href = '/login'
       return
@@ -382,7 +366,7 @@ async function sendMessage() {
     if (!res.ok) {
       throw new Error('Send message failed')
     }
-    
+
     // 判断是否流式响应
     const contentType = res.headers.get('content-type') || ''
     if (contentType.includes('text/event-stream')) {
@@ -438,7 +422,7 @@ async function sendMessage() {
       await loadConversations()
     }
   } catch (e) {
-    message.error('AI服务暂不可用，请稍后重试')
+    ElMessage.error('AI服务暂不可用，请稍后重试')
   } finally {
     loading.value = false
     streamingContent.value = ''
@@ -461,19 +445,19 @@ async function handleDelete(conversation_id) {
       headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
     })
     if (res.status === 401) {
-      message.warning('登录已过期，请重新登录')
+      ElMessage.warning('登录已过期，请重新登录')
       localStorage.removeItem('token')
       window.location.href = '/login'
       return
     }
-    message.success('会话已删除')
+    ElMessage.success('会话已删除')
     if (currentConversation.value?.conversation_id === conversation_id) {
       currentConversation.value = null
       messages.value = []
     }
     await loadConversations()
   } catch (e) {
-    message.error('删除失败')
+    ElMessage.error('删除失败')
   }
 }
 
@@ -483,23 +467,23 @@ async function handlePin(conv) {
     const username = authStore.userInfo?.username || ''
     const res = await fetch(`/api/v1/ai/conversations/${conv.conversation_id}/pin?is_pinned=${isPinned}`, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}` 
+        Authorization: `Bearer ${localStorage.getItem('token') || ''}`
       },
       body: JSON.stringify({ user_id: username })
     })
     if (res.status === 401) {
-      message.warning('登录已过期，请重新登录')
+      ElMessage.warning('登录已过期，请重新登录')
       localStorage.removeItem('token')
       window.location.href = '/login'
       return
     }
     if (!res.ok) throw new Error('Pin failed')
-    message.success(isPinned ? '已置顶' : '已取消置顶')
+    ElMessage.success(isPinned ? '已置顶' : '已取消置顶')
     await loadConversations()
   } catch (e) {
-    message.error('操作失败')
+    ElMessage.error('操作失败')
   }
 }
 
@@ -516,16 +500,49 @@ onMounted(() => {
 
 <style scoped>
 .chat-page { height: 100%; display: flex; flex-direction: column; }
-.chat-layout { height: calc(100vh - 140px); border-radius: 8px; overflow: hidden; }
-.conversation-sider { background: #fafafa; display: flex; flex-direction: column; transition: width 0.2s; }
+.chat-layout {
+  height: calc(100vh - 140px);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: row;
+  border: 1px solid #e4e7ed;
+}
+.conversation-aside {
+  background: #fafafa;
+  transition: width 0.3s;
+  overflow: hidden;
+  border-right: 1px solid #e4e7ed;
+  flex-shrink: 0;
+}
+.conversation-aside.collapsed {
+  width: 0 !important;
+  border-right: none;
+}
+.aside-content {
+  width: 280px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 .sider-header { padding: 12px; background: #fff; border-bottom: 1px solid #eee; }
 .conversation-list { flex: 1; overflow-y: auto; }
-.conversation-item { cursor: pointer; transition: background 0.2s; padding: 8px 12px !important; }
+.conversation-item {
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .conversation-item:hover { background: #f0f0f0; }
 .conversation-item.active { background: #e8f4ff; }
+.conv-icon { flex-shrink: 0; display: flex; align-items: center; }
 .conv-info { flex: 1; min-width: 0; }
 .conv-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-time { font-size: 12px; color: #999; margin-top: 2px; }
+.conv-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.2s; }
+.conversation-item:hover .conv-actions { opacity: 1; }
 .chat-main { display: flex; flex-direction: column; height: 100%; }
 .chat-header { padding: 16px 20px; border-bottom: 1px solid #eee; background: #fff; display: flex; align-items: center; gap: 12px; }
 .chat-header h3 { margin: 0; font-size: 16px; font-weight: 600; }
@@ -566,9 +583,10 @@ onMounted(() => {
 .input-area { flex: 1; }
 .send-btn { flex-shrink: 0; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+.chat-content { padding: 0; display: flex; flex-direction: column; }
 
 /* 响应式 - 小屏幕收起侧边栏 */
 @media (max-width: 768px) {
-  .chat-layout :deep(.n-layout-sider) { position: absolute; z-index: 100; height: 100%; }
+  .conversation-aside { position: absolute; z-index: 100; height: 100%; }
 }
 </style>

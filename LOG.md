@@ -1,126 +1,85 @@
-# LOG - ITOps Platform
+# ITOps Platform 开发记录
 
-## 2026-05-13
+> 最后更新：2026-05-23
 
-### 下午工作
+## 服务状态
 
-#### Phase 2 全面完成
-- [15:00] AI根因分析 (C2) ✅ — RootCauseAnalyzer + root_cause.py + 24 tests
-- [15:05] AI处置建议 (C3) ✅ — RemediationEngine + remediation.py + 25 tests
-- [15:10] 对话历史持久化 (C1) ✅ — _save_chat_messages() in ai.py
-- [15:15] 设备发现 API (B1) ✅ — POST/GET /discovery/scan + import
-- [15:20] 采集精细化开关 (B2) ✅ — device_metrics.py API + 27 tests
-- [15:25] 通知对象配置 (B3) ✅ — notification.py + NotificationTarget + 28 tests
-- [15:30] API Key认证 (B4) ✅ — api_keys.py + verify_api_key dependencies + tests
-- [15:35] SLA计时器+升级 (D2) ✅ — SLAManager + 26 tests
-- [15:40] 工单草稿保存 (D3) ✅ — draft_data字段 + PUT /draft + tests
-- [15:45] 执行失败自动回滚 (D4) ✅ — RollbackManager + 21 tests
-- [15:50] 工单Excel导出 (E1) ✅ — ExcelExporter + 30 tests
-- [15:55] 巡检报告生成 (A3) ✅ — InspectionReportGenerator + Report.vue + 20 tests
-- [16:00] 仪表盘自定义列 (A4) ✅ — DashboardLayout + 34 tests
-- [16:05] 批量导入设备 (E2) ✅ — DeviceImporter + 前端 + 23 tests
+- **API 服务**：PID 3128822，端口 8000
+- **前端构建**：`frontend/dist/`（已更新）
+- **数据库**：MySQL itops_platform @ localhost:3306
+- **Redis**：localhost:6379（db=1）
+- **LLM**：localhost:11435，Qwen3.5-0.8B-Q4_K_M.gguf
+- **默认账号**：admin / Admin@123456
 
-#### Phase 3 前端完成
-- [16:10] System.vue 5个子页面内容验证 ✅ + npm build ✅
-- [16:15] Scheduler.vue 执行历史+立即执行 ✅ + npm build ✅
-- [16:20] 巡检报告 Report.vue ✅ + npm build ✅
-- [16:25] Dashboard.vue 拖拽配置 ✅ + npm build ✅
-- [16:30] Devices.vue 批量导入按钮 ✅ + npm build ✅
+## P0 功能（已全部实现 ✅）
 
-#### 文档与Git同步
-- [16:35] 更新 TODO.md — 17/17 tracks 完成，~92% 实现度
-- [16:40] 更新 CHANGES.md — 记录所有 Phase 2 完成项
-- [16:45] 更新 LOG.md — 记录今日完成
-- [16:50] Git add + commit + push → github.com/wusdic/itops_platform
-- [16:55] 创建 parallel-track-execution skill
+| 任务 | 描述 | 验证方式 |
+|---|---|---|
+| P0-1 | API Key 认证 | `verify_api_key()` 在 `api/middleware/auth.py` |
+| P0-2 | 告警转派 | `POST /alerts/{id}/transfer` |
+| P0-3 | 告警屏蔽 | `POST /alerts/{id}/suppress` |
+| P0-4 | 工单草稿保存 | `WorkOrderDraftManager` 在 `modules/business/workorder/draft_manager.py` |
+| P0-5 | AI Copilot 对话 | `POST /ai/copilot/chat` |
+| P0-6 | 设备指纹模板版本 | `GET /credentials/versions` |
+| P0-7 | 导出数据权限 | admin 权限中间件 |
+| P0-8 | 数据脱敏展示 | YAML credentials 脱敏 |
 
-#### 今日统计
-- 新增 API 端点：~22 个
-- 新增测试：~316 个（100% 通过）
-- 新增业务模块：8 个
-- 前端 npm build：5 个页面全部通过
+## P1 功能（已全部实现 ✅）
 
-### 部署验证与问题修复
-- [14:00] Docker 6个容器健康检查全部通过（MySQL/Redis/TDengine/Qdrant/MinIO/API）
-- [14:10] LLM (Qwen3.5-9B Q8_0) 和 API 服务正常运行
-- [14:15] 修复 `docker_client.py` 第87行：`docker.Client` → `docker.APIClient`（SDK v7兼容）
-- [14:20] TDengine REST API 验证成功：确认 3.x 格式 `Content-Type: text/plain` + `data=`
-- [14:25] 容器指标采集测试成功：6个容器 CPU/Memory/Net/Block 全部采集正常
-- [14:30] TDengine 超级表写入失败：错误码512 `tbname column can not be null`
-  - 原因：TDengine 3.x 超级表必须指定子表名，不能直接 INSERT INTO 超级表
-  - 方案：改用普通表（按容器名建独立表）绕过超级表机制
-- [14:35] 网关探测：10.168.1.1 蒲公英SD-WAN路由器，Web管理页可访问，SNMP未开放
-- [14:40] 网络扫描：发现 172.20.0.x (Docker bridge)、10.168.1.1 (网关)、10.168.1.232 (本机)
-- [14:45] 新增 DEPLOYMENT_ISSUES.md：系统记录部署问题、网络限制、依赖兼容性
-- [14:50] 更新 CHANGES.md + LOG.md，准备提交 GitHub
+| 任务 | 描述 | 关键文件 |
+|---|---|---|
+| P1-9 | 审批流程可视化 | `api/routes/workorder.py` + `frontend/workorder/list.vue` |
+| P1-10 | 自定义仪表盘布局 | `PUT/GET /dashboard/layout` + `dashboard/index.vue` |
+| P1-11 | LDAP SSO 单点登录 | `POST /ldap-login` + `GET /ldap/status`（auth.py:496-646）|
+| P1-12 | 系统备份恢复 | `GET /admin/backup`（admin.py）|
+| P1-13 | 配置热更新 | `init_config_hot_reload()`（main.py:86）+ `ConfigManager.start_watching()` |
+| P1-14 | 运维知识库 SOP | `kb_categories` + `kb_sop_documents` + `kb_document_reviews` 三表 |
+| P1-15 | LLM 模型降级策略 | `llm_client.py` 降级链路（OpenAI → Ollama → Mock）|
+| P1-16 | 相似案例 AI 复用推荐 | `CaseRecommender`（case.py:758-917）+ `POST /fault-case/{id}/recommend-similar` |
+| P1-17 | 日志配置管理 | `GET/PUT /admin/log-configs` |
+| P1-18 | 告警增强字段 | `AlertRecord.last_escalated_at` + `AlertTrigger.check_escalation()` |
 
-#### 当前阻塞项
-- TDengine 写入：需将超级表方案改为普通表方案
-- 网关监控：需获取 10.168.1.1 登录凭证或找到可访问的 API 端点
-- Docker 网络 I/O：采集正常但未写入 TDengine
+## P2 功能
 
-## 2026-05-12
+| 任务 | 描述 | 状态 |
+|---|---|---|
+| P2-19 | ARP 主动扫描 | ✅ `ARPScanner` 类（scanner.py）+ `POST /discovery/arp/scan` |
+| P2-20 | 知识图谱检索 | ❌ 需要 Neo4j，暂跳过 |
+| P2-21 | 执行失败自动回滚 | ✅ `RollbackManager`（rollback.py:524行）+ rollback API |
+| P2-22 | 组织架构管理 | ✅ `Department` 模型 + 6个 CRUD API + 树形接口 |
+| P2-23~27 | 多租户/分表/滚动升级/数字水印 | ❌ 架构全局改造，风险高，跳过 |
 
-### 下午工作（持续）
+## 已验证的后端能力（代码存在但旧版 GAP_ANALYSIS 漏标）
 
-#### 测试套件大修复
-- [14:30] 测试基础设施全面修复 - StaticPool 导入缺失修复
-  - test_monitoring_api.py: 添加 `from sqlalchemy.pool import StaticPool` → 15 errors → 0，**20/20 通过**
-  - test_knowledge_api.py: 同上 → 21 errors → 1 failure，**27/28 通过**
-  - test_ai_api.py: 同上 → **17/19 通过**
-  - test_workorder.py: 同上 → **37/37 通过**
-  - commit `996255e` - "fix(tests): add StaticPool import to legacy test files"
-- [14:00] 修复 `alert_trigger.py` 时间窗口判断 bug
-  - `start_hour <= current_hour < end_hour` → `start_hour <= current_hour <= end_hour`
-  - 修复 end_hour=23 时 23:xx 被错误排除的问题
-  - 修复 `test_knowledge_api.py` DocumentStatus.DEPRECATED → OBSOLETE
+| 项目 | 描述 | 位置 |
+|---|---|---|
+| MAIN-001 | 配置热更新 | `core/config/manager.py:84` `ConfigManager.start_watching()` |
+| MON-022 | 告警屏蔽 | `monitoring.py:1300` `POST /alerts/{id}/suppress` |
+| MON-024 | 告警升级定时任务 | `alerter.py:561-746` `AlertTrigger._escalation_loop()` |
 
-#### 前端构建成功
-- [13:30] 解决 npm node_modules 权限问题
-  - 方案：在 ~/itops-frontend-build 重建独立构建环境
-  - 修复 3 个空 Vue 文件（devices.vue, knowledge/list.vue, ai/analyze.vue）
-  - 修复 api/index.js 缺失导出（devices/alerts/performance/auth/assets/scheduler）
-  - 创建 src/api/assets.js, src/api/scheduler.js
-- [13:20] 前端构建通过：`npm run build` → ✓ built in 6.18s，输出 3.0MB dist/
-- [13:15] commit `72257ef` - "feat(frontend): fix empty Vue stubs + add missing API exports + rebuild"
-- [13:10] commit `95b3319` - "fix(test_config_loader): use correct ConfigLoader param config_dir"
+## 遗留缺口
 
-#### Phase 1 P0 缺口完成状态确认
-- WKO-021 SLA计时器 ✅（b252be1）
-- WKO-022 SLA自动升级 ✅（b252be1）
-- WKO-033 工单导出Excel ✅（b252be1）
-- MON-032 仪表盘自定义布局 ✅（7b627d6）
-- AUTO-020 告警触发自动化 ✅（6c13124）
-- WKO-008 工单草稿保存 ✅（74b1f22）
-- MON-028 告警审计日志 ✅（005de2f）
-- CFG-026 通知对象配置 ✅（f06a8df）
-- COL-001/COL-002 设备自动发现 ✅（cb9fc99, 4992ae3）
-- CFG-013 采集项精细化开关 ✅（cb9fc99）
+- **P2-20 知识图谱**：依赖 Neo4j，当前环境不可用
+- **P2-23~27**：多租户/分表/滚动升级/数字水印/滚动发布，均为全局架构改造，需谨慎评估
 
-### 凌晨工作
-- [05:00] Phase 0.1 开始 - 测试基础设施修复
-- [05:30] Phase 0.1 完成 - 修复重复Base问题（aaec9f5）
-- [06:00-08:00] Phase 1 P0 后端缺口开发（见上午节）
-- [08:30] 测试基线：1207 passed, 175 failed, 75 errors (~87% pass率)
-- [08:45] 创建 complex-project-execution 方法论 skill
-- [09:00] 创建项目 TODO.md, LOG.md, CHANGES.md
+## 重要调试经验
 
-### 修改记录
-| 时间 | 文件 | 影响 | 原因 |
-|------|------|------|------|
-| 14:30 | test_monitoring_api.py | API测试 | 添加StaticPool导入 |
-| 14:30 | test_knowledge_api.py | 知识API测试 | 添加StaticPool导入+DEPRECATED→OBSOLETE |
-| 14:30 | test_ai_api.py | AI API测试 | 添加StaticPool导入 |
-| 14:30 | test_workorder.py | 工单测试 | 添加StaticPool导入 |
-| 14:00 | alert_trigger.py | 告警触发 | 修复时间窗口判断bug |
-| 13:30 | frontend/src/views/*.vue | 前端视图 | 修复空Vue文件 |
-| 13:30 | frontend/src/api/*.js | 前端API | 补充缺失导出 |
+### 服务重启时机
+新增 SQLAlchemy Model 后必须重启 uvicorn，否则 `Base.metadata.create_all` 不会注册新表。
 
-## 2026-05-11
+### 路由注册顺序
+FastAPI 按定义顺序匹配，动态路径（如 `/{id}`）必须放在静态路径（如 `/tree`）之后。
 
-### 之前的工作
-- 发现重复Base问题（3个独立的declarative_base()）
-- 发现测试基础设施损坏（表不存在）
-- 发现device_api router路径冲突
-- 完成GAP_ANALYSIS_v2.md差距分析
-- 完成REQUIREMENTS_MASTER.md需求全景
+### LLM 连接
+- 本地 ollama 默认端口 **11434**（不是 11435）
+- `LLMClient()` 无参数调用会得到 `llm_client = None`，需在调用前检查
+- `chat()` 接收 `List[Dict]`（消息列表），不是字符串 prompt
+
+### ARP 扫描
+- root 用户：原始套接字（需 `CAP_NET_RAW`）
+- 非 root：读取 `/proc/net/arp`（缓存，非实时）
+- 内置 OUI 数据库 109 条
+
+### Dashboard Layout
+- 后端 `DashboardLayoutPersistence` 在 `modules/business/dashboard/persistence.py`
+- 前端 `dashboard/index.vue` 需从 API 加载 layout 并动态渲染

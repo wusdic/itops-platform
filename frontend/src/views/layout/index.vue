@@ -1,122 +1,217 @@
 <template>
-  <n-layout has-sider class="layout" :native-scrollbar="false">
+  <el-container class="layout">
     <!-- Mobile Header -->
-    <n-layout-header class="mobile-header">
-      <n-space align="center">
-        <n-button quaternary circle size="small" @click="toggleSidebar">
-          <template #icon>
-            <n-icon><MenuOutline /></n-icon>
-          </template>
-        </n-button>
+    <el-header class="mobile-header">
+      <el-space>
+        <el-button quaternary circle size="small" @click="toggleSidebar">
+          <el-icon><Menu /></el-icon>
+        </el-button>
         <span class="mobile-title">ITOps</span>
-      </n-space>
-      <n-space align="center">
-        <n-badge :value="notificationCount" :max="99" :show="notificationCount > 0">
-          <n-button quaternary circle size="small" @click="$router.push('/notification/message')">
-            <template #icon><n-icon><NotificationsOutline /></n-icon></template>
-          </n-button>
-        </n-badge>
-        <n-dropdown :options="userDropdown" @select="onUserAction">
-          <n-space align="center" style="cursor:pointer;padding:0 8px">
-            <n-avatar round size="small" style="background:#18a058">
+      </el-space>
+      <el-space>
+        <el-badge :value="notificationCount" :max="99" :hidden="notificationCount === 0">
+          <el-button quaternary circle size="small" @click="$router.push('/notification/message')">
+            <el-icon><Bell /></el-icon>
+          </el-button>
+        </el-badge>
+        <el-dropdown @command="onUserAction" trigger="click">
+          <el-space align="center" style="cursor:pointer;padding:0 8px">
+            <el-avatar :size="28" style="background:#18a058">
               {{ username.charAt(0).toUpperCase() }}
-            </n-avatar>
+            </el-avatar>
             <span style="font-size:13px" class="mobile-username">{{ username }}</span>
-          </n-space>
-        </n-dropdown>
-      </n-space>
-    </n-layout-header>
+          </el-space>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+              <el-dropdown-item command="password">修改密码</el-dropdown-item>
+              <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </el-space>
+    </el-header>
 
     <!-- Sidebar -->
-    <n-layout-sider
-      bordered
-      :collapsed="collapsed"
-      :collapsed-width="64"
-      :width="220"
-      show-trigger="bar"
-      collapse-mode="width"
-      :native-scrollbar="false"
+    <el-aside
+      :width="collapsed ? '64px' : '220px'"
       class="sider"
       :class="{ 'mobile-sider': isMobile }"
-      :style="isMobile && !collapsed ? { position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 1000, transform: 'translateX(-100%)', transition: 'transform 0.3s' } : {}"
     >
       <!-- Overlay for mobile -->
       <div v-if="isMobile && !collapsed" class="sidebar-overlay" @click="collapsed = true"></div>
 
       <div class="logo" @click="goHome">
-        <n-icon size="26" color="#18a058"><ServerOutline /></n-icon>
+        <el-icon :size="26" color="#18a058"><Monitor /></el-icon>
         <span v-show="!collapsed" class="logo-text">ITOps</span>
       </div>
 
-      <n-menu
-        :collapsed="collapsed"
-        :collapsed-width="64"
-        :collapsed-icon-size="22"
-        :options="menuOptions"
-        :value="activeKey"
-        :expanded-keys="expandedKeys"
-        :indent="16"
-        @update:value="(key, item) => onMenuSelect(key, item)"
-        @update:expanded-keys="onExpandChange"
-      />
-    </n-layout-sider>
+      <el-menu
+        :default-active="activeKey"
+        :collapse="collapsed"
+        :collapse-transition="false"
+        class="sidebar-menu"
+        @select="onMenuSelect"
+      >
+        <el-menu-item index="/dashboard">
+          <el-icon><Odometer /></el-icon>
+          <template #title>仪表盘</template>
+        </el-menu-item>
+
+        <el-sub-menu index="monitoring">
+          <template #title>
+            <el-icon><Monitor /></el-icon>
+            <span>监控中心</span>
+          </template>
+          <el-menu-item index="/monitoring/devices">设备监控</el-menu-item>
+          <el-menu-item index="/discovery/scan">设备扫描</el-menu-item>
+          <el-menu-item index="/monitoring/alerts">告警管理</el-menu-item>
+          <el-menu-item index="/monitoring/performance">性能监控</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="workorder">
+          <template #title>
+            <el-icon><Ticket /></el-icon>
+            <span>工单管理</span>
+          </template>
+          <el-menu-item index="/workorder/list">工单列表</el-menu-item>
+          <el-menu-item index="/workorder/create">创建工单</el-menu-item>
+          <el-menu-item index="/workorder/my">我的工单</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="knowledge">
+          <template #title>
+            <el-icon><Reading /></el-icon>
+            <span>知识库</span>
+          </template>
+          <el-menu-item index="/knowledge/list">知识文档</el-menu-item>
+          <el-menu-item index="/knowledge/category">分类管理</el-menu-item>
+          <el-menu-item index="/knowledge/cases">故障案例</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="ai">
+          <template #title>
+            <el-icon><MagicStick /></el-icon>
+            <span>AI助手</span>
+          </template>
+          <el-menu-item index="/ai/chat">AI 聊天</el-menu-item>
+          <el-menu-item index="/ai/copilot">知识库问答</el-menu-item>
+          <el-menu-item index="/ai/analyze">智能分析</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="automation">
+          <template #title>
+            <el-icon><Lightning /></el-icon>
+            <span>自动化</span>
+          </template>
+          <el-menu-item index="/automation/script">脚本管理</el-menu-item>
+          <el-menu-item index="/automation/task">任务调度</el-menu-item>
+          <el-menu-item index="/automation/evaluate">指标评估</el-menu-item>
+          <el-menu-item index="/automation/execute">执行记录</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="backup">
+          <template #title>
+            <el-icon><Document /></el-icon>
+            <span>备份管理</span>
+          </template>
+          <el-menu-item index="/backup/list">备份记录</el-menu-item>
+          <el-menu-item index="/backup/restore">恢复管理</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="report">
+          <template #title>
+            <el-icon><DataBoard /></el-icon>
+            <span>报表管理</span>
+          </template>
+          <el-menu-item index="/report/list">报表管理</el-menu-item>
+          <el-menu-item index="/report/create">生成报表</el-menu-item>
+          <el-menu-item index="/report/template">模板管理</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="notification">
+          <template #title>
+            <el-icon><Bell /></el-icon>
+            <span>消息中心</span>
+          </template>
+          <el-menu-item index="/notification/message">我的消息</el-menu-item>
+          <el-menu-item index="/notification/history">消息历史</el-menu-item>
+          <el-menu-item index="/notification/config">通知配置</el-menu-item>
+        </el-sub-menu>
+
+        <el-sub-menu index="system">
+          <template #title>
+            <el-icon><Setting /></el-icon>
+            <span>系统管理</span>
+          </template>
+          <el-menu-item index="/system/user">用户管理</el-menu-item>
+          <el-menu-item index="/system/role">角色管理</el-menu-item>
+          <el-menu-item index="/system/menu">菜单管理</el-menu-item>
+          <el-menu-item index="/system/dict">字典管理</el-menu-item>
+          <el-menu-item index="/system/config">参数配置</el-menu-item>
+          <el-menu-item index="/system/logs">日志查看</el-menu-item>
+          <el-menu-item index="/system/adapters">适配器管理</el-menu-item>
+        </el-sub-menu>
+      </el-menu>
+    </el-aside>
 
     <!-- Main Content Area -->
-    <n-layout class="main">
-      <n-layout-header class="header">
-        <n-breadcrumb>
-          <n-breadcrumb-item v-for="b in breadcrumbs" :key="b">{{ b }}</n-breadcrumb-item>
-        </n-breadcrumb>
-        <n-space align="center" class="desktop-only">
-          <n-badge :value="notificationCount" :max="99" :show="notificationCount > 0">
-            <n-button quaternary circle size="small" @click="$router.push('/notification/message')">
-              <template #icon><n-icon><NotificationsOutline /></n-icon></template>
-            </n-button>
-          </n-badge>
-          <n-dropdown :options="userDropdown" @select="onUserAction">
-            <n-space align="center" style="cursor:pointer;padding:0 8px">
-              <n-avatar round size="small" style="background:#18a058">
+    <el-container class="main">
+      <el-header class="header">
+        <el-breadcrumb separator="/">
+          <el-breadcrumb-item v-for="b in breadcrumbs" :key="b">{{ b }}</el-breadcrumb-item>
+        </el-breadcrumb>
+        <el-space align="center" class="desktop-only">
+          <el-badge :value="notificationCount" :max="99" :hidden="notificationCount === 0">
+            <el-button quaternary circle size="small" @click="$router.push('/notification/message')">
+              <el-icon><Bell /></el-icon>
+            </el-button>
+          </el-badge>
+          <el-dropdown @command="onUserAction" trigger="click">
+            <el-space align="center" style="cursor:pointer;padding:0 8px">
+              <el-avatar :size="28" style="background:#18a058">
                 {{ username.charAt(0).toUpperCase() }}
-              </n-avatar>
+              </el-avatar>
               <span style="font-size:13px">{{ username }}</span>
-            </n-space>
-          </n-dropdown>
-        </n-space>
-      </n-layout-header>
+            </el-space>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                <el-dropdown-item command="password">修改密码</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </el-space>
+      </el-header>
 
-      <n-layout-content class="content" :native-scrollbar="false">
+      <el-main class="content">
         <div class="page">
           <router-view />
         </div>
-      </n-layout-content>
-    </n-layout>
-  </n-layout>
+      </el-main>
+    </el-container>
+  </el-container>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useMessage, useDialog } from 'naive-ui'
+import { ElMessageBox, ElMessage } from 'element-plus'
 import {
-  ServerOutline, GridOutline, DesktopOutline,
-  AlertOutline, FlashOutline, TicketOutline,
-  BookOutline, SparklesOutline, DocumentText,
-  NotificationsOutline, SettingsOutline, MenuOutline,
-  TimeOutline
-} from '@vicons/ionicons5'
+  Menu, Bell, Monitor, Odometer, Ticket, Reading,
+  MagicStick, Lightning, Document, DataBoard, Setting
+} from '@element-plus/icons-vue'
 import { notification } from '@/api'
 import { CONFIG } from '@/config/constants'
 
 const router = useRouter()
 const route = useRoute()
-const message = useMessage()
-const dialog = useDialog()
 
 const collapsed = ref(false)
 const isMobile = ref(false)
 const notificationCount = ref(0)
 const activeKey = computed(() => route.path)
-const expandedKeys = ref([])
 
 const username = computed(() => {
   try {
@@ -125,109 +220,6 @@ const username = computed(() => {
   } catch {}
   return 'admin'
 })
-
-function icon(comp) {
-  return () => h(comp)
-}
-
-const menuOptions = [
-  { key: '/dashboard', label: '仪表盘', icon: icon(GridOutline) },
-  {
-    key: 'monitoring',
-    label: '监控中心',
-    icon: icon(ServerOutline),
-    children: [
-      { key: '/monitoring/devices', label: '设备监控' },
-      { key: '/discovery/scan', label: '设备扫描' },
-      { key: '/monitoring/alerts', label: '告警管理' },
-      { key: '/monitoring/performance', label: '性能监控' },
-    ]
-  },
-  {
-    key: 'workorder',
-    label: '工单管理',
-    icon: icon(TicketOutline),
-    children: [
-      { key: '/workorder/list', label: '工单列表' },
-      { key: '/workorder/create', label: '创建工单' },
-      { key: '/workorder/my', label: '我的工单' },
-    ]
-  },
-  {
-    key: 'knowledge',
-    label: '知识库',
-    icon: icon(BookOutline),
-    children: [
-      { key: '/knowledge/list', label: '知识文档' },
-      { key: '/knowledge/category', label: '分类管理' },
-      { key: '/knowledge/cases', label: '故障案例' },
-    ]
-  },
-  {
-    key: 'ai',
-    label: 'AI助手',
-    icon: icon(SparklesOutline),
-    children: [
-      { key: '/ai/chat', label: 'AI 聊天' },
-      { key: '/ai/copilot', label: '知识库问答' },
-      { key: '/ai/analyze', label: '智能分析' },
-    ]
-  },
-  {
-    key: 'automation',
-    label: '自动化',
-    icon: icon(FlashOutline),
-    children: [
-      { key: '/automation/script', label: '脚本管理' },
-      { key: '/automation/task', label: '任务调度' },
-      { key: '/automation/evaluate', label: '指标评估' },
-      { key: '/automation/execute', label: '执行记录' },
-    ]
-  },
-  {
-    key: 'backup',
-    label: '备份管理',
-    icon: icon(DocumentText),
-    children: [
-      { key: '/backup/list', label: '备份记录' },
-      { key: '/backup/restore', label: '恢复管理' },
-    ]
-  },
-  {
-    key: 'report',
-    label: '报表管理',
-    icon: icon(DocumentText),
-    children: [
-      { key: '/report/list', label: '报表管理' },
-      { key: '/report/create', label: '生成报表' },
-      { key: '/report/template', label: '模板管理' },
-    ]
-  },
-  {
-    key: 'notification',
-    label: '消息中心',
-    icon: icon(NotificationsOutline),
-    children: [
-      { key: '/notification/message', label: '我的消息' },
-      { key: '/notification/history', label: '消息历史' },
-      { key: '/notification/config', label: '通知配置' },
-    ]
-  },
-  {
-    key: 'system',
-    label: '系统管理',
-    icon: icon(SettingsOutline),
-    children: [
-      { key: '/system/user', label: '用户管理' },
-      { key: '/system/role', label: '角色管理' },
-      { key: '/system/menu', label: '菜单管理' },
-      { key: '/system/dict', label: '字典管理' },
-      { key: '/system/config', label: '参数配置' },
-      { key: '/system/logs', label: '日志查看' },
-      { key: '/system/adapters', label: '适配器管理' },
-    ]
-  },
-]
 
 const breadcrumbs = computed(() => {
   const result = []
@@ -243,55 +235,34 @@ function toggleSidebar() {
   collapsed.value = !collapsed.value
 }
 
-function onMenuSelect(key, item) {
-  // If item has a path (child items), navigate to it
-  // Child items have key = path (e.g. '/monitoring/devices'), parent items have no children
-  if (item.children === undefined) {
-    router.push(key)
-  }
+function onMenuSelect(index) {
+  router.push(index)
 }
 
-function onExpandChange(keys) {
-  // Accordion: only keep the last expanded parent
-  expandedKeys.value = keys.length > 0 ? [keys[keys.length - 1]] : []
-}
-
-const userDropdown = [
-  { label: '个人中心', key: 'profile' },
-  { label: '修改密码', key: 'password' },
-  { type: 'divider', key: 'd1' },
-  { label: '退出登录', key: 'logout' },
-]
-
-function onUserAction(key) {
+async function onUserAction(key) {
   if (key === 'logout') {
-    dialog.warning({
-      title: '退出确认',
-      content: '确定要退出登录吗？',
-      positiveText: '确定',
-      negativeText: '取消',
-      onPositiveClick: () => {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        // 强跳登录页，不依赖 SPA 路由
-        window.location.href = '/login'
-      }
-    })
+    try {
+      await ElMessageBox.confirm('确定要退出登录吗？', '退出确认', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    } catch {}
   } else if (key === 'password') {
-    message.info('修改密码功能开发中')
+    ElMessage.info('修改密码功能开发中')
   } else if (key === 'profile') {
-    message.info('个人中心功能开发中')
+    ElMessage.info('个人中心功能开发中')
   }
 }
 
 const fetchNotificationCount = async () => {
   try {
     const res = await notification.getHistory({ page: 1, page_size: 1 })
-    // Assuming API returns { items: [...], total: number } or direct total
     notificationCount.value = res?.total || (Array.isArray(res) ? res.length : 0)
-  } catch (err) {
-    // Silently fail, notification badge will show 0
-  }
+  } catch {}
 }
 
 const checkMobile = () => {
@@ -301,35 +272,38 @@ const checkMobile = () => {
   }
 }
 
+let notifInterval = null
+
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
   fetchNotificationCount()
-  // Poll for new notifications every 60 seconds
-  const interval = setInterval(fetchNotificationCount, CONFIG.POLL_INTERVAL_LONG)
-  onUnmounted(() => clearInterval(interval))
+  notifInterval = setInterval(fetchNotificationCount, CONFIG.POLL_INTERVAL_LONG)
 })
 
-// Auto-expand parent menu when route changes
 watch(() => route.path, () => {
-  const parent = menuOptions.find(m => m.children?.some(c => c.key === route.path))
-  if (parent) {
-    expandedKeys.value = [parent.key]
+  // Auto-collapse sidebar on mobile when navigating
+  if (isMobile.value) {
+    collapsed.value = true
   }
 }, { immediate: true })
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
+  if (notifInterval) clearInterval(notifInterval)
 })
 </script>
 
 <style scoped>
 .layout {
   height: 100vh;
+  display: flex;
 }
 
 .sider {
   background: #f8f9fa;
+  transition: width 0.3s;
+  overflow: hidden;
 }
 
 .logo {
@@ -348,6 +322,11 @@ onUnmounted(() => {
   color: #18a058;
 }
 
+.sidebar-menu {
+  border-right: none;
+  background: transparent;
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -356,11 +335,11 @@ onUnmounted(() => {
   height: 48px;
   background: #fff;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-  z-index: 1;
 }
 
 .content {
   background: #f0f2f5;
+  padding: 0;
 }
 
 .page {
@@ -393,6 +372,7 @@ onUnmounted(() => {
   top: 0;
   bottom: 0;
   z-index: 1000;
+  transition: transform 0.3s, width 0.3s;
 }
 
 .sidebar-overlay {

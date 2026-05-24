@@ -1,41 +1,75 @@
 <template>
-  <n-card title="参数配置" class="page-card">
-    <template #header-extra>
-      <n-space>
-        <n-button type="primary" @click="loadData" :loading="loading">
-          <template #icon>
-            <n-icon><RefreshOutline /></n-icon>
+  <div class="page-card-wrapper">
+    <el-card shadow="never">
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span>参数配置</span>
+          <el-button type="primary" size="small" @click="loadData" :loading="loading">
+            <el-icon><Refresh /></el-icon>
+            刷新
+          </el-button>
+        </div>
+      </template>
+
+      <el-alert type="info" :show-icon="true" style="margin-bottom: 16px">
+        <strong>参数配置说明：</strong>系统级配置项，控制平台全局行为。修改前请确认用途，错误配置可能影响系统稳定性。
+      </el-alert>
+
+      <el-table
+        :data="configList"
+        v-loading="loading"
+        :pagination="paginationConfig"
+        row-key="key"
+        size="small"
+      >
+        <el-table-column label="配置键" prop="key" width="200" show-overflow-tooltip />
+        <el-table-column label="配置值" prop="value" width="320" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="!row.editing">
+              <span v-if="isTimezoneKey(row.key)">{{ getTimezoneLabel(row.value) }}</span>
+              <span v-else>{{ row.value }}</span>
+            </span>
+            <span v-else>
+              <el-select v-if="isTimezoneKey(row.key)" v-model="row.editValue" :options="TIMEZONE_OPTIONS" style="width: 260px" />
+              <el-input v-else v-model="row.editValue" style="width: 200px" />
+            </span>
           </template>
-          刷新
-        </n-button>
-      </n-space>
-    </template>
-
-    <n-alert type="info" :show-icon="true" style="margin-bottom: 16px">
-      <strong>参数配置说明：</strong>系统级配置项，控制平台全局行为。修改前请确认用途，错误配置可能影响系统稳定性。
-    </n-alert>
-
-    <n-data-table
-      :columns="columns"
-      :data="configList"
-      :loading="loading"
-      :pagination="pagination"
-      :row-key="row => row.key"
-    />
-  </n-card>
+        </el-table-column>
+        <el-table-column label="描述" prop="description" width="200" show-overflow-tooltip />
+        <el-table-column label="更新时间" prop="updated_at" width="180">
+          <template #default="{ row }">{{ formatDate(row.updated_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right">
+          <template #default="{ row }">
+            <span v-if="!row.editing">
+              <el-button type="primary" size="small" link @click="handleEdit(row)">
+                <el-icon><Edit /></el-icon>编辑
+              </el-button>
+            </span>
+            <span v-else>
+              <el-button type="primary" size="small" link @click="handleSave(row)">
+                <el-icon><Check /></el-icon>保存
+              </el-button>
+              <el-button type="info" size="small" link @click="handleCancel(row)">
+                <el-icon><Close /></el-icon>取消
+              </el-button>
+            </span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+  </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { useMessage, NButton, NIcon, NAlert, NSelect } from 'naive-ui'
-import { RefreshOutline, CreateOutline, CheckmarkOutline, CloseOutline } from '@vicons/ionicons5'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Refresh, Edit, Check, Close } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
 
-const message = useMessage()
 const loading = ref(false)
 const configList = ref([])
 
-// 常用时区列表
 const TIMEZONE_OPTIONS = [
   { label: '亚洲/上海 (UTC+8)', value: 'Asia/Shanghai' },
   { label: '亚洲/东京 (UTC+9)', value: 'Asia/Tokyo' },
@@ -48,34 +82,39 @@ const TIMEZONE_OPTIONS = [
   { label: 'UTC', value: 'UTC' },
 ]
 
-const pagination = {
-  page: 1,
+const getTimezoneLabel = (val) => {
+  const opt = TIMEZONE_OPTIONS.find(o => o.value === val)
+  return opt ? opt.label.split(' ')[0] + ' ' + opt.label.split(' ')[1] : val
+}
+
+const paginationConfig = reactive({
+  currentPage: 1,
   pageSize: 10,
-  showSizePicker: true,
   pageSizes: [10, 20, 50],
-  onChange: (page) => {
-    pagination.page = page
+  layout: 'sizes, prev, pager, next',
+  onCurrentChange: (page) => {
+    paginationConfig.currentPage = page
     loadData()
   },
-  onUpdatePageSize: (pageSize) => {
-    pagination.pageSize = pageSize
-    pagination.page = 1
+  onSizeChange: (pageSize) => {
+    paginationConfig.pageSize = pageSize
+    paginationConfig.currentPage = 1
     loadData()
   }
-}
+})
 
 const loadData = async () => {
   loading.value = true
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/admin/config?page=${pagination.page}&page_size=${pagination.pageSize}`, {
+    const res = await fetch(`/api/v1/admin/config?page=${paginationConfig.currentPage}&page_size=${paginationConfig.pageSize}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (!res.ok) throw new Error('请求失败')
     const data = await res.json()
     configList.value = (data.items || []).map(c => ({ ...c, editing: false, editValue: c.value }))
   } catch (error) {
-    message.error('加载配置失败')
+    ElMessage.error('加载配置失败')
   } finally {
     loading.value = false
   }
@@ -105,110 +144,24 @@ const handleSave = async (row) => {
     if (!res.ok) throw new Error('更新失败')
     row.value = row.editValue
     row.editing = false
-    message.success('保存成功')
+    ElMessage.success('保存成功')
 
-    // 如果修改的是时区，立即应用到全局
     if (row.key === 'system.timezone') {
       const { setTimezone } = await import('@/utils/date')
       setTimezone(row.value)
     }
   } catch (error) {
-    message.error('保存失败')
+    ElMessage.error('保存失败')
   }
 }
 
-// 根据配置键判断是否有时区选择器
 const isTimezoneKey = (key) => key === 'system.timezone'
-
-// 构建编辑控件（时区用下拉框，普通配置用 input）
-const buildEditControl = (row) => {
-  if (isTimezoneKey(row.key)) {
-    return h(NSelect, {
-      value: row.editValue,
-      options: TIMEZONE_OPTIONS,
-      style: 'width: 260px',
-      onUpdateValue: (val) => { row.editValue = val }
-    })
-  }
-  return h('input', {
-    value: row.editValue,
-    onInput: (e) => { row.editValue = e.target.value },
-    style: 'width: 200px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;'
-  })
-}
-
-const columns = [
-  {
-    title: '配置键',
-    key: 'key',
-    width: 200,
-    ellipsis: { tooltip: true }
-  },
-  {
-    title: '配置值',
-    key: 'value',
-    width: 320,
-    ellipsis: { tooltip: true },
-    render(row) {
-      if (!row.editing) {
-        // 时区配置显示中文说明
-        if (isTimezoneKey(row.key)) {
-          const opt = TIMEZONE_OPTIONS.find(o => o.value === row.value)
-          return opt ? opt.label.split(' ')[0] + ' ' + opt.label.split(' ')[1] : row.value
-        }
-        return row.value
-      }
-      return buildEditControl(row)
-    }
-  },
-  {
-    title: '描述',
-    key: 'description',
-    width: 200,
-    ellipsis: { tooltip: true }
-  },
-  {
-    title: '更新时间',
-    key: 'updated_at',
-    width: 180,
-    render(row) {
-      return formatDate(row.updated_at)
-    }
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 150,
-    fixed: 'right',
-    render(row) {
-      if (!row.editing) {
-        return h(
-          NButton,
-          { type: 'primary', size: 'small', onClick: () => handleEdit(row) },
-          { icon: () => h(NIcon, null, { default: () => h(CreateOutline) }), default: () => '编辑' }
-        )
-      }
-      return h('div', { style: 'display: flex; gap: 8px;' }, [
-        h(
-          NButton,
-          { type: 'primary', size: 'small', onClick: () => handleSave(row) },
-          { icon: () => h(NIcon, null, { default: () => h(CheckmarkOutline) }), default: () => '保存' }
-        ),
-        h(
-          NButton,
-          { type: 'info', size: 'small', onClick: () => handleCancel(row) },
-          { icon: () => h(NIcon, null, { default: () => h(CloseOutline) }), default: () => '取消' }
-        )
-      ])
-    }
-  }
-]
 
 onMounted(() => { loadData() })
 </script>
 
 <style lang="scss" scoped>
-.page-card {
+.page-card-wrapper {
   margin: 16px;
 }
 </style>

@@ -1,44 +1,89 @@
 <template>
   <div class="page-container">
-    <n-card title="通知渠道配置" :bordered="false">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon><n-icon><AddOutline /></n-icon></template>
-          添加渠道
-        </n-button>
+    <el-card>
+      <template #header>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span>通知渠道配置</span>
+          <el-button type="primary" @click="handleAdd">
+            <el-icon><Plus /></el-icon>
+            添加渠道
+          </el-button>
+        </div>
       </template>
-      <n-data-table :columns="columns" :data="channelList" :loading="loading" :pagination="false" :row-key="row => row.id" />
-    </n-card>
-    <n-card title="通知类型" :bordered="false" style="margin-top: 16px">
-      <n-space vertical>
-        <n-alert v-for="t in notificationTypes" :key="t.value" :type="getAlertType(t.value)" :title="t.label">{{ t.description }}</n-alert>
-      </n-space>
-    </n-card>
-    <n-drawer v-model:show="drawerVisible" :width="500" placement="right">
-      <n-drawer-content :title="editingChannel && editingChannel.id ? '编辑渠道' : '添加渠道'">
-        <n-form :model="form" label-placement="left" label-width="100">
-          <n-form-item label="渠道名称"><n-input v-model:value="form.name" placeholder="如：邮件通知" /></n-form-item>
-          <n-form-item label="渠道类型"><n-select v-model:value="form.type" :options="typeOptions" placeholder="选择类型" /></n-form-item>
-          <n-form-item label="配置JSON"><n-input v-model:value="form.config" type="textarea" :rows="6" placeholder='{"webhook": "https://..."}' /></n-form-item>
-          <n-form-item label="启用状态"><n-switch v-model:value="form.enabled" /></n-form-item>
-        </n-form>
-        <template #footer>
-          <n-space justify="end">
-            <n-button @click="drawerVisible = false">取消</n-button>
-            <n-button type="primary" @click="handleSave" :loading="saving">保存</n-button>
-          </n-space>
-        </template>
-      </n-drawer-content>
-    </n-drawer>
+      <el-table :data="channelList" :loading="loading" stripe border>
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="name" label="名称" width="150" />
+        <el-table-column prop="type" label="类型" width="120">
+          <template #default="props">
+            {{ typeMap[props.row.type] || props.row.type }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="enabled" label="状态" width="80">
+          <template #default="props">
+            <el-tag :type="props.row.enabled ? 'success' : 'info'" size="small">
+              {{ props.row.enabled ? '启用' : '停用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120">
+          <template #default="props">
+            <el-button link type="primary" size="small" @click="handleEdit(props.row)">编辑</el-button>
+            <el-button link type="danger" size="small" @click="handleDelete(props.row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <el-card style="margin-top: 16px">
+      <template #header>通知类型</template>
+      <el-space direction="vertical" :size="12">
+        <el-alert
+          v-for="t in notificationTypes"
+          :key="t.value"
+          :type="getAlertType(t.value)"
+          :title="t.label"
+          :description="t.description"
+          :closable="false"
+        />
+      </el-space>
+    </el-card>
+
+    <el-drawer v-model="drawerVisible" :title="editingChannel && editingChannel.id ? '编辑渠道' : '添加渠道'" size="500px">
+      <el-form :model="form" label-position="left" label-width="100">
+        <el-form-item label="渠道名称">
+          <el-input v-model="form.name" placeholder="如：邮件通知" />
+        </el-form-item>
+        <el-form-item label="渠道类型">
+          <el-select v-model="form.type" placeholder="选择类型" style="width: 100%">
+            <el-option label="邮件 (Email)" value="email" />
+            <el-option label="钉钉 (DingTalk)" value="dingtalk" />
+            <el-option label="飞书 (Feishu)" value="feishu" />
+            <el-option label="企业微信" value="wechat_work" />
+            <el-option label="Webhook" value="webhook" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="配置JSON">
+          <el-input v-model="form.config" type="textarea" :rows="6" placeholder='{"webhook": "https://..."}' />
+        </el-form-item>
+        <el-form-item label="启用状态">
+          <el-switch v-model="form.enabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-space justify="end">
+          <el-button @click="drawerVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleSave" :loading="saving">保存</el-button>
+        </el-space>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { useMessage } from 'naive-ui'
-import { AddOutline } from '@vicons/ionicons5'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 
-const message = useMessage()
 const loading = ref(false)
 const saving = ref(false)
 const channelList = ref([])
@@ -47,27 +92,7 @@ const drawerVisible = ref(false)
 const editingChannel = ref(null)
 const form = reactive({ name: '', type: '', config: '{}', enabled: true })
 
-const typeOptions = [
-  { label: '邮件 (Email)', value: 'email' },
-  { label: '钉钉 (DingTalk)', value: 'dingtalk' },
-  { label: '飞书 (Feishu)', value: 'feishu' },
-  { label: '企业微信', value: 'wechat_work' },
-  { label: 'Webhook', value: 'webhook' },
-]
-
-const columns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '名称', key: 'name', width: 150 },
-  { title: '类型', key: 'type', width: 120, render: (row) => {
-    const map = { email: '邮件', dingtalk: '钉钉', feishu: '飞书', wechat_work: '企业微信', webhook: 'Webhook' }
-    return map[row.type] || row.type
-  }},
-  { title: '状态', key: 'enabled', width: 80, render: (row) => h('span', { style: row.enabled ? 'color:#18a058' : 'color:#999' }, row.enabled ? '启用' : '停用')},
-  { title: '操作', key: 'actions', width: 120, render: (row) => h('div', { style: 'display:flex;gap:8px' }, [
-    h('button', { style: 'background:none;border:none;color:#18a058;cursor:pointer;font-size:13px', onClick: () => handleEdit(row) }, '编辑'),
-    h('button', { style: 'background:none;border:none;color:#d03050;cursor:pointer;font-size:13px', onClick: () => handleDelete(row.id) }, '删除')
-  ])}
-]
+const typeMap = { email: '邮件', dingtalk: '钉钉', feishu: '飞书', wechat_work: '企业微信', webhook: 'Webhook' }
 
 onMounted(() => { loadChannels(); loadTypes() })
 
@@ -80,7 +105,7 @@ async function loadChannels() {
     const data = await res.json()
     channelList.value = data.items || []
   } catch (e) {
-    message.error('加载渠道失败: ' + e.message)
+    ElMessage.error('加载渠道失败: ' + e.message)
     channelList.value = []
   } finally {
     loading.value = false
@@ -94,9 +119,7 @@ async function loadTypes() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     notificationTypes.value = data.types || []
-  } catch (e) {
-    // loadTypes failed silently
-  }
+  } catch (_) {}
 }
 
 function getAlertType(type) {
@@ -116,7 +139,7 @@ function handleEdit(row) {
 }
 
 async function handleSave() {
-  if (!form.name || !form.type) { message.warning('请填写名称和类型'); return }
+  if (!form.name || !form.type) { ElMessage.warning('请填写名称和类型'); return }
   saving.value = true
   try {
     const token = localStorage.getItem('token') || ''
@@ -124,11 +147,11 @@ async function handleSave() {
     const url = editingChannel.value ? `/api/v1/notifications/channels/${editingChannel.value.id}` : '/api/v1/notifications/channels'
     const res = await fetch(url, { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, type: form.type, config: JSON.parse(form.config || '{}'), enabled: form.enabled }) })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    message.success(editingChannel.value ? '更新成功' : '添加成功')
+    ElMessage.success(editingChannel.value ? '更新成功' : '添加成功')
     drawerVisible.value = false
     loadChannels()
   } catch (e) {
-    message.error('保存失败: ' + e.message)
+    ElMessage.error('保存失败: ' + e.message)
   } finally {
     saving.value = false
   }
@@ -139,10 +162,10 @@ async function handleDelete(id) {
     const token = localStorage.getItem('token') || ''
     const res = await fetch(`/api/v1/notifications/channels/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    message.success('删除成功')
+    ElMessage.success('删除成功')
     loadChannels()
   } catch (e) {
-    message.error('删除失败: ' + e.message)
+    ElMessage.error('删除失败: ' + e.message)
   }
 }
 </script>

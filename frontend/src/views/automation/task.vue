@@ -1,82 +1,121 @@
 <template>
   <div class="page-container">
-    <n-card title="任务调度" :bordered="false">
-      <n-tabs type="line" animated>
-        <n-tab-pane name="evaluate" tab="指标评估">
-          <n-form :model="form" label-placement="left" label-width="100" style="max-width: 600px; margin-top: 16px;">
-            <n-form-item label="设备" required>
-              <n-select v-model:value="form.device_id" :options="deviceOptions" placeholder="请选择设备" style="width: 100%" @update:value="loadMetrics" />
-            </n-form-item>
-            <n-form-item label="指标" required>
-              <n-select v-model:value="form.metric_name" :options="metricOptions" placeholder="请先选择设备" style="width: 100%" :disabled="!form.device_id" />
-            </n-form-item>
-            <n-form-item label="阈值(可选)">
-              <n-input v-model:value="form.threshold" placeholder="请输入阈值(可选)" />
-            </n-form-item>
-            <n-form-item>
-              <n-space>
-                <n-button type="primary" @click="handleEvaluate" :loading="evaluating">评估</n-button>
-                <n-button @click="resetForm">重置</n-button>
-              </n-space>
-            </n-form-item>
-          </n-form>
+    <el-card>
+      <el-tabs type="border-card">
+        <el-tab-pane label="指标评估">
+          <el-form :model="form" label-placement="left" label-width="100" style="max-width: 600px; margin-top: 16px;">
+            <el-form-item label="设备" required>
+              <el-select v-model="form.device_id" placeholder="请选择设备" style="width: 100%" @change="loadMetrics">
+                <el-option
+                  v-for="d in deviceOptions"
+                  :key="d.value"
+                  :label="d.label"
+                  :value="d.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="指标" required>
+              <el-select v-model="form.metric_name" placeholder="请先选择设备" style="width: 100%" :disabled="!form.device_id">
+                <el-option
+                  v-for="m in metricOptions"
+                  :key="m.value"
+                  :label="m.label"
+                  :value="m.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="阈值(可选)">
+              <el-input v-model="form.threshold" placeholder="请输入阈值(可选)" />
+            </el-form-item>
+            <el-form-item>
+              <el-space>
+                <el-button type="primary" @click="handleEvaluate" :loading="evaluating">评估</el-button>
+                <el-button @click="resetForm">重置</el-button>
+              </el-space>
+            </el-form-item>
+          </el-form>
 
           <!-- 评估结果 -->
-          <n-card v-if="evalResult" title="评估结果" style="margin-top: 16px;" :bordered="true">
-            <n-descriptions label-placement="top" :column="2" v-if="evalResult">
-              <n-descriptions-item label="设备ID">{{ evalResult.device_id || '-' }}</n-descriptions-item>
-              <n-descriptions-item label="指标名称">{{ evalResult.metric_name || '-' }}</n-descriptions-item>
-              <n-descriptions-item label="当前值">{{ evalResult.current_value ?? '-' }}</n-descriptions-item>
-              <n-descriptions-item label="阈值">{{ evalResult.threshold ?? '-' }}</n-descriptions-item>
-              <n-descriptions-item label="状态">
-                <n-tag :type="getStatusType(evalResult.status)">{{ getStatusText(evalResult.status) }}</n-tag>
-              </n-descriptions-item>
-              <n-descriptions-item label="执行ID">{{ evalResult.execution_id || '-' }}</n-descriptions-item>
-            </n-descriptions>
-            <n-divider />
-            <n-input type="textarea" :value="evalResultDetail" :rows="8" readonly placeholder="暂无详细结果" />
-          </n-card>
-        </n-tab-pane>
+          <el-card v-if="evalResult" style="margin-top: 16px;">
+            <template #header>评估结果</template>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="设备ID">{{ evalResult.device_id || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="指标名称">{{ evalResult.metric_name || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="当前值">{{ evalResult.current_value ?? '-' }}</el-descriptions-item>
+              <el-descriptions-item label="阈值">{{ evalResult.threshold ?? '-' }}</el-descriptions-item>
+              <el-descriptions-item label="状态">
+                <el-tag :type="getStatusType(evalResult.status)">{{ getStatusText(evalResult.status) }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="执行ID">{{ evalResult.execution_id || '-' }}</el-descriptions-item>
+            </el-descriptions>
+            <el-divider />
+            <el-input v-model="evalResultDetail" type="textarea" :rows="8" readonly placeholder="暂无详细结果" />
+          </el-card>
+        </el-tab-pane>
 
-        <n-tab-pane name="history" tab="历史记录">
-          <n-space style="margin-bottom: 12px">
-            <n-button quaternary @click="loadHistory" :loading="historyLoading">
-              <template #icon><n-icon><RefreshOutline /></n-icon></template>
+        <el-tab-pane label="历史记录">
+          <el-space style="margin-bottom: 12px">
+            <el-button quaternary @click="loadHistory" :loading="historyLoading">
+              <el-icon><Refresh /></el-icon>
               刷新
-            </n-button>
-          </n-space>
-          <n-data-table
-            :columns="historyColumns"
+            </el-button>
+          </el-space>
+          <el-table
             :data="historyList"
             :loading="historyLoading"
-            :pagination="historyPagination"
             :row-key="row => row.execution_id"
+            stripe
+            border
+          >
+            <el-table-column prop="execution_id" label="执行ID" width="120" />
+            <el-table-column prop="device_id" label="设备ID" width="100" />
+            <el-table-column prop="metric_name" label="指标名称" show-overflow-tooltip />
+            <el-table-column prop="current_value" label="当前值" width="100" />
+            <el-table-column label="状态" width="100">
+              <template #default="props">
+                <el-tag :type="getStatusType(props.row.status)" size="small">
+                  {{ getStatusText(props.row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="triggered_at" label="触发时间" width="180" />
+            <el-table-column label="操作" width="100">
+              <template #default="props">
+                <el-button size="small" link type="info" @click="handleViewSnapshot(props.row)">快照</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-pagination
+            v-model:current-page="historyPagination.page"
+            v-model:page-size="historyPagination.pageSize"
+            :total="historyPagination.total"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            style="margin-top: 12px; justify-content: flex-end"
+            @current-change="loadHistory"
+            @size-change="handlePageSizeChange"
           />
-        </n-tab-pane>
-      </n-tabs>
-    </n-card>
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
 
     <!-- 快照详情 -->
-    <n-modal v-model:show="snapshotDialogVisible" preset="card" title="执行快照" style="width: 700px">
-      <n-spin :show="snapshotLoading">
-        <n-input type="textarea" :value="snapshotDetail" :rows="20" readonly placeholder="暂无快照数据" />
-      </n-spin>
+    <el-dialog v-model="snapshotDialogVisible" title="执行快照" width="700px">
+      <div v-loading="snapshotLoading">
+        <el-input v-model="snapshotDetail" type="textarea" :rows="20" readonly placeholder="暂无快照数据" />
+      </div>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="snapshotDialogVisible = false">关闭</n-button>
-        </n-space>
+        <el-button @click="snapshotDialogVisible = false">关闭</el-button>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { useRoute } from 'vue-router'
-import { NCard, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSelect, NSpace, NTag, NIcon, NSpin, NTabs, NTabPane, NDescriptions, NDescriptionsItem, NDivider, useMessage } from 'naive-ui'
-import { RefreshOutline, SearchOutline } from '@vicons/ionicons5'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 
-const message = useMessage()
 const loading = ref(false)
 const evaluating = ref(false)
 const historyLoading = ref(false)
@@ -91,40 +130,15 @@ const snapshotDetail = ref('')
 const currentExecutionId = ref(null)
 
 const form = reactive({ device_id: null, metric_name: null, threshold: '' })
-const historyPagination = {
+const historyPagination = reactive({
   page: 1,
   pageSize: 10,
-  total: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (page) => { historyPagination.page = page; loadHistory(); },
-  onUpdatePageSize: (size) => { historyPagination.pageSize = size; historyPagination.page = 1; loadHistory(); }
-}
-
-const historyColumns = [
-  { title: '执行ID', key: 'execution_id', width: 120 },
-  { title: '设备ID', key: 'device_id', width: 100 },
-  { title: '指标名称', key: 'metric_name', ellipsis: { tooltip: true } },
-  { title: '当前值', key: 'current_value', width: 100 },
-  { title: '状态', key: 'status', width: 100,
-    render: (r) => {
-      const typeMap = { normal: 'success', warning: 'warning', critical: 'error', triggered: 'error' }
-      const textMap = { normal: '正常', warning: '警告', critical: '严重', triggered: '触发' }
-      return h(NTag, { size: 'small', type: typeMap[r.status] || 'default' }, () => textMap[r.status] || r.status || '-')
-    }
-  },
-  { title: '触发时间', key: 'triggered_at', width: 180 },
-  {
-    title: '操作', key: 'actions', width: 100,
-    render(row) {
-      return h(NButton, { size: 'small', quaternary: true, type: 'info', onClick: () => handleViewSnapshot(row) }, () => '快照')
-    }
-  }
-]
+  total: 0
+})
 
 function getStatusType(status) {
-  const map = { normal: 'success', warning: 'warning', critical: 'error', triggered: 'error' }
-  return map[status] || 'default'
+  const map = { normal: 'success', warning: 'warning', critical: 'danger', triggered: 'danger' }
+  return map[status] || 'info'
 }
 
 function getStatusText(status) {
@@ -142,7 +156,7 @@ async function loadDevices() {
     const data = await res.json()
     deviceOptions.value = (data.items || data.data?.items || []).map(d => ({ label: `${d.name} (${d.ip_address})`, value: d.id }))
   } catch (e) {
-    message.error(`加载设备失败: ${e.message}`)
+    ElMessage.error(`加载设备失败: ${e.message}`)
     deviceOptions.value = []
   }
 }
@@ -161,8 +175,7 @@ async function loadMetrics(deviceId) {
     const data = await res.json()
     const metrics = data.metrics || data.items || data.data?.items || []
     metricOptions.value = metrics.map(m => ({ label: m.name || m.metric_name, value: m.name || m.metric_name }))
-  } catch (e) {
-    // Fallback: use common metric names
+  } catch (_) {
     metricOptions.value = [
       { label: 'CPU使用率', value: 'cpu_usage' },
       { label: '内存使用率', value: 'memory_usage' },
@@ -173,20 +186,15 @@ async function loadMetrics(deviceId) {
 }
 
 async function handleEvaluate() {
-  if (!form.device_id) { message.warning('请选择设备'); return }
-  if (!form.metric_name) { message.warning('请选择指标'); return }
+  if (!form.device_id) { ElMessage.warning('请选择设备'); return }
+  if (!form.metric_name) { ElMessage.warning('请选择指标'); return }
   evaluating.value = true
   evalResult.value = null
   evalResultDetail.value = ''
   try {
     const token = localStorage.getItem('token') || ''
-    const payload = {
-      device_id: form.device_id,
-      metric_name: form.metric_name
-    }
-    if (form.threshold) {
-      payload.threshold = parseFloat(form.threshold)
-    }
+    const payload = { device_id: form.device_id, metric_name: form.metric_name }
+    if (form.threshold) payload.threshold = parseFloat(form.threshold)
     const res = await fetch('/api/v1/automation/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -196,10 +204,10 @@ async function handleEvaluate() {
     const data = await res.json()
     evalResult.value = data
     evalResultDetail.value = JSON.stringify(data, null, 2)
-    message.success('评估完成')
+    ElMessage.success('评估完成')
   } catch (e) {
     evalResultDetail.value = `评估失败: ${e.message}`
-    message.error(`评估失败: ${e.message}`)
+    ElMessage.error(`评估失败: ${e.message}`)
   } finally {
     evaluating.value = false
   }
@@ -220,7 +228,7 @@ async function handleViewSnapshot(row) {
     snapshotDetail.value = JSON.stringify(data, null, 2)
   } catch (e) {
     snapshotDetail.value = `加载快照失败: ${e.message}`
-    message.error(`加载快照失败: ${e.message}`)
+    ElMessage.error(`加载快照失败: ${e.message}`)
   } finally {
     snapshotLoading.value = false
   }
@@ -237,15 +245,20 @@ async function loadHistory() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (!data || typeof data !== 'object') throw new Error('响应格式异常')
-    // 评估历史使用 rollback-history 接口数据
     historyList.value = data.items || data.data?.items || []
     historyPagination.total = data.total || data.data?.total || 0
   } catch (e) {
-    message.error(`加载历史记录失败: ${e.message}`)
+    ElMessage.error(`加载历史记录失败: ${e.message}`)
     historyList.value = []
   } finally {
     historyLoading.value = false
   }
+}
+
+function handlePageSizeChange(size) {
+  historyPagination.pageSize = size
+  historyPagination.page = 1
+  loadHistory()
 }
 
 function resetForm() {
@@ -256,8 +269,6 @@ function resetForm() {
   evalResultDetail.value = ''
   metricOptions.value = []
 }
-
-const route = useRoute()
 
 onMounted(() => {
   loadDevices()

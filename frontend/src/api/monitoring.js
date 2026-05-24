@@ -71,6 +71,11 @@ export const performance = {
   getDashboard: (id) => request.get(`/monitoring/dashboards/${id}`),
   // 仪表盘统计
   getDashboardStats: () => request.get('/monitoring/dashboard/stats'),
+  // 仪表盘布局（MON-032 自定义布局）
+  getDashboardLayout: (layoutId) => request.get('/monitoring/dashboard/layout', { params: layoutId ? { layout_id: layoutId } : {} }),
+  saveDashboardLayout: (data) => request.put('/monitoring/dashboard/layout', data),
+  listDashboardLayouts: () => request.get('/monitoring/dashboard/layouts'),
+  deleteDashboardLayout: (layoutId) => request.delete(`/monitoring/dashboard/layout/${layoutId}`),
   // 采集项配置
   getMetricConfigs: (params) => request.get('/monitoring/metric-configs', { params }),
   getMetricConfig: (id) => request.get(`/monitoring/metric-configs/${id}`),

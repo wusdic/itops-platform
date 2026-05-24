@@ -31,8 +31,8 @@ from api.routes import (
     auth_router,
     discovery_router,
     automation_router,
-    backup_router,
     adapters_router,
+    sharding_router,
 )
 from api.dependencies import get_settings
 from api.middleware.logging import LoggingMiddleware
@@ -81,12 +81,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             logger.warning("AI initialization returned None (disabled or failed)")
     except Exception as e:
         logger.warning(f"AI initialization skipped: {e}")
-    
+
+    # 初始化配置热更新
+    try:
+        from api.start import init_config_hot_reload
+        init_config_hot_reload({})
+    except Exception as e:
+        logger.warning(f"Config hot reload initialization skipped: {e}")
+
+    # 启动告警升级定时任务
+    import asyncio as _asyncio_alt
+    try:
+        from modules.business.monitoring.alerter import get_alert_trigger
+        alert_trigger = get_alert_trigger()
+        _asyncio_alt.create_task(alert_trigger.start())
+        logger.info("AlertTrigger escalation task started")
+    except Exception as e:
+        logger.warning(f"AlertTrigger initialization skipped: {e}")
+
     # 启动设备定时采集任务
     periodic_collect_task = None
     try:
         from modules.collection.device_manager import get_device_manager
-        import asyncio
         
         manager = get_device_manager()
         # 从配置获取采集间隔，默认60秒
@@ -99,7 +115,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             pass
         
         # 启动定时采集为后台任务
-        periodic_collect_task = asyncio.create_task(
+        _asyncio_alt.create_task(
             manager.start_periodic_collect(interval=interval)
         )
         logger.info(f"设备定时采集任务已启动 (间隔: {interval}秒)")
@@ -111,7 +127,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         logger.info("自动化触发服务已注册到设备采集回调")
 
         # 启动自动化触发评估循环
-        trigger_service_task = asyncio.create_task(trigger_service.start())
+        _asyncio_alt.create_task(trigger_service.start())
         logger.info("自动化触发服务已启动")
     except Exception as e:
         logger.warning(f"设备定时采集任务启动失败: {e}")
@@ -147,7 +163,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         close_db()
     except Exception as e:
         logger.warning(f"Database cleanup skipped: {e}")
-    
+
+    # 停止配置热更新轮询
+    try:
+        from api.start import get_config_manager
+        cm = get_config_manager()
+        if cm:
+            cm.stop_watching()
+            logger.info("Config hot reload stopped")
+    except Exception as e:
+        logger.warning(f"Config hot reload cleanup skipped: {e}")
+
+    # 停止告警升级定时任务
+    try:
+        from modules.business.monitoring.alerter import get_alert_trigger
+        alert_trigger = get_alert_trigger()
+        await alert_trigger.stop()
+        logger.info("AlertTrigger stopped")
+    except Exception as e:
+        logger.warning(f"AlertTrigger cleanup skipped: {e}")
+
     logger.info("ITOps Platform API Gateway stopped")
 
 
@@ -187,7 +222,25 @@ def create_app() -> FastAPI:
     app.add_middleware(LoggingMiddleware)
     app.add_middleware(PerformanceMiddleware)
     app.add_middleware(ErrorHandlerMiddleware)
-    
+
+    # 健康检查端点（必须在路由注册之前，确保 /health 优先级高于 /{path:path}）
+    @app.get("/health", tags=["系统"])
+    async def health_check():
+        """健康检查接口"""
+        return {
+            "status": "healthy",
+            "service": "itops-platform-api",
+            "version": "1.0.0",
+        }
+
+    @app.get("/ready", tags=["系统"])
+    async def readiness_check():
+        """就绪检查接口"""
+        return {
+            "status": "ready",
+            "service": "itops-platform-api",
+        }
+
     # 注册路由
     app.include_router(
         monitoring_router,
@@ -285,10 +338,28 @@ def create_app() -> FastAPI:
         tags=["自动化触发"],
     )
 
+    from api.routes.tenant import router as tenant_router
     app.include_router(
-        backup_router,
+        tenant_router,
         prefix="/api/v1",
-        tags=["备份管理"],
+        tags=["租户管理"],
+    )
+
+    app.include_router(
+        sharding_router,
+        tags=["分片管理"],
+    )
+
+    from api.routes.deploy import router as deploy_router
+    app.include_router(
+        deploy_router,
+        tags=["部署管理"],
+    )
+
+    from api.routes.watermark import router as watermark_router
+    app.include_router(
+        watermark_router,
+        tags=["操作水印"],
     )
 
     from api.routes.vendor_credentials import router as vendor_credentials_router
@@ -349,25 +420,6 @@ def create_app() -> FastAPI:
         
         logger.info(f"Frontend static files enabled at /assets/ from: {dist_path}")
 
-    # 健康检查端点
-    @app.get("/health", tags=["系统"])
-    async def health_check():
-        """健康检查接口"""
-        return {
-            "status": "healthy",
-            "service": "itops-platform-api",
-            "version": "1.0.0",
-        }
-    
-    @app.get("/ready", tags=["系统"])
-    async def readiness_check():
-        """就绪检查接口"""
-        # 可以添加更多依赖检查
-        return {
-            "status": "ready",
-            "service": "itops-platform-api",
-        }
-    
     # 全局异常处理 - 必须在最后添加，覆盖所有其他处理器
     from fastapi.exceptions import RequestValidationError
     from starlette.exceptions import HTTPException as StarletteHTTPException

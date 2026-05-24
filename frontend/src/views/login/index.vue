@@ -7,31 +7,31 @@
     </div>
     <div class="login-card">
       <div class="login-header">
-        <n-icon size="48" color="#18a058"><ServerOutline /></n-icon>
+        <el-icon :size="48" color="#18a058"><Monitor /></el-icon>
         <h1>ITOps 智能运维平台</h1>
         <p>IT Operations Platform</p>
       </div>
 
-      <n-form ref="formRef" :model="form" :rules="rules" size="large">
-        <n-form-item path="username" label="用户名">
-          <n-input v-model:value="form.username" placeholder="请输入用户名" @keydown.enter="handleLogin">
-            <template #prefix><n-icon><PersonOutline /></n-icon></template>
-          </n-input>
-        </n-form-item>
-        <n-form-item path="password" label="密码">
-          <n-input v-model:value="form.password" type="password" placeholder="请输入密码" show-password-on="mousedown" @keydown.enter="handleLogin">
-            <template #prefix><n-icon><LockClosedOutline /></n-icon></template>
-          </n-input>
-        </n-form-item>
-        <n-form-item>
-          <n-checkbox v-model:checked="form.remember">记住密码</n-checkbox>
-        </n-form-item>
-        <n-form-item>
-          <n-button type="primary" :loading="loading" block size="large" @click="handleLogin">
+      <el-form ref="formRef" :model="form" :rules="rules" size="large">
+        <el-form-item prop="username" label="用户名">
+          <el-input v-model="form.username" placeholder="请输入用户名" @keyup.enter="handleLogin">
+            <template #prefix><el-icon><User /></el-icon></template>
+          </el-input>
+        </el-form-item>
+        <el-form-item prop="password" label="密码">
+          <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password @keyup.enter="handleLogin">
+            <template #prefix><el-icon><Lock /></el-icon></template>
+          </el-input>
+        </el-form-item>
+        <el-form-item>
+          <el-checkbox v-model="form.remember">记住密码</el-checkbox>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="loading" style="width: 100%" size="large" @click="handleLogin">
             {{ loading ? '登录中...' : '登 录' }}
-          </n-button>
-        </n-form-item>
-      </n-form>
+          </el-button>
+        </el-form-item>
+      </el-form>
 
       <div class="login-footer">
         <span>© 2024 ITOps Platform v3.0</span>
@@ -44,12 +44,11 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useMessage } from 'naive-ui'
-import { ServerOutline, PersonOutline, LockClosedOutline } from '@vicons/ionicons5'
+import { ElMessage } from 'element-plus'
+import { User, Lock, Monitor } from '@element-plus/icons-vue'
 import { auth } from '@/api'
 
 const router = useRouter()
-const message = useMessage()
 const formRef = ref(null)
 const loading = ref(false)
 
@@ -98,10 +97,10 @@ const handleLogin = async () => {
       localStorage.removeItem('savedUsername')
     }
 
-    message.success('登录成功')
+    ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch (error) {
-    message.error(error.response?.data?.message || error.message || '登录失败')
+    ElMessage.error(error.response?.data?.message || error.message || '登录失败')
   } finally {
     loading.value = false
   }

@@ -15,7 +15,8 @@ ITOps Intelligence Platform - Foundation Layer
 
 from .base import Base, db_session, init_db, close_db, get_engine
 from .device import Device, DeviceType, DeviceStatus
-from .alert import Alert, AlertLevel, AlertStatus, AlertCategory, AlertRule
+from .alert import Alert, AlertLevel, AlertStatus, AlertCategory, AlertRule, MaintenanceWindow
+from .fingerprint_template_version import FingerprintTemplateVersion
 from .monitoring import PerformanceMetric
 from .system import OperationLog, BackupRecord, SystemUser, NetworkScanConfig, DiscoveryTask
 from .workorder import WorkOrder, WorkOrderType, WorkOrderStatus
@@ -26,6 +27,11 @@ from .notification.notification_model import (
 )
 from .notification.notification_model import NotificationChannel, NotificationTarget
 from .adapter import AdapterTemplate, DeviceProtocolConfig
+from .automation import (
+    AutomationScript, AutomationTask, AutomationExecution,
+    AutomationExecutionLog, AutomationTriggerRule,
+    AutomationAIDecision, AutomationScriptVersion
+)
 
 __all__ = [
     'Base',
@@ -63,6 +69,13 @@ __all__ = [
     'NotificationTarget',
     'AdapterTemplate',
     'DeviceProtocolConfig',
+    'AutomationScript',
+    'AutomationTask',
+    'AutomationExecution',
+    'AutomationExecutionLog',
+    'AutomationTriggerRule',
+    'AutomationAIDecision',
+    'AutomationScriptVersion',
 ]
 
 __version__ = '1.0.0'

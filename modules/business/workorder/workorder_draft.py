@@ -101,6 +101,18 @@ class WorkOrderDraftManager:
         """
         self.redis = redis_client
         self.db = db_session
+        if self.redis is None:
+            try:
+                import os
+                from modules.storage.redis_client.client import RedisClient
+                self.redis = RedisClient(
+                    host=os.getenv("REDIS_HOST", "localhost"),
+                    port=int(os.getenv("REDIS_PORT", "6379")),
+                    db=int(os.getenv("REDIS_DB", "0")),
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Redis client init failed: {e}")
     
     def _get_draft_key(self, user_id: str, draft_id: str = None) -> str:
         """Get Redis key for draft"""

@@ -1,73 +1,88 @@
 <template>
   <div class="page-container">
-    <n-card title="用户管理" :bordered="false">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon><n-icon><AddOutline /></n-icon></template>
-          添加用户
-        </n-button>
+    <el-card :bordered="false">
+      <template #header>
+        <div class="card-header">
+          <span>用户管理</span>
+          <el-button type="primary" @click="handleAdd">
+            <el-icon><Plus /></el-icon>
+            添加用户
+          </el-button>
+        </div>
       </template>
 
-      <n-space style="margin-bottom: 12px" align="center">
-        <n-input v-model:value="searchKeyword" placeholder="搜索用户名/姓名" clearable style="width: 200px" @input="handleSearchInput">
-          <template #prefix><n-icon><SearchOutline /></n-icon></template>
-        </n-input>
-        <n-select v-model:value="filterStatus" :options="statusOptions" placeholder="用户状态" clearable style="width: 120px" @update:value="debouncedSearch" />
-      </n-space>
+      <el-space style="margin-bottom: 12px" align="center">
+        <el-input v-model="searchKeyword" placeholder="搜索用户名/姓名" clearable style="width: 200px" @input="handleSearchInput">
+          <template #prefix><el-icon><Search /></el-icon></template>
+        </el-input>
+        <el-select v-model="filterStatus" :options="statusOptions" placeholder="用户状态" clearable style="width: 120px" @change="debouncedSearch" />
+      </el-space>
 
-      <n-data-table
-        :columns="columns"
+      <el-table
         :data="userList"
         :loading="loading"
-        :pagination="pagination"
         :row-key="row => row.id"
-      />
-    </n-card>
+        style="width: 100%"
+      >
+        <el-table-column v-for="col in columns" :key="col.key" v-bind="col" />
+      </el-table>
+
+      <div class="pagination-wrapper">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
+    </el-card>
 
     <!-- 新建/编辑用户 -->
-    <n-modal v-model:show="dialogVisible" preset="card" :title="dialogTitle" style="width: 600px">
-      <n-form :model="form" label-placement="left" label-width="100">
-        <n-form-item label="用户名" required>
-          <n-input v-model:value="form.username" placeholder="请输入用户名" :disabled="!!form.id" />
-        </n-form-item>
-        <n-form-item v-if="!form.id" label="密码">
-          <n-input
-            v-model:value="form.password"
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
+      <el-form :model="form" label-position="left" label-width="100">
+        <el-form-item label="用户名" required>
+          <el-input v-model="form.username" placeholder="请输入用户名" :disabled="!!form.id" />
+        </el-form-item>
+        <el-form-item v-if="!form.id" label="密码">
+          <el-input
+            v-model="form.password"
             type="password"
             placeholder="请输入密码"
-            show-password-on="click"
+            show-password
           />
-        </n-form-item>
-        <n-form-item label="姓名">
-          <n-input v-model:value="form.full_name" placeholder="请输入姓名" />
-        </n-form-item>
-        <n-form-item label="邮箱">
-          <n-input v-model:value="form.email" placeholder="请输入邮箱" />
-        </n-form-item>
-        <n-form-item label="手机号">
-          <n-input v-model:value="form.phone" placeholder="请输入手机号" />
-        </n-form-item>
-        <n-form-item label="角色">
-          <n-select v-model:value="form.role" :options="roleOptions" placeholder="请选择角色" style="width: 100%" />
-        </n-form-item>
-      </n-form>
+        </el-form-item>
+        <el-form-item label="姓名">
+          <el-input v-model="form.full_name" placeholder="请输入姓名" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="form.email" placeholder="请输入邮箱" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="form.phone" placeholder="请输入手机号" />
+        </el-form-item>
+        <el-form-item label="角色">
+          <el-select v-model="form.role" :options="roleOptions" placeholder="请选择角色" style="width: 100%" />
+        </el-form-item>
+      </el-form>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="dialogVisible = false">取消</n-button>
-          <n-button type="primary" @click="submitForm" :loading="submitting">确定</n-button>
-        </n-space>
+        <el-space justify="end">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitForm" :loading="submitting">确定</el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, h } from 'vue'
-import { NCard, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSelect, NSpace, NTag, NIcon, useMessage } from 'naive-ui'
-import { AddOutline, SearchOutline } from '@vicons/ionicons5'
+import { ElMessage } from 'element-plus'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { CONFIG } from '@/config/constants'
 
-const message = useMessage()
 const loading = ref(false)
 const submitting = ref(false)
 const userList = ref([])
@@ -78,7 +93,6 @@ const dialogTitle = ref('添加用户')
 
 let searchTimer = null
 function handleSearchInput() {
-  // 实时筛选，立即清空旧定时器，每次输入都重新开始计时
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     pagination.page = 1
@@ -106,15 +120,11 @@ function validateEmail(email) {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)
 }
 
-const pagination = {
+const pagination = reactive({
   page: 1,
   pageSize: 10,
   total: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (page) => { pagination.page = page; loadData(); },
-  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
-}
+})
 const form = reactive({ id: null, username: '', password: '', full_name: '', email: '', phone: '', role: null })
 
 const statusOptions = [
@@ -144,6 +154,8 @@ async function loadRoles() {
   }
 }
 
+const roleMap = { admin: '管理员', operator: '运维人员', guest: '访客' }
+
 const columns = [
   { title: 'ID', key: 'id', width: 80 },
   { title: '用户名', key: 'username', width: 150 },
@@ -151,22 +163,19 @@ const columns = [
   { title: '邮箱', key: 'email', width: 180 },
   { title: '手机号', key: 'phone', width: 130 },
   { title: '角色', key: 'role', width: 120,
-    render: (r) => {
-      const map = { admin: '管理员', operator: '运维人员', guest: '访客' }
-      return h(NTag, { size: 'small', type: 'info' }, () => map[r.role] || r.role || '-')
-    }
+    render: ({ row }) => h(ElTag, { size: 'small', type: 'info' }, () => roleMap[row.role] || row.role || '-')
   },
   { title: '状态', key: 'is_active', width: 100,
-    render: (r) => h(NTag, { size: 'small', type: r.is_active ? 'success' : 'default' }, () => r.is_active ? '启用' : '禁用')
+    render: ({ row }) => h(ElTag, { size: 'small', type: row.is_active ? 'success' : 'info' }, () => row.is_active ? '启用' : '禁用')
   },
   { title: '创建时间', key: 'created_at', width: 180 },
   {
     title: '操作', key: 'actions', width: 240, fixed: 'right',
-    render(row) {
-      return h(NSpace, { size: 12 }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => handleEdit(row) }, () => '编辑'),
-        h(NButton, { size: 'small', quaternary: true, type: 'warning', onClick: () => handleResetPwd(row) }, () => '重置密码'),
-        h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => handleDelete(row) }, () => '删除')
+    render({ row }) {
+      return h(ElSpace, { size: 12 }, () => [
+        h(ElButton, { size: 'small', text: true, type: 'primary', onClick: () => handleEdit(row) }, () => '编辑'),
+        h(ElButton, { size: 'small', text: true, type: 'warning', onClick: () => handleResetPwd(row) }, () => '重置密码'),
+        h(ElButton, { size: 'small', text: true, type: 'danger', onClick: () => handleDelete(row) }, () => '删除')
       ])
     }
   }
@@ -188,7 +197,7 @@ async function loadData() {
     userList.value = data.items || data.data?.items || []
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
-    message.error(`加载用户失败: ${e.message}`)
+    ElMessage.error(`加载用户失败: ${e.message}`)
     userList.value = []
   } finally {
     loading.value = false
@@ -215,10 +224,9 @@ async function handleResetPwd(row) {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    message.success('密码已重置，请查看系统通知或联系管理员')
+    ElMessage.success('密码已重置，请查看系统通知或联系管理员')
   } catch (e) {
-    message.error(`重置失败: ${e.message}`)
+    ElMessage.error(`重置失败: ${e.message}`)
   }
 }
 
@@ -230,24 +238,24 @@ async function handleDelete(row) {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    message.success('删除成功')
+    ElMessage.success('删除成功')
     loadData()
   } catch (e) {
-    message.error(`删除失败: ${e.message}`)
+    ElMessage.error(`删除失败: ${e.message}`)
   }
 }
 
 async function submitForm() {
   if (!form.username) {
-    message.warning('请填写用户名')
+    ElMessage.warning('请填写用户名')
     return
   }
   if (form.email && !validateEmail(form.email)) {
-    message.warning('邮箱格式不正确')
+    ElMessage.warning('邮箱格式不正确')
     return
   }
   if (form.phone && !validatePhone(form.phone)) {
-    message.warning('手机号格式不正确')
+    ElMessage.warning('手机号格式不正确')
     return
   }
   if (submitting.value) return
@@ -264,14 +272,25 @@ async function submitForm() {
       body: JSON.stringify(body)
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    message.success(form.id ? '更新成功' : '创建成功')
+    ElMessage.success(form.id ? '更新成功' : '创建成功')
     dialogVisible.value = false
     loadData()
   } catch (e) {
-    message.error(`操作失败: ${e.message}`)
+    ElMessage.error(`操作失败: ${e.message}`)
   } finally {
     submitting.value = false
   }
+}
+
+function handleSizeChange(size) {
+  pagination.pageSize = size
+  pagination.page = 1
+  loadData()
+}
+
+function handlePageChange(page) {
+  pagination.page = page
+  loadData()
 }
 
 onMounted(() => { loadData(); loadRoles() })
@@ -279,4 +298,14 @@ onMounted(() => { loadData(); loadRoles() })
 
 <style scoped>
 .page-container { padding: 16px; }
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
 </style>

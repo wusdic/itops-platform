@@ -620,3 +620,314 @@ class FaultCategoryManager:
         except SQLAlchemyError as e:
             self.db.rollback()
             raise e
+
+
+# ============== AI 案例推荐器 ==============
+
+class CaseRecommender:
+    """
+    AI驱动的故障案例相似度推荐器
+
+    基于 LLM 语义分析，从故障案例库中检索与当前故障最相似的历史案例，
+    并按相似度评分排序返回推荐结果。
+    """
+
+    def __init__(self, db: Session, llm_client=None):
+        """
+        Args:
+            db: 数据库会话
+            llm_client: LLM 客户端（来自 modules.business.ai_copilot.llm_client）
+        """
+        self.db = db
+        self.llm_client = llm_client
+
+    def _build_similarity_prompt(self, query_case: Dict, candidate_cases: List[Dict]) -> str:
+        """构建相似度分析的 prompt"""
+        query_text = (
+            f"标题：{query_case.get('title', '')}\n"
+            f"故障现象：{query_case.get('symptom', '')}\n"
+            f"故障分类：{query_case.get('fault_category', '未知')}\n"
+            f"故障级别：{query_case.get('fault_level', '未知')}\n"
+            f"影响系统：{', '.join(query_case.get('affected_systems') or [])}"
+        )
+
+        cases_text = []
+        for i, c in enumerate(candidate_cases, 1):
+            cases_text.append(
+                f"案例{i} [ID={c['id']}, 标题={c['title']}, 分类={c.get('fault_category','未知')}, "
+                f"级别={c.get('fault_level','未知')}]:\n"
+                f"  现象：{c.get('symptom','')[:300]}\n"
+                f"  根因：{c.get('root_cause','')[:200]}\n"
+                f"  解决：{c.get('solution','')[:200]}"
+            )
+
+        prompt = f"""你是一个运维故障案例匹配专家。请分析以下故障案例，从候选案例库中找出与目标故障最相似的Top3，并给出相似度评分(0-1)和匹配理由。
+
+# 目标故障
+{query_text}
+
+# 候选案例库
+{chr(10).join(cases_text)}
+
+请以JSON格式返回，字段说明：
+- "recommendations": [{{"id": int, "similarity_score": float(0-1), "match_reason": str, "title": str}}]，按相似度降序排列，最多返回3个
+- "analysis_summary": str，总结推荐逻辑
+
+只返回JSON，不要有其他内容。JSON格式：
+{{"recommendations":[{{"id":1,"similarity_score":0.85,"match_reason":"...","title":"..."}}],"analysis_summary":"..."}}"""
+        return prompt
+
+    def _parse_llm_response(self, response: str) -> Dict:
+        """解析 LLM 返回的 JSON 推荐结果"""
+        import json, re
+        try:
+            # 尝试提取 JSON block
+            match = re.search(r'\{.*\}', response, re.DOTALL)
+            if match:
+                return json.loads(match.group())
+        except Exception:
+            pass
+        return {"recommendations": [], "analysis_summary": "解析失败"}
+
+    def _get_candidates(self, case_id: int, top_n: int = 5) -> Dict:
+        """
+        第一阶段：获取候选案例列表（不调用 LLM）。
+        供 API endpoint 分阶段调用使用。
+        Returns:
+            {success, query_dict, candidate_cases, total_candidates, error}
+        """
+        query_case = self.db.query(FaultCase).filter(
+            FaultCase.id == case_id,
+            FaultCase.is_deleted == False
+        ).first()
+
+        if not query_case:
+            return {"success": False, "error": f"案例 {case_id} 不存在", "query_dict": {}, "candidate_cases": []}
+
+        query_dict = {
+            "id": query_case.id,
+            "title": query_case.title or "",
+            "symptom": query_case.symptom or "",
+            "fault_category": str(query_case.fault_category) if query_case.fault_category else "",
+            "fault_level": str(query_case.fault_level).split('.')[-1] if query_case.fault_level else "",
+            "affected_systems": query_case.affected_systems or [],
+        }
+
+        query = self.db.query(FaultCase).filter(
+            FaultCase.is_deleted == False,
+            FaultCase.id != case_id,
+            FaultCase.fault_status.in_([FaultStatus.RESOLVED, FaultStatus.CLOSED])
+        )
+
+        if query_case.fault_category:
+            cat_filtered = query.filter(FaultCase.fault_category == query_case.fault_category)
+            if cat_filtered.count() >= top_n:
+                query = cat_filtered.order_by(FaultCase.view_count.desc())
+            else:
+                from sqlalchemy import case as sql_case
+                weight_expr = sql_case(
+                    (FaultCase.fault_category == query_case.fault_category, 1),
+                    else_=0
+                )
+                query = query.order_by(weight_expr.desc(), FaultCase.view_count.desc())
+        else:
+            query = query.order_by(FaultCase.view_count.desc())
+
+        candidates_raw = query.limit(top_n * 6).all()
+        candidate_cases = [
+            {
+                "id": c.id,
+                "title": c.title or "",
+                "symptom": c.symptom or "",
+                "root_cause": c.root_cause or "",
+                "solution": c.solution or "",
+                "fault_category": str(c.fault_category) if c.fault_category else "",
+                "fault_level": str(c.fault_level).split('.')[-1] if c.fault_level else "",
+            }
+            for c in candidates_raw
+        ]
+
+        return {
+            "success": True,
+            "query_dict": query_dict,
+            "candidate_cases": candidate_cases,
+            "total_candidates": len(candidate_cases),
+        }
+
+    def recommend_similar_cases(
+        self,
+        case_id: int,
+        top_n: int = 5,
+        min_score: float = 0.3
+    ) -> Dict:
+        """
+        获取相似案例推荐（LLM 语义分析版）
+
+        Args:
+            case_id: 目标案例 ID
+            top_n: 候选池大小（从库中检索的候选案例数）
+            min_score: 最低相似度阈值
+
+        Returns:
+            {{
+                "success": bool,
+                "case_id": int,
+                "recommendations": [{{id, similarity_score, match_reason, title, symptom, root_cause, solution}}],
+                "analysis_summary": str,
+                "total_candidates": int,
+                "error": str
+            }}
+        """
+        query_case = self.db.query(FaultCase).filter(
+            FaultCase.id == case_id,
+            FaultCase.is_deleted == False
+        ).first()
+
+        if not query_case:
+            return {"success": False, "error": f"案例 {case_id} 不存在", "recommendations": []}
+
+        # 预处理目标案例
+        query_dict = {
+            "id": query_case.id,
+            "title": query_case.title or "",
+            "symptom": query_case.symptom or "",
+            "fault_category": str(query_case.fault_category) if query_case.fault_category else "",
+            "fault_level": str(query_case.fault_level).split('.')[-1] if query_case.fault_level else "",
+            "affected_systems": query_case.affected_systems or [],
+        }
+
+        # 第一阶段：检索候选案例
+        query = self.db.query(FaultCase).filter(
+            FaultCase.is_deleted == False,
+            FaultCase.id != case_id,
+            FaultCase.fault_status.in_([FaultStatus.RESOLVED, FaultStatus.CLOSED])
+        )
+
+        # 分类过滤（强关联）
+        count_after_cat = 0
+        if query_case.fault_category:
+            cat_filtered = query.filter(FaultCase.fault_category == query_case.fault_category)
+            count_after_cat = cat_filtered.count()
+            if count_after_cat >= top_n:
+                query = cat_filtered.order_by(FaultCase.view_count.desc())
+            else:
+                # 分类过滤后候选不足，加权排序
+                from sqlalchemy import case as sql_case
+                weight_expr = sql_case(
+                    (FaultCase.fault_category == query_case.fault_category, 1),
+                    else_=0
+                )
+                query = query.order_by(weight_expr.desc(), FaultCase.view_count.desc())
+        else:
+            query = query.order_by(FaultCase.view_count.desc())
+
+        candidates_raw = query.limit(top_n * 6).all()
+        candidate_cases = [
+            {
+                "id": c.id,
+                "title": c.title or "",
+                "symptom": c.symptom or "",
+                "root_cause": c.root_cause or "",
+                "solution": c.solution or "",
+                "fault_category": str(c.fault_category) if c.fault_category else "",
+                "fault_level": str(c.fault_level).split('.')[-1] if c.fault_level else "",
+            }
+            for c in candidates_raw
+        ]
+
+        if not candidate_cases:
+            return {
+                "success": True,
+                "case_id": case_id,
+                "recommendations": [],
+                "analysis_summary": "候选案例库为空",
+                "total_candidates": 0
+            }
+
+        # 第二阶段：调用 LLM 进行语义相似度分析
+        if self.llm_client:
+            try:
+                prompt = self._build_similarity_prompt(query_dict, candidate_cases)
+                response = self.llm_client.chat([{"role": "user", "content": prompt}])
+                response_text = response.get("content", "") if isinstance(response, dict) else str(response)
+                llm_result = self._parse_llm_response(response_text)
+
+                recommendations = []
+                for rec in llm_result.get("recommendations", []):
+                    if rec.get("similarity_score", 0) < min_score:
+                        continue
+                    # 找到对应案例的完整信息
+                    matched = next((c for c in candidate_cases if c["id"] == rec["id"]), None)
+                    if matched:
+                        recommendations.append({
+                            "id": rec["id"],
+                            "similarity_score": round(rec.get("similarity_score", 0), 3),
+                            "match_reason": rec.get("match_reason", ""),
+                            "title": matched["title"],
+                            "symptom": matched["symptom"],
+                            "root_cause": matched["root_cause"],
+                            "solution": matched["solution"],
+                        })
+
+                return {
+                    "success": True,
+                    "case_id": case_id,
+                    "recommendations": sorted(recommendations, key=lambda x: x["similarity_score"], reverse=True),
+                    "analysis_summary": llm_result.get("analysis_summary", ""),
+                    "total_candidates": len(candidate_cases)
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "case_id": case_id,
+                    "error": f"LLM分析失败: {str(e)}",
+                    "recommendations": [],
+                    "total_candidates": len(candidate_cases)
+                }
+        else:
+            # 无 LLM client 时回退到简单分类匹配
+            fallback = []
+            for c in candidate_cases[:top_n]:
+                score = 0.5
+                if c["fault_category"] == query_dict["fault_category"]:
+                    score += 0.2
+                if c["fault_level"] == query_dict["fault_level"]:
+                    score += 0.1
+                score = min(score, 0.9)
+                fallback.append({
+                    "id": c["id"],
+                    "similarity_score": score,
+                    "match_reason": "分类匹配（无LLM）",
+                    "title": c["title"],
+                    "symptom": c["symptom"],
+                    "root_cause": c["root_cause"],
+                    "solution": c["solution"],
+                })
+            return {
+                "success": True,
+                "case_id": case_id,
+                "recommendations": sorted(fallback, key=lambda x: x["similarity_score"], reverse=True),
+                "analysis_summary": "无LLM客户端，使用分类匹配回退",
+                "total_candidates": len(candidate_cases)
+            }
+
+
+# 全局单例
+_recommender_instance: Optional[CaseRecommender] = None
+
+
+def get_case_recommender() -> CaseRecommender:
+    """获取 CaseRecommender 全局单例（需外部注入 db 和 llm_client）"""
+    global _recommender_instance
+    if _recommender_instance is None:
+        from sqlalchemy.orm import Session
+        from api.start import get_redis_client
+        from modules.foundation.db_manager import DatabaseManager
+        db = DatabaseManager().get_session()
+        try:
+            from modules.business.ai_copilot.llm_client import LLMClient
+            llm_client = LLMClient()
+        except Exception:
+            llm_client = None
+        _recommender_instance = CaseRecommender(db, llm_client)
+    return _recommender_instance

@@ -6,68 +6,87 @@
         <p class="page-subtitle">查看历史通知消息</p>
       </div>
       <div class="page-actions">
-        <n-button @click="loadData">
-          <template #icon><n-icon><Refresh /></n-icon></template>
+        <el-button @click="loadData">
+          <el-icon><Refresh /></el-icon>
           刷新
-        </n-button>
-        <n-button @click="markAllRead">
-          <template #icon><n-icon><CheckmarkDoneOutline /></n-icon></template>
+        </el-button>
+        <el-button @click="markAllRead">
+          <el-icon><Check /></el-icon>
           全部已读
-        </n-button>
+        </el-button>
       </div>
     </div>
 
-    <n-card class="mb-4">
-      <n-space align="center">
-        <n-select v-model:value="filterType" :options="typeOptions" placeholder="按类型筛选" clearable style="width: 150px" @update:value="loadData" />
-        <n-select v-model:value="filterChannel" :options="channelOptions" placeholder="按渠道筛选" clearable style="width: 150px" @update:value="loadData" />
-        <n-select v-model:value="filterRead" :options="readOptions" placeholder="按阅读状态筛选" clearable style="width: 150px" @update:value="loadData" />
-        <n-button @click="clearFilters">清除筛选</n-button>
-      </n-space>
-    </n-card>
+    <el-card class="mb-4" shadow="never">
+      <el-space align="center">
+        <el-select v-model="filterType" placeholder="按类型筛选" clearable :options="typeOptions" style="width: 150px" @change="loadData" />
+        <el-select v-model="filterChannel" placeholder="按渠道筛选" clearable :options="channelOptions" style="width: 150px" @change="loadData" />
+        <el-select v-model="filterRead" placeholder="按阅读状态筛选" clearable :options="readOptions" style="width: 150px" @change="loadData" />
+        <el-button @click="clearFilters">清除筛选</el-button>
+      </el-space>
+    </el-card>
 
-    <n-card>
-      <n-data-table
-        :columns="columns"
+    <el-card shadow="never">
+      <el-table
         :data="list"
-        :loading="loading"
-        :pagination="pagination"
-        :row-key="row => row.id"
-        @update:page="handlePageChange"
-        @update:page-size="handlePageSizeChange"
-      />
-    </n-card>
+        v-loading="loading"
+        :pagination="paginationConfig"
+        row-key="id"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      >
+        <el-table-column label="序号" type="index" width="60" />
+        <el-table-column label="类型" prop="type" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getTypeColor(row.type)" size="small">{{ row.type }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="渠道" prop="channel" width="100" />
+        <el-table-column label="标题" prop="title" width="200" show-overflow-tooltip />
+        <el-table-column label="内容" prop="content" show-overflow-tooltip />
+        <el-table-column label="状态" prop="read" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.read ? 'success' : 'warning'" size="small">{{ row.read ? '已读' : '未读' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="时间" prop="created_at" width="180" />
+        <el-table-column label="操作" width="140">
+          <template #default="{ row }">
+            <el-button size="small" link @click="showDetail(row)">查看</el-button>
+            <el-button size="small" link @click="toggleRead(row)">{{ row.read ? '标记未读' : '标记已读' }}</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
 
-    <n-modal v-model:show="detailModalVisible" preset="card" title="消息详情" style="width: 500px">
-      <n-descriptions v-if="currentMessage" label-placement="top" :column="1">
-        <n-descriptions-item label="类型">
-          <n-tag :type="getTypeColor(currentMessage.type)">{{ currentMessage.type }}</n-tag>
-        </n-descriptions-item>
-        <n-descriptions-item label="渠道">{{ currentMessage.channel }}</n-descriptions-item>
-        <n-descriptions-item label="标题">{{ currentMessage.title }}</n-descriptions-item>
-        <n-descriptions-item label="内容">{{ currentMessage.content }}</n-descriptions-item>
-        <n-descriptions-item label="状态">
-          <n-tag :type="currentMessage.read ? 'success' : 'warning'">{{ currentMessage.read ? '已读' : '未读' }}</n-tag>
-        </n-descriptions-item>
-        <n-descriptions-item label="时间">{{ currentMessage.created_at }}</n-descriptions-item>
-      </n-descriptions>
+    <el-dialog v-model="detailModalVisible" title="消息详情" width="500px" destroy-on-close>
+      <el-descriptions v-if="currentMessage" direction="vertical" :column="1" border>
+        <el-descriptions-item label="类型">
+          <el-tag :type="getTypeColor(currentMessage.type)">{{ currentMessage.type }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="渠道">{{ currentMessage.channel }}</el-descriptions-item>
+        <el-descriptions-item label="标题">{{ currentMessage.title }}</el-descriptions-item>
+        <el-descriptions-item label="内容">{{ currentMessage.content }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          <el-tag :type="currentMessage.read ? 'success' : 'warning'">{{ currentMessage.read ? '已读' : '未读' }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="时间">{{ currentMessage.created_at }}</el-descriptions-item>
+      </el-descriptions>
       <template #footer>
-        <n-space justify="end">
-          <n-button v-if="!currentMessage?.read" type="primary" @click="markAsRead">标记已读</n-button>
-          <n-button @click="detailModalVisible = false">关闭</n-button>
-        </n-space>
+        <el-space justify="end">
+          <el-button v-if="!currentMessage?.read" type="primary" @click="markAsRead">标记已读</el-button>
+          <el-button @click="detailModalVisible = false">关闭</el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { NIcon } from 'naive-ui'
-import { Refresh, CheckmarkDoneOutline } from '@vicons/ionicons5'
-import { useMessage, NTag, NButton, NButtonGroup, NDescriptions, NDescriptionsItem } from 'naive-ui'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Refresh, Check } from '@element-plus/icons-vue'
 
-const message = useMessage()
 const loading = ref(false)
 const list = ref([])
 const filterType = ref(null)
@@ -94,35 +113,15 @@ const readOptions = [
   { label: '未读', value: false }
 ]
 
-const pagination = {
-  page: 1,
+const paginationConfig = reactive({
+  currentPage: 1,
   pageSize: 10,
   total: 0,
-  showSizePicker: true,
   pageSizes: [10, 20, 50, 100],
-  onChange: (page) => { pagination.page = page; loadData(); },
-  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
-}
-
-const columns = [
-  { title: '序号', type: 'index', width: 60 },
-  { title: '类型', key: 'type', width: 100,
-    render: (row) => h(NTag, { type: getTypeColor(row.type), size: 'small' }, () => row.type)
-  },
-  { title: '渠道', key: 'channel', width: 100 },
-  { title: '标题', key: 'title', width: 200, ellipsis: { tooltip: true } },
-  { title: '内容', key: 'content', ellipsis: { tooltip: true } },
-  { title: '状态', key: 'read', width: 100,
-    render: (row) => h(NTag, { type: row.read ? 'success' : 'warning', size: 'small' }, () => row.read ? '已读' : '未读')
-  },
-  { title: '时间', key: 'created_at', width: 180 },
-  { title: '操作', key: 'actions', width: 120,
-    render: (row) => h(NButtonGroup, {}, () => [
-      h(NButton, { size: 'small', onClick: () => showDetail(row) }, () => '查看'),
-      h(NButton, { size: 'small', onClick: () => toggleRead(row) }, () => row.read ? '标记未读' : '标记已读')
-    ])
-  }
-]
+  layout: 'sizes, prev, pager, next',
+  onCurrentChange: (page) => { paginationConfig.currentPage = page; loadData(); },
+  onSizeChange: (size) => { paginationConfig.pageSize = size; paginationConfig.currentPage = 1; loadData(); }
+})
 
 onMounted(() => { loadData() })
 
@@ -130,7 +129,7 @@ const loadData = async () => {
   loading.value = true
   try {
     const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({ page: pagination.page, page_size: pagination.pageSize })
+    const params = new URLSearchParams({ page: paginationConfig.currentPage, page_size: paginationConfig.pageSize })
     if (filterType.value) params.append('type', filterType.value)
     if (filterChannel.value) params.append('channel', filterChannel.value)
     if (filterRead.value !== null) params.append('read', filterRead.value)
@@ -141,17 +140,17 @@ const loadData = async () => {
     const data = await res.json()
     if (!data || typeof data !== 'object') throw new Error('响应格式异常')
     list.value = data.items || data.data?.items || []
-    pagination.total = data.total || data.data?.total || 0
+    paginationConfig.total = data.total || data.data?.total || 0
   } catch (e) {
-    message.error(`加载失败: ${e.message}`)
+    ElMessage.error(`加载失败: ${e.message}`)
     list.value = []
   } finally {
     loading.value = false
   }
 }
 
-const handlePageChange = (page) => { pagination.page = page; loadData() }
-const handlePageSizeChange = (pageSize) => { pagination.pageSize = pageSize; pagination.page = 1; loadData() }
+const handlePageChange = (page) => { paginationConfig.currentPage = page; loadData() }
+const handlePageSizeChange = (pageSize) => { paginationConfig.pageSize = pageSize; paginationConfig.currentPage = 1; loadData() }
 const showDetail = (row) => { currentMessage.value = row; detailModalVisible.value = true }
 
 const markAsRead = async () => {
@@ -167,7 +166,7 @@ const markAsRead = async () => {
     loadData()
     detailModalVisible.value = false
   } catch (e) {
-    message.error(`标记失败: ${e.message}`)
+    ElMessage.error(`标记失败: ${e.message}`)
   }
 }
 
@@ -182,7 +181,7 @@ const toggleRead = async (row) => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     loadData()
   } catch (e) {
-    message.error(`操作失败: ${e.message}`)
+    ElMessage.error(`操作失败: ${e.message}`)
   }
 }
 
@@ -194,15 +193,15 @@ const markAllRead = async () => {
       headers: { Authorization: `Bearer ${token}` }
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    message.success('已全部标记为已读')
+    ElMessage.success('已全部标记为已读')
     loadData()
   } catch (e) {
-    message.error(`操作失败: ${e.message}`)
+    ElMessage.error(`操作失败: ${e.message}`)
   }
 }
 
 const clearFilters = () => { filterType.value = null; filterChannel.value = null; filterRead.value = null; loadData() }
-const getTypeColor = (type) => ({ alert: 'error', maintenance: 'warning', info: 'info' }[type] || 'default')
+const getTypeColor = (type) => ({ alert: 'danger', maintenance: 'warning', info: 'info' }[type] || 'info')
 </script>
 
 <style lang="scss" scoped>

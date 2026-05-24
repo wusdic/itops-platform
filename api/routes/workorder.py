@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from api.dependencies import get_db, get_current_user, CurrentUser, PaginationParams
+from api.dependencies import get_db, get_current_user, CurrentUser, PaginationParams, require_role
 from modules.foundation.db_models.workorder import (
     WorkOrder, WorkOrderFlow, WorkOrderType, WorkOrderStatus, WorkOrderPriority
 )
@@ -216,12 +216,13 @@ async def export_workorders(
     start_date: Optional[datetime] = Query(None, description="创建时间开始"),
     end_date: Optional[datetime] = Query(None, description="创建时间结束"),
     format: Optional[str] = Query("excel", description="导出格式: excel/csv"),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
     """
     导出工单到Excel或CSV文件
     支持按状态、优先级、时间范围过滤
+    仅限 admin 和 operator 角色
     """
     core = _build_workorder_core(db)
     
@@ -273,11 +274,12 @@ async def export_workorders(
 async def export_single_workorder(
     workorder_id: int,
     format: Optional[str] = Query("excel", description="导出格式: excel/csv"),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
     """
     导出单个工单到Excel或CSV文件
+    仅限 admin 和 operator 角色
     """
     core = _build_workorder_core(db)
     
@@ -621,6 +623,211 @@ async def delete_workorder(
 
 
 # ============== 工单流程接口 ==============
+
+@router.get("/{workorder_id}/approval-flow", summary="获取工单审批流程图")
+async def get_workorder_approval_flow(
+    workorder_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    获取工单审批流程图数据
+    返回按时间排序的审批节点列表，包含状态、审批人、操作、意见等
+    """
+    # 验证工单存在
+    core = _build_workorder_core(db)
+    wo = core.get_by_id(workorder_id)
+    if not wo:
+        raise HTTPException(status_code=404, detail="工单不存在")
+
+    # 获取所有流程记录（WorkOrderFlow）
+    flows = db.query(WorkOrderFlow).filter(
+        WorkOrderFlow.work_order_id == workorder_id
+    ).order_by(WorkOrderFlow.created_at.asc()).all()
+
+    # 状态到中文的映射
+    status_labels = {
+        'pending': '待处理',
+        'processing': '处理中',
+        'pending_approval': '待审批',
+        'approved': '已批准',
+        'rejected': '已拒绝',
+        'resolved': '已解决',
+        'closed': '已关闭',
+        'cancelled': '已取消',
+    }
+
+    # 操作到图标的映射
+    action_icons = {
+        'assign': '👤',
+        'approve': '✅',
+        'reject': '❌',
+        'resolve': '🔧',
+        'close': '🔒',
+        'cancel': '🚫',
+        'submit': '📤',
+        'create': '🆕',
+    }
+
+    # 构建节点列表
+    nodes = []
+
+    # 起始节点：工单创建
+    wo_order_type = wo.order_type.value if hasattr(wo.order_type, 'value') else (wo.order_type or 'fault')
+    wo_status = wo.status.value if hasattr(wo.status, 'value') else (wo.status or 'pending')
+    nodes.append({
+        'node_id': 'start',
+        'type': 'start',
+        'title': '工单创建',
+        'status': 'pending',
+        'status_label': '已创建',
+        'operator': wo.creator or '系统',
+        'action': 'create',
+        'action_icon': '🆕',
+        'comment': (wo.description or '')[:200],
+        'created_at': wo.created_at.isoformat() if wo.created_at else None,
+        'is_current': False,
+    })
+
+    # 合并 flows 和 approval_records
+    approval_records = []
+    try:
+        from modules.business.workorder.approval import ApprovalRecord
+        approval_records = db.query(ApprovalRecord).filter(
+            ApprovalRecord.work_order_id == workorder_id
+        ).order_by(ApprovalRecord.created_at.asc()).all()
+    except Exception:
+        pass  # 表可能不存在
+
+    # 用字典按时间线合并
+    timeline = []
+    for f in flows:
+        timeline.append({
+            'ts': f.created_at,
+            'source': 'flow',
+            'data': f,
+        })
+    for ar in approval_records:
+        timeline.append({
+            'ts': ar.created_at,
+            'source': 'approval',
+            'data': ar,
+        })
+
+    # 按时间排序
+    timeline.sort(key=lambda x: x['ts'] or 0)
+
+    current_status = wo_status
+    current_node_id = None
+
+    for item in timeline:
+        d = item['data']
+        if item['source'] == 'flow':
+            action = d.action or ''
+            from_s = d.from_status or ''
+            to_s = d.to_status or ''
+            operator = d.operator or '系统'
+            comment = d.comment or ''
+            ts = d.created_at
+
+            node_type = 'process'
+            if action in ('approve', 'reject'):
+                node_type = 'approval'
+            elif action in ('resolve', 'close'):
+                node_type = 'complete'
+
+            nodes.append({
+                'node_id': f'flow_{d.id}',
+                'type': node_type,
+                'title': d.step_name or f'流程节点 #{d.id}',
+                'status': to_s,
+                'status_label': status_labels.get(to_s, to_s),
+                'operator': operator,
+                'action': action,
+                'action_icon': action_icons.get(action, '➡️'),
+                'comment': comment[:200] if comment else '',
+                'from_status': from_s,
+                'to_status': to_s,
+                'created_at': ts.isoformat() if ts else None,
+                'is_current': to_s == current_status,
+            })
+
+            if to_s == current_status:
+                current_node_id = f'flow_{d.id}'
+
+        elif item['source'] == 'approval':
+            node_type = 'approval'
+            if d.status == 'approved':
+                node_type = 'approval_done'
+            elif d.status == 'rejected':
+                node_type = 'approval_rejected'
+
+            nodes.append({
+                'node_id': f'approval_{d.id}',
+                'type': node_type,
+                'title': f'审批节点 #{d.id}',
+                'status': d.status,
+                'status_label': {'pending': '待审批', 'approved': '已批准', 'rejected': '已拒绝',
+                                 'cancelled': '已取消', 'timeout': '已超时', 'delegated': '已委托'}.get(d.status, d.status),
+                'operator': d.approver or '未知',
+                'approver_role': d.approver_role or '',
+                'action': d.action or 'approve',
+                'action_icon': '✅' if d.status == 'approved' else ('❌' if d.status == 'rejected' else '⏳'),
+                'comment': d.comment or '',
+                'mode': d.mode or '',
+                'created_at': d.created_at.isoformat() if d.created_at else None,
+                'completed_at': d.completed_at.isoformat() if d.completed_at else None,
+                'expires_at': d.expires_at.isoformat() if d.expires_at else None,
+                'is_current': d.status == 'pending',
+            })
+
+            if d.status == 'pending':
+                current_node_id = f'approval_{d.id}'
+
+    # 终止节点
+    end_status = wo_status
+    end_types = {
+        'closed': 'end_resolved',
+        'cancelled': 'end_cancelled',
+        'rejected': 'end_rejected',
+    }
+    nodes.append({
+        'node_id': 'end',
+        'type': end_types.get(end_status, 'end'),
+        'title': '流程结束',
+        'status': end_status,
+        'status_label': status_labels.get(end_status, end_status),
+        'operator': '',
+        'action': 'end',
+        'action_icon': '🏁',
+        'comment': '',
+        'created_at': wo.updated_at.isoformat() if wo.updated_at else None,
+        'is_current': end_status in ('closed', 'cancelled', 'rejected'),
+    })
+
+    # 找出当前节点
+    for node in nodes:
+        if node['is_current'] and node['node_id'] != 'start' and node['node_id'] != 'end':
+            current_node_id = node['node_id']
+
+    # 工作流配置（从工单类型获取默认步骤）
+    workflow_steps = {
+        'fault': ['创建', '处理中', '待审批', '已批准', '已解决', '已关闭'],
+        'change': ['创建', '评估', '待审批', '已批准', '实施', '已关闭'],
+        'inspection': ['创建', '处理中', '待审批', '已批准', '已解决', '已关闭'],
+        'security': ['创建', '评估', '待审批', '已批准', '处理', '已关闭'],
+    }
+
+    return {
+        'workorder_id': workorder_id,
+        'workorder_no': wo.order_no or '',
+        'current_status': current_status,
+        'current_node_id': current_node_id,
+        'workorder_type': wo_order_type,
+        'workflow_steps': workflow_steps.get(wo_order_type, workflow_steps['fault']),
+        'nodes': nodes,
+    }
+
 
 @router.get("/{workorder_id}/flows", summary="获取工单流程历史")
 async def get_workorder_flows(
@@ -1089,11 +1296,12 @@ async def export_workorders(
     start_date: Optional[datetime] = Query(None, description="创建时间开始"),
     end_date: Optional[datetime] = Query(None, description="创建时间结束"),
     format: Optional[str] = Query("xlsx", description="导出格式: xlsx, csv"),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_role("admin", "operator")),
     db: Session = Depends(get_db),
 ):
     """
     导出工单列表到Excel或CSV
+    仅限 admin 和 operator 角色
     """
     from fastapi.responses import Response
     from modules.business.workorder.workorder_export import WorkOrderExporter, ExportFormat

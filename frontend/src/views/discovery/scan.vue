@@ -1,145 +1,158 @@
 <template>
   <div class="scan-container">
-    <n-space vertical :size="20">
-      <n-card title="网段扫描配置" size="large">
-        <n-space vertical :size="16">
+    <el-space direction="vertical" :size="20" style="width: 100%">
+      <el-card title="网段扫描配置" size="large">
+        <el-space direction="vertical" :size="16" style="width: 100%">
           <!-- 网段输入 -->
-          <n-form label-placement="left" label-width="120">
-            <n-form-item label="扫描网段">
-              <n-space>
-                <n-input v-model:value="cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
-                <n-button type="primary" @click="startScan" :loading="scanning" :disabled="!cidr">
-                  <template #icon>
-                    <SearchOutline />
-                  </template>
+          <el-form label-position="left" label-width="120px">
+            <el-form-item label="扫描网段">
+              <el-space>
+                <el-input v-model="cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
+                <el-button type="primary" @click="startScan" :loading="scanning" :disabled="!cidr">
+                  <el-icon v-if="!scanning"><Search /></el-icon>
                   开始扫描
-                </n-button>
-                <n-button @click="stopScan" :disabled="!scanning" type="warning">
+                </el-button>
+                <el-button @click="stopScan" :disabled="!scanning" type="warning">
                   停止
-                </n-button>
-              </n-space>
-            </n-form-item>
-            <n-form-item label="扫描选项">
-              <n-space>
-                <n-checkbox v-model:checked="options.scanPorts">扫描端口</n-checkbox>
-                <n-checkbox v-model:checked="options.grabBanners">获取Banner</n-checkbox>
-                <n-checkbox v-model:checked="options.snmpScan">SNMP探测</n-checkbox>
-              </n-space>
-            </n-form-item>
-          </n-form>
+                </el-button>
+              </el-space>
+            </el-form-item>
+            <el-form-item label="扫描选项">
+              <el-space>
+                <el-checkbox v-model="options.scanPorts">扫描端口</el-checkbox>
+                <el-checkbox v-model="options.grabBanners">获取Banner</el-checkbox>
+                <el-checkbox v-model="options.snmpScan">SNMP探测</el-checkbox>
+              </el-space>
+            </el-form-item>
+          </el-form>
 
           <!-- 扫描进度 -->
-          <n-card v-if="scanning || scanProgress > 0" size="small" embedded>
-            <n-progress type="line" :percentage="scanProgress" :indicator-placement="'inside'" />
-            <n-text depth="3" style="margin-top: 8px">{{ scanStatus }}</n-text>
-          </n-card>
+          <el-card v-if="scanning || scanProgress > 0" size="small" shadow="never">
+            <el-progress :percentage="scanProgress" :stroke-width="10" />
+            <div class="scan-status">{{ scanStatus }}</div>
+          </el-card>
 
           <!-- 已保存的扫描任务 -->
-          <n-card title="已配置网段" size="small">
-            <template #header-extra>
-              <n-button size="small" @click="openAddDialog">添加网段</n-button>
+          <el-card title="已配置网段" size="small">
+            <template #header>
+              <div class="card-header">
+                <span>已配置网段</span>
+                <el-button size="small" @click="openAddDialog">添加网段</el-button>
+              </div>
             </template>
-            <n-data-table
+            <el-table
               v-if="savedNetworks.length > 0"
-              :columns="networkColumns"
               :data="savedNetworks"
               :pagination="false"
               size="small"
-            />
-            <n-empty v-else description="暂无已配置的网段，点击上方添加" />
-          </n-card>
-        </n-space>
-      </n-card>
+              style="width: 100%"
+            >
+              <el-table-column v-for="col in networkColumns" :key="col.key" :="col" />
+            </el-table>
+            <el-empty v-else description="暂无已配置的网段，点击上方添加" />
+          </el-card>
+        </el-space>
+      </el-card>
 
       <!-- 扫描结果 -->
-      <n-card v-if="scanResults.length > 0" title="扫描结果" size="large">
-        <template #header-extra>
-          <n-space>
-            <n-text depth="3">发现 {{ scanResults.length }} 台主机</n-text>
-            <n-button type="primary" size="small" @click="importSelected" :disabled="selectedHosts.length === 0">
-              导入选中 ({{ selectedHosts.length }})
-            </n-button>
-          </n-space>
+      <el-card v-if="scanResults.length > 0" title="扫描结果" size="large">
+        <template #header>
+          <div class="card-header">
+            <span>扫描结果</span>
+            <el-space>
+              <span class="result-count">发现 {{ scanResults.length }} 台主机</span>
+              <el-button type="primary" size="small" @click="importSelected" :disabled="selectedHosts.length === 0">
+                导入选中 ({{ selectedHosts.length }})
+              </el-button>
+            </el-space>
+          </div>
         </template>
 
-        <n-data-table
-          v-model:selected-row-keys="selectedHosts"
-          :columns="resultColumns"
+        <el-table
+          v-model:selected="selectedHosts"
           :data="scanResults"
-          :row-key="(row) => row.ip"
+          row-key="ip"
           :pagination="false"
-          :row-props="(row) => ({ style: 'cursor: pointer' })"
-          @update:selected-row-keys="onSelectionChange"
-        />
+          @selection-change="onSelectionChange"
+          style="width: 100%"
+        >
+          <el-table-column v-for="col in resultColumns" :key="col.key" :="col" />
+        </el-table>
 
         <!-- 结果统计 -->
-        <n-grid :cols="4" style="margin-top: 16px">
-          <n-gi>
-            <n-statistic label="在线主机">
-              <n-number-animation :from="0" :to="onlineCount" />
-            </n-statistic>
-          </n-gi>
-          <n-gi>
-            <n-statistic label="Linux设备">
-              <n-number-animation :from="0" :to="linuxCount" />
-            </n-statistic>
-          </n-gi>
-          <n-gi>
-            <n-statistic label="Windows设备">
-              <n-number-animation :from="0" :to="windowsCount" />
-            </n-statistic>
-          </n-gi>
-          <n-gi>
-            <n-statistic label="网络设备">
-              <n-number-animation :from="0" :to="networkCount" />
-            </n-statistic>
-          </n-gi>
-        </n-grid>
-      </n-card>
+        <el-row :gutter="16" style="margin-top: 16px">
+          <el-col :span="6">
+            <div class="statistic-item">
+              <span class="statistic-label">在线主机</span>
+              <span class="statistic-value">{{ onlineCount }}</span>
+            </div>
+          </el-col>
+          <el-col :span="6">
+            <div class="statistic-item">
+              <span class="statistic-label">Linux设备</span>
+              <span class="statistic-value">{{ linuxCount }}</span>
+            </div>
+          </el-col>
+          <el-col :span="6">
+            <div class="statistic-item">
+              <span class="statistic-label">Windows设备</span>
+              <span class="statistic-value">{{ windowsCount }}</span>
+            </div>
+          </el-col>
+          <el-col :span="6">
+            <div class="statistic-item">
+              <span class="statistic-label">网络设备</span>
+              <span class="statistic-value">{{ networkCount }}</span>
+            </div>
+          </el-col>
+        </el-row>
+      </el-card>
 
       <!-- 扫描历史 -->
-      <n-card title="扫描历史" size="small">
-        <n-data-table
-          :columns="historyColumns"
+      <el-card title="扫描历史" size="small">
+        <el-table
           :data="scanHistory"
           :pagination="getHistoryPagination()"
-          :row-key="(row) => row.id"
-        />
-      </n-card>
-    </n-space>
+          row-key="id"
+          style="width: 100%"
+        >
+          <el-table-column v-for="col in historyColumns" :key="col.key" :="col" />
+        </el-table>
+      </el-card>
+    </el-space>
 
     <!-- 添加/编辑网段对话框 -->
-    <n-modal v-model:show="showAddDialog" preset="card" :title="editingNetwork ? '编辑扫描网段' : '添加扫描网段'" style="width: 500px">
-      <n-form label-placement="left" label-width="100">
-        <n-form-item label="网段">
-          <n-input v-model:value="editForm.cidr" placeholder="192.168.1.0/24" />
-        </n-form-item>
-        <n-form-item label="描述">
-          <n-input v-model:value="editForm.description" placeholder="可选描述" />
-        </n-form-item>
-        <n-form-item label="自动扫描">
-          <n-space>
-            <n-switch v-model:value="editForm.auto_scan" />
-            <n-text depth="3">启用后按调度自动扫描</n-text>
-          </n-space>
-        </n-form-item>
-      </n-form>
+    <el-dialog v-model="showAddDialog" :title="editingNetwork ? '编辑扫描网段' : '添加扫描网段'" width="500px">
+      <el-form label-position="left" label-width="100px">
+        <el-form-item label="网段">
+          <el-input v-model="editForm.cidr" placeholder="192.168.1.0/24" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="editForm.description" placeholder="可选描述" />
+        </el-form-item>
+        <el-form-item label="自动扫描">
+          <el-space>
+            <el-switch v-model="editForm.auto_scan" />
+            <span class="help-text">启用后按调度自动扫描</span>
+          </el-space>
+        </el-form-item>
+      </el-form>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="showAddDialog = false">取消</n-button>
-          <n-button type="primary" @click="saveNetwork">保存</n-button>
-        </n-space>
+        <el-space justify="end">
+          <el-button @click="showAddDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveNetwork">保存</el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, h, onMounted } from 'vue'
-import { NTag, NButton, NSpace, NText, NGrid, NGi, NStatistic, NNumberAnimation, useMessage } from 'naive-ui'
-import { SearchOutline } from '@vicons/ionicons5'
+import { ref, computed, h, onMounted, reactive } from 'vue'
+import { Search } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
-const message = useMessage()
+const message = ElMessage
 
 const cidr = ref('')
 const scanning = ref(false)
@@ -181,16 +194,16 @@ const handleHistPageSizeChange = (s) => {
   loadHistory()
 }
 // 共享纯 JS 对象 — getHistoryPagination() 每次返回同一引用
-const histPagination = {
+const histPagination = reactive({
   page: 1,
   pageSize: 10,
   pageCount: 1,
   itemCount: 0,
-  showSizePicker: true,
+  layout: 'prev, pager, next, sizes',
   pageSizes: [10, 20, 50],
-  onChange: handleHistPageChange,
-  onUpdatePageSize: handleHistPageSizeChange,
-}
+  onCurrentChange: handleHistPageChange,
+  onSizeChange: handleHistPageSizeChange,
+})
 const getHistoryPagination = () => {
   histPaginationVersion.value
   histPagination.pageCount = Math.max(1, Math.ceil((histTotal.value || 0) / (histPageSize.value || 1)))
@@ -207,13 +220,16 @@ const networkCount = computed(() => scanResults.value.filter(r => ['Router', 'Sw
 // ── 列定义 ─────────────────────────────────────────────────
 const networkColumns = [
   { title: '网段', key: 'cidr', width: 180 },
-  { title: '描述', key: 'description', ellipsis: { tooltip: true } },
+  { title: '描述', key: 'description', showOverflowTooltip: true },
   { title: '自动', key: 'auto_scan', width: 70, render: (r) => r.auto_scan ? '是' : '否' },
-  { title: '操作', key: 'actions', width: 150,
-    render: (row) => h(NSpace, { size: 8 }, () => [
-      h(NButton, { size: 'tiny', onClick: () => openEditDialog(row) }, () => '编辑'),
-      h(NButton, { size: 'tiny', onClick: () => quickScan(row.cidr) }, () => '扫描'),
-      h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteNetwork(row.id) }, () => '删除'),
+  {
+    title: '操作',
+    key: 'actions',
+    width: 150,
+    render: (row) => h(ElSpace, { size: 8 }, () => [
+      h(ElButton, { size: 'small', onClick: () => openEditDialog(row) }, () => '编辑'),
+      h(ElButton, { size: 'small', onClick: () => quickScan(row.cidr) }, () => '扫描'),
+      h(ElButton, { size: 'small', type: 'danger', onClick: () => deleteNetwork(row.id) }, () => '删除'),
     ])
   }
 ]
@@ -221,16 +237,18 @@ const networkColumns = [
 const resultColumns = [
   { type: 'selection' },
   { title: 'IP地址', key: 'ip', width: 150 },
-  { title: '主机名', key: 'hostname', ellipsis: { tooltip: true }, render: (r) => r.hostname || '-' },
+  { title: '主机名', key: 'hostname', showOverflowTooltip: true, render: (r) => r.hostname || '-' },
   { title: '操作系统', key: 'os_type', width: 120, render: (r) => r.os_type || '-' },
   { title: '设备类型', key: 'device_type', width: 100, render: (r) => r.device_type || '-' },
   { title: '厂商', key: 'vendor', width: 120, render: (r) => r.vendor || '-' },
-  { title: '状态', key: 'status', width: 80, render: (r) => h(NTag, { type: r.status === 'up' ? 'success' : 'default', size: 'small' }, () => r.status === 'up' ? '在线' : '离线') },
-  { title: '开放端口', key: 'ports', ellipsis: { tooltip: true }, render: (r) => r.ports ? r.ports.join(', ') : '-' },
+  { title: '状态', key: 'status', width: 80, render: (r) => h(ElTag, { type: r.status === 'up' ? 'success' : 'info', size: 'small' }, () => r.status === 'up' ? '在线' : '离线') },
+  { title: '开放端口', key: 'ports', showOverflowTooltip: true, render: (r) => r.ports ? r.ports.join(', ') : '-' },
   {
-    title: '操作', key: 'actions', width: 100,
-    render: (row) => h(NSpace, { size: 8 }, () => [
-      h(NButton, { size: 'tiny', type: 'primary', onClick: () => importSingle(row) }, () => '导入'),
+    title: '操作',
+    key: 'actions',
+    width: 100,
+    render: (row) => h(ElSpace, { size: 8 }, () => [
+      h(ElButton, { size: 'small', type: 'primary', onClick: () => importSingle(row) }, () => '导入'),
     ]),
   },
 ]
@@ -241,7 +259,7 @@ const historyColumns = [
   { title: '发现主机', key: 'hosts_found', width: 100 },
   { title: '在线', key: 'hosts_online', width: 80 },
   { title: '已导入', key: 'hosts_imported', width: 80 },
-  { title: '状态', key: 'status', width: 100, render: (r) => h(NTag, { type: r.status === 'completed' ? 'success' : r.status === 'failed' ? 'error' : 'info', size: 'small' }, () => r.status) },
+  { title: '状态', key: 'status', width: 100, render: (r) => h(ElTag, { type: r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : 'info', size: 'small' }, () => r.status) },
 ]
 
 // ── 扫描 ───────────────────────────────────────────────────
@@ -539,5 +557,41 @@ onMounted(async () => {
 .scan-container {
   padding: 20px;
   max-width: 1200px;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.scan-status {
+  margin-top: 8px;
+  color: #909399;
+  font-size: 13px;
+}
+.result-count {
+  color: #909399;
+  font-size: 14px;
+}
+.statistic-item {
+  text-align: center;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+.statistic-label {
+  display: block;
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 4px;
+}
+.statistic-value {
+  display: block;
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+}
+.help-text {
+  color: #909399;
+  font-size: 13px;
 }
 </style>

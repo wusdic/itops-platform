@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime, timedelta
-from typing import Literal, Optional
+from typing import Literal, Optional, Dict, Any
 import secrets
 import base64
 import io
@@ -491,6 +491,156 @@ async def login_form(form_data: OAuth2PasswordRequestForm = Depends()):
     )
     
     return Token(access_token=access_token, token_type="bearer", expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+
+
+# ============== LDAP SSO 登录 ==============
+
+class LDAPSSORequest(BaseModel):
+    """LDAP SSO 登录请求"""
+    username: str
+    password: str
+
+
+class LDAPSSOResponse(BaseModel):
+    """LDAP SSO 登录响应"""
+    success: bool
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    expires_in: Optional[int] = None
+    user: Optional[Dict[str, Any]] = None
+    message: str = ""
+
+
+def _get_ldap_config() -> Optional[Dict[str, Any]]:
+    """从配置获取 LDAP 配置"""
+    try:
+        settings = get_settings()
+        ldap_cfg = getattr(settings, 'LDAP', None) or getattr(settings, 'ldap', None)
+        if not ldap_cfg:
+            return None
+        enabled = ldap_cfg.get('enabled', False)
+        if not enabled:
+            return None
+        return ldap_cfg
+    except Exception:
+        return None
+
+
+@router.post("/ldap-login", response_model=LDAPSSOResponse, tags=["认证"])
+async def ldap_login(login_data: LDAPSSORequest):
+    """
+    LDAP/SSO 单点登录
+
+    - 先尝试本地数据库认证
+    - 如果本地失败且 LDAP 已启用，则尝试 LDAP 认证
+    - LDAP 认证成功后将用户信息同步到本地数据库（如果不存在）
+    """
+    settings = get_settings()
+
+    # Step 1: 先尝试本地数据库认证
+    local_user = _user_store.authenticate(login_data.username, login_data.password)
+    if local_user:
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={
+                "sub": local_user["username"],
+                "user_id": local_user["user_id"],
+                "roles": local_user["roles"]
+            },
+            expires_delta=access_token_expires,
+        )
+        return LDAPSSOResponse(
+            success=True,
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=local_user,
+            message="本地认证成功"
+        )
+
+    # Step 2: 本地失败，尝试 LDAP 认证
+    ldap_cfg = _get_ldap_config()
+    if not ldap_cfg:
+        return LDAPSSOResponse(
+            success=False,
+            message="本地认证失败，且 LDAP/SSO 未启用"
+        )
+
+    try:
+        from modules.foundation.auth_manager import LDAPClient, LDAPConfig as _LDAPConfig
+
+        ldap_config = _LDAPConfig(
+            server=ldap_cfg.get('server', ''),
+            port=ldap_cfg.get('port', 389),
+            use_ssl=ldap_cfg.get('use_ssl', False),
+            start_tls=ldap_cfg.get('start_tls', False),
+            bind_dn=ldap_cfg.get('bind_dn', ''),
+            bind_password=ldap_cfg.get('bind_password', ''),
+            base_dn=ldap_cfg.get('base_dn', ''),
+            user_filter=ldap_cfg.get('user_filter', '(objectClass=user)'),
+            group_filter=ldap_cfg.get('group_filter', '(objectClass=group)'),
+            user_search_base=ldap_cfg.get('user_search_base', ''),
+            group_search_base=ldap_cfg.get('group_search_base', ''),
+            username_attr=ldap_cfg.get('username_attr', 'sAMAccountName'),
+            email_attr=ldap_cfg.get('email_attr', 'mail'),
+            display_name_attr=ldap_cfg.get('display_name_attr', 'displayName'),
+            group_member_attr=ldap_cfg.get('group_member_attr', 'member'),
+        )
+
+        ldap_client = LDAPClient(ldap_config)
+        ok, msg, ldap_user = ldap_client.authenticate(login_data.username, login_data.password)
+
+        if not ok or not ldap_user:
+            return LDAPSSOResponse(success=False, message=f"LDAP认证失败: {msg}")
+
+        # LDAP 认证成功：查找或创建本地用户
+        local_user = _user_store.get_user(login_data.username)
+        if not local_user:
+            # 同步 LDAP 用户到本地（角色待定，默认为 viewer）
+            new_user_id = f"ldap_{ldap_user.username}"
+            _user_store._users[new_user_id] = {
+                "user_id": new_user_id,
+                "username": ldap_user.username,
+                "email": ldap_user.email or "",
+                "full_name": ldap_user.display_name or ldap_user.username,
+                "roles": ["viewer"],  # LDAP 用户默认 viewer 角色
+                "is_active": ldap_user.enabled,
+                "created_at": datetime.now().isoformat(),
+            }
+            local_user = _user_store.get_user(login_data.username)
+
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={
+                "sub": local_user["username"],
+                "user_id": local_user["user_id"],
+                "roles": local_user["roles"]
+            },
+            expires_delta=access_token_expires,
+        )
+
+        return LDAPSSOResponse(
+            success=True,
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=local_user,
+            message="LDAP认证成功"
+        )
+
+    except ImportError:
+        return LDAPSSOResponse(success=False, message="LDAP模块未安装")
+    except Exception as e:
+        return LDAPSSOResponse(success=False, message=f"LDAP认证异常: {str(e)}")
+
+
+@router.get("/ldap/status", tags=["认证"])
+async def ldap_status():
+    """查询 LDAP/SSO 状态"""
+    ldap_cfg = _get_ldap_config()
+    if ldap_cfg:
+        return {"enabled": True, "server": ldap_cfg.get('server', '')}
+    return {"enabled": False, "server": None}
 
 
 @router.post("/logout", tags=["认证"])

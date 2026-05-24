@@ -1,72 +1,89 @@
 <template>
   <div class="page-container">
-    <n-card title="角色管理" :bordered="false">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon><n-icon><AddOutline /></n-icon></template>
-          添加角色
-        </n-button>
+    <el-card header="角色管理">
+      <template #header>
+        <div class="card-header">
+          <span>角色管理</span>
+          <el-button type="primary" @click="handleAdd">
+            <el-icon><Plus /></el-icon> 添加角色
+          </el-button>
+        </div>
       </template>
 
-      <n-data-table
-        :columns="columns"
-        :data="roleList"
-        :loading="loading"
-        :pagination="pagination"
-        :row-key="row => row.id"
-      />
-    </n-card>
+      <el-table :data="roleList" v-loading="loading" style="width: 100%">
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="name" label="角色名称" width="180" />
+        <el-table-column prop="code" label="角色编码" width="150" />
+        <el-table-column prop="description" label="描述" :show-overflow-tooltip="true" />
+        <el-table-column prop="user_count" label="用户数" width="90">
+          <template #default="{ row }">{{ row.user_count || 0 }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="handlePermission(row)">权限</el-button>
+            <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          @size-change="loadData"
+          @current-change="loadData"
+        />
+      </div>
+    </el-card>
 
     <!-- 创建/编辑角色 -->
-    <n-modal v-model:show="dialogVisible" preset="card" :title="dialogTitle" style="width: 500px">
-      <n-form :model="form" label-placement="left" label-width="100">
-        <n-form-item label="角色名称" required>
-          <n-input v-model:value="form.name" placeholder="请输入角色名称" />
-        </n-form-item>
-        <n-form-item label="角色编码" required>
-          <n-input v-model:value="form.code" placeholder="请输入角色编码" :disabled="isEdit" />
-        </n-form-item>
-        <n-form-item label="描述">
-          <n-input v-model:value="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
-        </n-form-item>
-      </n-form>
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" label-position="left">
+        <el-form-item label="角色名称" prop="name">
+          <el-input v-model="form.name" placeholder="请输入角色名称" />
+        </el-form-item>
+        <el-form-item label="角色编码" prop="code">
+          <el-input v-model="form.code" placeholder="请输入角色编码" :disabled="isEdit" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
+        </el-form-item>
+      </el-form>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="dialogVisible = false">取消</n-button>
-          <n-button type="primary" @click="submitForm" :loading="submitting">确定</n-button>
-        </n-space>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitForm" :loading="submitting">确定</el-button>
       </template>
-    </n-modal>
+    </el-dialog>
 
     <!-- 权限分配 -->
-    <n-modal v-model:show="permDialogVisible" preset="card" title="分配权限" style="width: 600px">
-      <n-tree
-        block-node
-        checkable
-        cascade
+    <el-dialog v-model="permDialogVisible" title="分配权限" width="600px">
+      <el-tree
+        ref="permissionTreeRef"
         :data="permissionTree"
-        :default-expanded-keys="['root']"
+        show-checkbox
+        node-key="key"
+        :props="{ label: 'label', children: 'children' }"
+        :default-expand-all="true"
         :default-checked-keys="defaultCheckedKeys"
-        :selected-keys="[]"
-        @update:checked-keys="handlePermissionCheck"
+        @check="handlePermissionCheck"
       />
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="permDialogVisible = false">取消</n-button>
-          <n-button type="primary" @click="submitPermission" :loading="permSubmitting">保存权限</n-button>
-        </n-space>
+        <el-button @click="permDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitPermission" :loading="permSubmitting">保存权限</el-button>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { NCard, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSpace, NTag, NIcon, NTree, useMessage, useDialog } from 'naive-ui'
-import { AddOutline } from '@vicons/ionicons5'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 
-const message = useMessage()
-const dialog = useDialog()
 const loading = ref(false)
 const submitting = ref(false)
 const permSubmitting = ref(false)
@@ -77,17 +94,21 @@ const permDialogVisible = ref(false)
 const dialogTitle = ref('添加角色')
 const currentRoleId = ref(null)
 const currentCheckedKeys = ref([])
+const permissionTreeRef = ref(null)
+const formRef = ref(null)
 
-const pagination = {
+const pagination = reactive({
   page: 1,
   pageSize: 10,
-  total: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (page) => { pagination.page = page; loadData(); },
-  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
-}
+  total: 0
+})
+
 const form = reactive({ id: null, name: '', code: '', description: '' })
+
+const rules = {
+  name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
+  code: [{ required: true, message: '请输入角色编码', trigger: 'blur' }]
+}
 
 const permissionTree = ref([
   {
@@ -149,24 +170,6 @@ const permissionTree = ref([
 
 const defaultCheckedKeys = ref([])
 
-const columns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '角色名称', key: 'name', width: 180 },
-  { title: '角色编码', key: 'code', width: 150 },
-  { title: '描述', key: 'description', ellipsis: { tooltip: true } },
-  { title: '用户数', key: 'user_count', width: 90, render: (r) => r.user_count || 0 },
-  {
-    title: '操作', key: 'actions', width: 200, fixed: 'right',
-    render(row) {
-      return h(NSpace, { size: 8 }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => handlePermission(row) }, () => '权限'),
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => handleEdit(row) }, () => '编辑'),
-        h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => handleDelete(row) }, () => '删除')
-      ])
-    }
-  }
-]
-
 async function loadData() {
   loading.value = true
   try {
@@ -180,7 +183,7 @@ async function loadData() {
     roleList.value = data.items || data.data?.items || []
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
-    message.error(`加载角色失败: ${e.message}`)
+    ElMessage.error(`加载角色失败: ${e.message}`)
     roleList.value = []
   } finally {
     loading.value = false
@@ -202,12 +205,8 @@ function handleEdit(row) {
 }
 
 function handleDelete(row) {
-  dialog.warning({
-    title: '确认删除',
-    content: `确定删除角色"${row.name}"吗？`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
+  ElMessageBox.confirm(`确定删除角色"${row.name}"吗？`, '确认删除', { type: 'warning' })
+    .then(async () => {
       try {
         const token = localStorage.getItem('token') || ''
         const res = await fetch(`/api/v1/admin/roles/${row.id}`, {
@@ -215,13 +214,12 @@ function handleDelete(row) {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        message.success('删除成功')
+        ElMessage.success('删除成功')
         loadData()
       } catch (e) {
-        message.error(`删除失败: ${e.message}`)
+        ElMessage.error(`删除失败: ${e.message}`)
       }
-    }
-  })
+    }).catch(() => {})
 }
 
 // 打开权限分配弹窗
@@ -229,7 +227,7 @@ async function handlePermission(row) {
   currentRoleId.value = row.id
   currentCheckedKeys.value = []
   permDialogVisible.value = true
-  
+
   // 加载该角色的现有权限
   try {
     const token = localStorage.getItem('token') || ''
@@ -252,8 +250,8 @@ async function handlePermission(row) {
 }
 
 // 权限勾选变化
-function handlePermissionCheck(keys) {
-  currentCheckedKeys.value = keys
+function handlePermissionCheck(data, checked) {
+  currentCheckedKeys.value = checked.checkedKeys
 }
 
 // 提交权限
@@ -271,15 +269,15 @@ async function submitPermission() {
       if (res.status !== 404) throw new Error(`HTTP ${res.status}`)
       throw new Error('API_NOT_FOUND')
     }
-    message.success('权限分配成功')
+    ElMessage.success('权限分配成功')
     permDialogVisible.value = false
   } catch (e) {
     if (e.message === 'API_NOT_FOUND') {
       // 模拟成功（本地演示）
-      message.success('权限分配成功（API不存在，演示模式）')
+      ElMessage.success('权限分配成功（API不存在，演示模式）')
       permDialogVisible.value = false
     } else {
-      message.error(`权限分配失败: ${e.message}`)
+      ElMessage.error(`权限分配失败: ${e.message}`)
     }
   } finally {
     permSubmitting.value = false
@@ -288,7 +286,7 @@ async function submitPermission() {
 
 async function submitForm() {
   if (!form.name || !form.code) {
-    message.warning('请填写必填项')
+    ElMessage.warning('请填写必填项')
     return
   }
   submitting.value = true
@@ -302,11 +300,11 @@ async function submitForm() {
       body: JSON.stringify({ name: form.name, code: form.code, description: form.description })
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    message.success(form.id ? '更新成功' : '创建成功')
+    ElMessage.success(form.id ? '更新成功' : '创建成功')
     dialogVisible.value = false
     loadData()
   } catch (e) {
-    message.error(`操作失败: ${e.message}`)
+    ElMessage.error(`操作失败: ${e.message}`)
   } finally {
     submitting.value = false
   }
@@ -327,4 +325,6 @@ onMounted(loadData)
 
 <style scoped>
 .page-container { padding: 16px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; }
+.pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 </style>

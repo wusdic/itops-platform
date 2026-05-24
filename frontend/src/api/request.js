@@ -1,16 +1,7 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 import router from '../router'
-import { useMessage } from 'naive-ui'
 import { CONFIG } from '../config/constants'
-
-// 延迟获取 message 实例，避免在模块顶层调用（此时无 Vue 上下文）
-let _message = null
-const getMessage = () => {
-  if (!_message) {
-    try { _message = useMessage() } catch {}
-  }
-  return _message
-}
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -58,7 +49,7 @@ request.interceptors.response.use(
     }
     // 有 msg 或 detail 字段通常是后端错误响应
     if (res.msg) {
-      getMessage()?.error(res.msg || '请求失败')
+      ElMessage.error(res.msg || '请求失败')
       return Promise.reject(new Error(res.msg || '请求失败'))
     }
     // 兜底：直接返回原始数据
@@ -68,22 +59,22 @@ request.interceptors.response.use(
     if (error.response) {
       const data = error.response.data
       if (error.response.status === 401) {
-        getMessage()?.error('登录已过期，请重新登录')
+        ElMessage.error('登录已过期，请重新登录')
         localStorage.removeItem('token')
         router.push('/login')
       } else if (error.response.status === 403) {
-        getMessage()?.error('没有权限访问')
+        ElMessage.error('没有权限访问')
       } else if (error.response.status === 404 && data?.detail?.includes('无指标数据')) {
         // 设备指标暂无数据，是正常状态，不弹错误提示，静默返回空数据
         return Promise.reject(new Error('NO_DATA'))
       } else if (data?.msg || data?.detail) {
-        getMessage()?.error(data.msg || data.detail)
+        ElMessage.error(data.msg || data.detail)
         return Promise.reject(new Error(data.msg || data.detail))
       } else {
-        getMessage()?.error('请求失败')
+        ElMessage.error('请求失败')
       }
     } else {
-      getMessage()?.error('网络错误')
+      ElMessage.error('网络错误')
     }
     return Promise.reject(error)
   }

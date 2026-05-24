@@ -1,112 +1,136 @@
 <template>
   <div class="page-container">
-    <n-card title="菜单管理" :bordered="false">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd(null)">
-          <template #icon><n-icon><AddOutline /></n-icon></template>
-          添加菜单
-        </n-button>
+    <el-card class="menu-card">
+      <template #header>
+        <div class="card-header">
+          <span>菜单管理</span>
+          <el-button type="primary" @click="handleAdd(null)">
+            <el-icon><Plus /></el-icon>
+            添加菜单
+          </el-button>
+        </div>
       </template>
 
-      <n-tree
-        block-line
+      <el-tree
         :data="menuTree"
-        :default-expanded-keys="defaultExpandedKeys"
-        :selected-keys="selectedKeys"
-        key-field="key"
-        label-field="label"
-        children-field="children"
-        @update:selected-keys="handleSelect"
+        :default-expand-all="false"
+        :expand-on-click-node="false"
+        node-key="key"
+        :props="{ label: 'label', children: 'children' }"
+        @node-click="handleNodeClick"
       >
-        <template #label="{ label, data }">
-          <n-space>
-            <n-icon v-if="data.icon"><component :is="data.icon" /></n-icon>
-            <span>{{ label }}</span>
-            <n-tag v-if="data.type === 'btn'" size="tiny" type="warning">按钮</n-tag>
-          </n-space>
+        <template #default="{ data }">
+          <span class="tree-node">
+            <span class="node-label">
+              <el-icon v-if="data.icon"><component :is="getIconComponent(data.iconName)" /></el-icon>
+              <span>{{ data.label }}</span>
+              <el-tag v-if="data.type === 'btn'" type="warning" size="small">按钮</el-tag>
+            </span>
+            <span class="node-actions">
+              <el-button size="small" link type="primary" @click.stop="handleAddChild(data)">添加子项</el-button>
+              <el-button size="small" link type="info" @click.stop="handleEdit(data)">编辑</el-button>
+              <el-button size="small" link type="danger" @click.stop="handleDelete(data)">删除</el-button>
+            </span>
+          </span>
         </template>
-        <template #suffix="{ data }">
-          <n-space size="small">
-            <n-button size="tiny" quaternary type="primary" @click.stop="handleAddChild(data)">添加子项</n-button>
-            <n-button size="tiny" quaternary type="info" @click.stop="handleEdit(data)">编辑</n-button>
-            <n-button size="tiny" quaternary type="error" @click.stop="handleDelete(data)">删除</n-button>
-          </n-space>
-        </template>
-      </n-tree>
-    </n-card>
+      </el-tree>
+    </el-card>
 
     <!-- 添加/编辑菜单抽屉 -->
-    <n-drawer v-model:show="drawerVisible" :width="450" placement="right">
-      <n-drawer-content :title="drawerTitle" closable>
-        <template #header>
-          <n-space justify="space-between" align="center" style="width:100%">
-            <span>{{ drawerTitle }}</span>
-            <n-button size="small" quaternary @click="drawerVisible = false">取消</n-button>
-          </n-space>
-        </template>
-        <n-form :model="form" label-placement="left" label-width="100" require-mark-placement="right-hanging">
-          <n-form-item label="菜单名称" required>
-            <n-input v-model:value="form.label" placeholder="请输入菜单名称" />
-          </n-form-item>
-          <n-form-item label="菜单编码" required>
-            <n-input v-model:value="form.key" placeholder="请输入菜单编码，如: system:user" :disabled="isEdit" />
-          </n-form-item>
-          <n-form-item label="菜单路径">
-            <n-input v-model:value="form.path" placeholder="请输入菜单路径，如: /system/user" />
-          </n-form-item>
-          <n-form-item label="图标">
-            <n-select v-model:value="form.iconName" :options="iconOptions" placeholder="选择图标" clearable filterable />
-          </n-form-item>
-          <n-form-item label="排序">
-            <n-input-number v-model:value="form.sort" :min="0" :max="9999" style="width:100%" />
-          </n-form-item>
-          <n-form-item label="类型">
-            <n-radio-group v-model:value="form.type">
-              <n-radio value="menu">菜单</n-radio>
-              <n-radio value="btn">按钮</n-radio>
-            </n-radio-group>
-          </n-form-item>
-          <n-form-item label="上级菜单" v-if="form.parentKey">
-            <n-tag>{{ getMenuLabelByKey(form.parentKey) }}</n-tag>
-            <n-button size="small" quaternary style="margin-left:8px" @click="form.parentKey = null">清除</n-button>
-          </n-form-item>
-        </n-form>
-        <template #footer>
-          <n-space justify="end">
-            <n-button @click="drawerVisible = false">取消</n-button>
-            <n-button type="primary" @click="submitForm" :loading="submitting">保存</n-button>
-          </n-space>
-        </template>
-      </n-drawer-content>
-    </n-drawer>
+    <el-drawer
+      v-model="drawerVisible"
+      :title="drawerTitle"
+      direction="rtl"
+      size="450px"
+      :show-close="false"
+      class="menu-drawer"
+    >
+      <template #header>
+        <div class="drawer-header">
+          <span>{{ drawerTitle }}</span>
+          <el-button size="small" link @click="drawerVisible = false">取消</el-button>
+        </div>
+      </template>
+      <el-form :model="form" label-position="left" label-width="80" require-asterisk-position="right">
+        <el-form-item label="菜单名称" required>
+          <el-input v-model="form.label" placeholder="请输入菜单名称" />
+        </el-form-item>
+        <el-form-item label="菜单编码" required>
+          <el-input v-model="form.key" placeholder="请输入菜单编码，如: system:user" :disabled="isEdit" />
+        </el-form-item>
+        <el-form-item label="菜单路径">
+          <el-input v-model="form.path" placeholder="请输入菜单路径，如: /system/user" />
+        </el-form-item>
+        <el-form-item label="图标">
+          <el-select v-model="form.iconName" placeholder="选择图标" clearable filterable style="width: 100%">
+            <el-option
+              v-for="icon in iconOptions"
+              :key="icon.value"
+              :label="icon.label"
+              :value="icon.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="类型">
+          <el-radio-group v-model="form.type">
+            <el-radio value="menu">菜单</el-radio>
+            <el-radio value="btn">按钮</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="上级菜单" v-if="form.parentKey">
+          <el-tag>{{ getMenuLabelByKey(form.parentKey) }}</el-tag>
+          <el-button size="small" link style="margin-left: 8px" @click="form.parentKey = null">清除</el-button>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div style="text-align: right;">
+          <el-button @click="drawerVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitForm" :loading="submitting">保存</el-button>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { NCard, NButton, NTree, NSpace, NTag, NIcon, NDrawer, NDrawerContent, NForm, NFormItem, NInput, NInputNumber, NSelect, NRadioGroup, NRadio, useMessage, useDialog } from 'naive-ui'
-import { AddOutline, GridOutline, ServerOutline, AlertCircleOutline, ConstructOutline, FolderOutline, SettingsOutline, PeopleOutline, KeyOutline, FlashOutline, DocumentTextOutline, HomeOutline, ListOutline, PersonOutline, ShieldOutline, RefreshOutline, CloudOutline, TerminalOutline, CubeOutline, FileTrayOutline, StatsChartOutline, GitBranchOutline, ExtensionPuzzleOutline, LockClosedOutline, EyeOutline, CreateOutline, TrashOutline, AddCircleOutline } from '@vicons/ionicons5'
+import { ref, reactive, onMounted, shallowRef } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  Grid, Monitor, Warning, Folder, Setting, User, Key, Lock,
+  Lightning, Document, House, List, Refresh, Cloudy, Box, TrendCharts,
+  Connection, Operation, View, Delete, Plus, CirclePlus, CircleClose,
+  Tickets, MagicStick, Coin, Ticket, Bell, DataBoard, Upload, Search,
+  Check, RefreshRight, Finished, Timer, FolderChecked, Reading,
+  DataAnalysis, Cpu, Aim, Histogram, PieChart, Compass
+} from '@element-plus/icons-vue'
 
-const message = useMessage()
-const dialog = useDialog()
+const ICON_MAP = {
+  Grid, Monitor, Warning, Folder, Setting, User, Key, Lock,
+  Lightning, Document, House, List, Refresh, Cloudy, Box, TrendCharts,
+  Connection, Operation, View, Delete, Plus, CirclePlus, CircleClose,
+  Tickets, MagicStick, Coin, Ticket, Bell, DataBoard, Upload, Search,
+  Check, RefreshRight, Finished, Timer, FolderChecked, Reading,
+  DataAnalysis, Cpu, Aim, Histogram, PieChart, Compass
+}
+
+function getIconComponent(iconName) {
+  if (!iconName) return null
+  return ICON_MAP[iconName] || null
+}
+
+const iconOptions = Object.keys(ICON_MAP).map(name => ({
+  label: name,
+  value: name
+}))
 
 const menuTree = ref([])
-const selectedKeys = ref([])
 const drawerVisible = ref(false)
 const drawerTitle = ref('添加菜单')
 const submitting = ref(false)
 const isEdit = ref(false)
-const defaultExpandedKeys = ref(['dashboard', 'monitoring', 'workorder', 'ai', 'automation', 'backup', 'notification', 'system', 'report'])
-
-const ICON_MAP = {
-  GridOutline, ServerOutline, AlertCircleOutline, ConstructOutline, FolderOutline, SettingsOutline,
-  PeopleOutline, KeyOutline, FlashOutline, DocumentTextOutline, HomeOutline, GridOutline, ListOutline,
-  PersonOutline, ShieldOutline, RefreshOutline, CloudOutline, TerminalOutline, CubeOutline,
-  FileTrayOutline, StatsChartOutline, GitBranchOutline, ExtensionPuzzleOutline, LockClosedOutline,
-  EyeOutline, CreateOutline, TrashOutline, AddCircleOutline
-}
-
-const iconOptions = Object.keys(ICON_MAP).map(name => ({ label: name.replace(/([A-Z])/g, '_$1').toUpperCase(), value: name }))
 
 const form = reactive({
   key: '', label: '', path: '', iconName: null, icon: null, sort: 0, type: 'menu', parentKey: null
@@ -139,39 +163,39 @@ async function loadMenus() {
     })
   } catch {
     menuTree.value = [
-      { key: 'dashboard', label: '仪表盘', icon: GridOutline, path: '/dashboard', sort: 0 },
-      { key: 'monitoring', label: '监控中心', icon: ServerOutline, sort: 1, children: [
+      { key: 'dashboard', label: '仪表盘', iconName: 'GridOutline', path: '/dashboard', sort: 0 },
+      { key: 'monitoring', label: '监控中心', iconName: 'ServerOutline', sort: 1, children: [
         { key: '/monitoring/devices', label: '设备监控', path: '/monitoring/devices', sort: 0 },
         { key: '/monitoring/alerts', label: '告警管理', path: '/monitoring/alerts', sort: 1 },
         { key: '/monitoring/performance', label: '性能监控', path: '/monitoring/performance', sort: 2 },
         { key: '/management/vendor-credentials', label: '厂商账密', path: '/management/vendor-credentials', sort: 3 },
       ]},
-      { key: 'workorder', label: '工单管理', icon: ConstructOutline, sort: 2, children: [
+      { key: 'workorder', label: '工单管理', iconName: 'ConstructOutline', sort: 2, children: [
         { key: '/workorder/list', label: '工单列表', path: '/workorder/list', sort: 0 },
         { key: '/workorder/create', label: '创建工单', path: '/workorder/create', sort: 1 },
         { key: '/workorder/my', label: '我的工单', path: '/workorder/my', sort: 2 },
       ]},
-      { key: 'ai', label: 'AI助手', icon: FlashOutline, sort: 4, children: [
+      { key: 'ai', label: 'AI助手', iconName: 'FlashOutline', sort: 4, children: [
         { key: '/ai/chat', label: 'AI聊天', path: '/ai/chat', sort: 0 },
         { key: '/ai/copilot', label: '知识库问答', path: '/ai/copilot', sort: 1 },
         { key: '/ai/analyze', label: '智能分析', path: '/ai/analyze', sort: 2 },
       ]},
-      { key: 'automation', label: '自动化', icon: FlashOutline, sort: 5, children: [
+      { key: 'automation', label: '自动化', iconName: 'FlashOutline', sort: 5, children: [
         { key: '/automation/script', label: '脚本管理', path: '/automation/script', sort: 0 },
         { key: '/automation/task', label: '任务调度', path: '/automation/task', sort: 1 },
         { key: '/automation/evaluate', label: '指标评估', path: '/automation/evaluate', sort: 2 },
         { key: '/automation/execute', label: '执行记录', path: '/automation/execute', sort: 3 },
       ]},
-      { key: 'backup', label: '备份管理', icon: DocumentTextOutline, sort: 6, children: [
+      { key: 'backup', label: '备份管理', iconName: 'DocumentTextOutline', sort: 6, children: [
         { key: '/backup/list', label: '备份记录', path: '/backup/list', sort: 0 },
         { key: '/backup/restore', label: '恢复管理', path: '/backup/restore', sort: 1 },
       ]},
-      { key: 'notification', label: '消息中心', icon: SettingsOutline, sort: 7, children: [
+      { key: 'notification', label: '消息中心', iconName: 'SettingsOutline', sort: 7, children: [
         { key: '/notification/message', label: '我的消息', path: '/notification/message', sort: 0 },
         { key: '/notification/history', label: '消息历史', path: '/notification/history', sort: 1 },
         { key: '/notification/config', label: '通知配置', path: '/notification/config', sort: 2 },
       ]},
-      { key: 'system', label: '系统管理', icon: SettingsOutline, sort: 99, children: [
+      { key: 'system', label: '系统管理', iconName: 'SettingsOutline', sort: 99, children: [
         { key: '/system/user', label: '用户管理', path: '/system/user', sort: 0 },
         { key: '/system/role', label: '角色管理', path: '/system/role', sort: 1 },
         { key: '/system/menu', label: '菜单管理', path: '/system/menu', sort: 2 },
@@ -180,7 +204,7 @@ async function loadMenus() {
         { key: '/system/logs', label: '日志查看', path: '/system/logs', sort: 5 },
         { key: '/system/adapters', label: '适配器管理', path: '/system/adapters', sort: 6 },
       ]},
-      { key: 'report', label: '报表管理', icon: DocumentTextOutline, sort: 100, children: [
+      { key: 'report', label: '报表管理', iconName: 'DocumentTextOutline', sort: 100, children: [
         { key: '/report/list', label: '报表管理', path: '/report/list', sort: 0 },
         { key: '/report/create', label: '生成报表', path: '/report/create', sort: 1 },
         { key: '/report/template', label: '模板管理', path: '/report/template', sort: 2 },
@@ -189,13 +213,14 @@ async function loadMenus() {
   }
 }
 
-function handleSelect(keys) { selectedKeys.value = keys }
+function handleNodeClick(data) {}
 
 function handleAdd(parent) {
   isEdit.value = false; drawerTitle.value = '添加菜单'
   Object.assign(form, { key: '', label: '', path: '', iconName: null, icon: null, sort: 0, type: 'menu', parentKey: parent?.key || null })
   drawerVisible.value = true
 }
+
 function handleAddChild(parent) { handleAdd(parent) }
 
 function handleEdit(data) {
@@ -205,28 +230,31 @@ function handleEdit(data) {
 }
 
 function handleDelete(data) {
-  dialog.warning({
-    title: '确认删除',
-    content: `确定删除菜单"${data.label}"吗？${data.children?.length ? '（将同时删除所有子菜单）' : ''}`,
-    positiveText: '确定', negativeText: '取消',
-    onPositiveClick: () => {
-      const remove = (nodes) => {
-        const idx = nodes.findIndex(n => n.key === data.key)
-        if (idx !== -1) { nodes.splice(idx, 1); return true }
-        for (const node of nodes) { if (node.children && remove(node.children)) return true }
-        return false
-      }
-      remove(menuTree.value)
-      message.success('删除成功')
-      drawerVisible.value = false
+  ElMessageBox.confirm(
+    `确定删除菜单"${data.label}"吗？${data.children?.length ? '（将同时删除所有子菜单）' : ''}`,
+    '确认删除',
+    { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+  ).then(() => {
+    const remove = (nodes) => {
+      const idx = nodes.findIndex(n => n.key === data.key)
+      if (idx !== -1) { nodes.splice(idx, 1); return true }
+      for (const node of nodes) { if (node.children && remove(node.children)) return true }
+      return false
     }
-  })
+    remove(menuTree.value)
+    ElMessage.success('删除成功')
+    drawerVisible.value = false
+  }).catch(() => {})
 }
 
 async function submitForm() {
-  if (!form.label || !form.key) { message.warning('请填写必填项'); return }
+  if (!form.label || !form.key) { ElMessage.warning('请填写必填项'); return }
   submitting.value = true
-  const payload = { key: form.key, label: form.label, path: form.path || '', icon: form.iconName ? ICON_MAP[form.iconName] : null, iconName: form.iconName, sort: form.sort, type: form.type, parent_key: form.parentKey }
+  const payload = {
+    key: form.key, label: form.label, path: form.path || '',
+    icon: form.iconName ? ICON_MAP[form.iconName] : null,
+    iconName: form.iconName, sort: form.sort, type: form.type, parent_key: form.parentKey
+  }
   try {
     const token = localStorage.getItem('token') || ''
     const method = isEdit.value ? 'PUT' : 'POST'
@@ -234,7 +262,7 @@ async function submitForm() {
     const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) })
     if (res.status === 404) throw new Error('API_NOT_FOUND')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    message.success(isEdit.value ? '更新成功' : '创建成功')
+    ElMessage.success(isEdit.value ? '更新成功' : '创建成功')
     drawerVisible.value = false
     loadMenus()
   } catch (e) {
@@ -249,9 +277,9 @@ async function submitForm() {
           add(menuTree.value)
         } else { menuTree.value.push(newNode) }
       }
-      message.success(isEdit.value ? '更新成功（本地存储）' : '创建成功（本地存储）')
+      ElMessage.success(isEdit.value ? '更新成功（本地存储）' : '创建成功（本地存储）')
       drawerVisible.value = false
-    } else { message.error(`操作失败: ${e.message}`) }
+    } else { ElMessage.error(`操作失败: ${e.message}`) }
   } finally { submitting.value = false }
 }
 
@@ -260,4 +288,9 @@ onMounted(loadMenus)
 
 <style scoped>
 .page-container { padding: 16px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; }
+.tree-node { display: flex; justify-content: space-between; align-items: center; width: 100%; padding-right: 8px; }
+.node-label { display: flex; align-items: center; gap: 8px; }
+.node-actions { display: flex; gap: 4px; }
+.menu-drawer :deep(.el-drawer__header) { margin-bottom: 0; padding: 12px 16px; border-bottom: 1px solid #ebeef5; }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <div class="create-report-container">
-    <n-card class="main-card">
+    <el-card class="main-card">
       <div class="card-header">
         <div class="header-info">
           <h2>生成新报表</h2>
@@ -8,255 +8,242 @@
         </div>
       </div>
 
-      <n-tabs type="line" animated>
+      <el-tabs type="line">
         <!-- Basic Settings Tab -->
-        <n-tab-pane name="basic" tab="基础设置">
+        <el-tab-pane label="基础设置" name="basic">
           <div class="tab-content">
-            <n-grid :cols="2" :x-gap="24">
+            <el-row :gutter="24">
               <!-- Left Column - Report Configuration -->
-              <n-gi>
-                <n-card title="报表配置" class="config-card">
+              <el-col :span="12">
+                <el-card title="报表配置" class="config-card">
                   <!-- Report Type Selector -->
-                  <n-form-item label="报表类型" required>
-                    <n-grid :cols="3" :x-gap="12" :y-gap="12">
-                      <n-gi v-for="type in reportTypes" :key="type.value">
+                  <el-form-item label="报表类型" required>
+                    <el-row :gutter="12">
+                      <el-col :span="8" v-for="type in reportTypes" :key="type.value">
                         <div
                           class="type-option"
                           :class="{ active: formData.type === type.value }"
                           @click="formData.type = type.value"
                         >
-                          <n-icon :size="24" class="type-icon">
+                          <el-icon :size="24" class="type-icon">
                             <component :is="type.icon" />
-                          </n-icon>
+                          </el-icon>
                           <span class="type-label">{{ type.label }}</span>
                           <span class="type-desc">{{ type.description }}</span>
                         </div>
-                      </n-gi>
-                    </n-grid>
-                  </n-form-item>
+                      </el-col>
+                    </el-row>
+                  </el-form-item>
 
                   <!-- Template Selector -->
-                  <n-form-item label="报表模板" required>
-                    <n-select
-                      v-model:value="formData.template_id"
+                  <el-form-item label="报表模板" required>
+                    <el-select
+                      v-model="formData.template_id"
                       :options="templateOptions"
                       placeholder="选择模板"
                       filterable
                       :loading="templatesLoading"
+                      style="width: 100%"
                     />
-                  </n-form-item>
+                  </el-form-item>
 
                   <!-- Output Format Selector -->
-                  <n-form-item label="输出格式" required>
-                    <n-space vertical :size="12">
-                      <n-grid :cols="3" :x-gap="12">
-                        <n-gi v-for="format in outputFormats" :key="format.value">
-                          <div
-                            class="format-option"
-                            :class="{ active: formData.format === format.value }"
-                            @click="formData.format = format.value"
-                          >
-                            <n-icon :size="32" class="format-icon">
-                              <component :is="format.icon" />
-                            </n-icon>
-                            <span class="format-label">{{ format.label }}</span>
-                          </div>
-                        </n-gi>
-                      </n-grid>
-                    </n-space>
-                  </n-form-item>
-                </n-card>
-              </n-gi>
+                  <el-form-item label="输出格式" required>
+                    <el-row :gutter="12">
+                      <el-col :span="8" v-for="format in outputFormats" :key="format.value">
+                        <div
+                          class="format-option"
+                          :class="{ active: formData.format === format.value }"
+                          @click="formData.format = format.value"
+                        >
+                          <el-icon :size="32" class="format-icon">
+                            <component :is="format.icon" />
+                          </el-icon>
+                          <span class="format-label">{{ format.label }}</span>
+                        </div>
+                      </el-col>
+                    </el-row>
+                  </el-form-item>
+                </el-card>
+              </el-col>
 
               <!-- Right Column - Date & Filters -->
-              <n-gi>
-                <n-card title="日期范围和过滤器" class="config-card">
+              <el-col :span="12">
+                <el-card title="日期范围和过滤器" class="config-card">
                   <!-- Date Range Picker -->
-                  <n-form-item label="日期范围" required>
-                    <n-date-picker
-                      v-model:value="formData.date_range"
+                  <el-form-item label="日期范围" required>
+                    <el-date-picker
+                      v-model="formData.date_range"
                       type="daterange"
                       range
                       clearable
                       style="width: 100%"
                     />
-                  </n-form-item>
+                  </el-form-item>
 
                   <!-- Quick Date Presets -->
-                  <n-form-item label="快速选择">
-                    <n-space :size="8">
-                      <n-button
+                  <el-form-item label="快速选择">
+                    <el-space :size="8">
+                      <el-button
                         v-for="preset in datePresets"
                         :key="preset.label"
                         size="small"
                         @click="applyDatePreset(preset)"
                       >
                         {{ preset.label }}
-                      </n-button>
-                    </n-space>
-                  </n-form-item>
+                      </el-button>
+                    </el-space>
+                  </el-form-item>
 
                   <!-- Device Group Filter -->
-                  <n-form-item label="设备分组">
-                    <n-select
-                      v-model:value="formData.device_group"
+                  <el-form-item label="设备分组">
+                    <el-select
+                      v-model="formData.device_group"
                       :options="deviceGroupOptions"
                       placeholder="所有设备分组"
                       clearable
                       multiple
+                      style="width: 100%"
                     />
-                  </n-form-item>
+                  </el-form-item>
 
                   <!-- Alert Level Filter -->
-                  <n-form-item label="告警级别">
-                    <n-select
-                      v-model:value="formData.alert_level"
+                  <el-form-item label="告警级别">
+                    <el-select
+                      v-model="formData.alert_level"
                       :options="alertLevelOptions"
                       placeholder="所有告警级别"
                       clearable
                       multiple
+                      style="width: 100%"
                     />
-                  </n-form-item>
-                </n-card>
-              </n-gi>
-            </n-grid>
+                  </el-form-item>
+                </el-card>
+              </el-col>
+            </el-row>
 
             <!-- Report Name -->
-            <n-card title="报表详情" class="details-card">
-              <n-form-item label="报表名称" required>
-                <n-input
-                  v-model:value="formData.name"
+            <el-card title="报表详情" class="details-card">
+              <el-form-item label="报表名称" required>
+                <el-input
+                  v-model="formData.name"
                   placeholder="输入报表名称"
                 />
-              </n-form-item>
-              <n-form-item label="描述">
-                <n-input
-                  v-model:value="formData.description"
+              </el-form-item>
+              <el-form-item label="描述">
+                <el-input
+                  v-model="formData.description"
                   type="textarea"
                   placeholder="报表描述（可选）"
                   :rows="2"
                 />
-              </n-form-item>
-            </n-card>
+              </el-form-item>
+            </el-card>
           </div>
-        </n-tab-pane>
+        </el-tab-pane>
 
         <!-- Preview Tab -->
-        <n-tab-pane name="preview" tab="预览">
+        <el-tab-pane label="预览" name="preview">
           <div class="tab-content">
-            <n-card title="报表预览" class="preview-card">
-              <template #header-extra>
-                <n-space>
-                  <n-button @click="refreshPreview" :loading="previewLoading">
-                    <template #icon>
-                      <n-icon><RefreshOutline /></n-icon>
-                    </template>
-                    刷新
-                  </n-button>
-                </n-space>
+            <el-card class="preview-card">
+              <template #header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>报表预览</span>
+                  <el-space>
+                    <el-button @click="refreshPreview" :loading="previewLoading">
+                      <el-icon><Refresh /></el-icon>
+                      刷新
+                    </el-button>
+                  </el-space>
+                </div>
               </template>
               
-              <n-spin :show="previewLoading">
-                <div class="preview-container">
-                  <div v-if="previewContent" class="preview-content" v-html="previewContent"></div>
-                  <n-empty v-else description="配置设置后点击生成预览查看预览" />
-                </div>
-              </n-spin>
-            </n-card>
+              <div v-loading="previewLoading" class="preview-container">
+                <div v-if="previewContent" class="preview-content" v-html="previewContent"></div>
+                <el-empty v-else description="配置设置后点击生成预览查看预览" />
+              </div>
+            </el-card>
           </div>
-        </n-tab-pane>
-      </n-tabs>
+        </el-tab-pane>
+      </el-tabs>
 
       <!-- Action Buttons -->
       <div class="action-bar">
-        <n-space justify="space-between" align="center">
-          <n-button @click="handleReset">重置表单</n-button>
-          <n-space>
-            <n-button @click="handleSaveTemplate" :loading="saving">
-              <template #icon>
-                <n-icon><DocumentTextOutline /></n-icon>
-              </template>
+        <el-space justify="space-between" align="center" style="width: 100%">
+          <el-button @click="handleReset">重置表单</el-button>
+          <el-space>
+            <el-button @click="handleSaveTemplate" :loading="saving">
+              <el-icon><Document /></el-icon>
               保存为模板
-            </n-button>
-            <n-button @click="handleGenerate" type="primary" :loading="generating">
-              <template #icon>
-                <n-icon><PlayOutline /></n-icon>
-              </template>
+            </el-button>
+            <el-button type="primary" @click="handleGenerate" :loading="generating">
+              <el-icon><VideoPlay /></el-icon>
               生成报表
-            </n-button>
-          </n-space>
-        </n-space>
+            </el-button>
+          </el-space>
+        </el-space>
       </div>
-    </n-card>
+    </el-card>
 
     <!-- Save Template Modal -->
-    <n-modal
-      v-model:show="saveTemplateModal.show"
-      preset="card"
+    <el-dialog
+      v-model="saveTemplateModal.show"
       title="保存为模板"
-      :style="{ width: '450px' }"
+      width="450px"
     >
-      <n-form :model="saveTemplateForm" label-placement="top">
-        <n-form-item label="模板名称" required>
-          <n-input v-model:value="saveTemplateForm.name" placeholder="输入模板名称" />
-        </n-form-item>
-        <n-form-item label="描述">
-          <n-input
-            v-model:value="saveTemplateForm.description"
+      <el-form :model="saveTemplateForm" label-placement="top">
+        <el-form-item label="模板名称" required>
+          <el-input v-model="saveTemplateForm.name" placeholder="输入模板名称" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input
+            v-model="saveTemplateForm.description"
             type="textarea"
             placeholder="模板描述（可选）"
             :rows="2"
           />
-        </n-form-item>
-      </n-form>
+        </el-form-item>
+      </el-form>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="saveTemplateModal.show = false">取消</n-button>
-          <n-button type="primary" @click="confirmSaveTemplate" :loading="savingTemplate">
+        <el-space justify="end">
+          <el-button @click="saveTemplateModal.show = false">取消</el-button>
+          <el-button type="primary" @click="confirmSaveTemplate" :loading="savingTemplate">
             保存
-          </n-button>
-        </n-space>
+          </el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
 
     <!-- Generation Progress Modal -->
-    <n-modal
-      v-model:show="progressModal.show"
-      preset="card"
+    <el-dialog
+      v-model="progressModal.show"
       title="正在生成报表"
-      :closable="false"
-      :mask-closable="false"
+      width="450px"
+      :close-on-click-modal="false"
     >
       <div class="progress-content">
-        <n-progress
-          type="line"
+        <el-progress
           :percentage="progressModal.percentage"
           :status="progressModal.status"
-          :processing="progressModal.processing"
+          :stroke-width="20"
         />
         <p class="progress-text">{{ progressModal.message }}</p>
       </div>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, h } from 'vue'
-import { useMessage, useDialog } from 'naive-ui'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  AddOutline,
-  DocumentTextOutline,
-  DownloadOutline,
-  TrashOutline,
-  PlayOutline,
-  EyeOutline,
-  CreateOutline,
-  RefreshOutline,
-  ChevronForwardOutline
-} from '@vicons/ionicons5'
+  Document,
+  VideoPlay,
+  Refresh,
+} from '@element-plus/icons-vue'
 
-const message = useMessage()
-const dialog = useDialog()
+const message = ElMessage
+const dialog = ElMessageBox
 
 // Loading states
 const templatesLoading = ref(false)
@@ -292,7 +279,6 @@ const progressModal = reactive({
   show: false,
   percentage: 0,
   status: 'success',
-  processing: true,
   message: '正在准备报表生成...'
 })
 
@@ -332,45 +318,45 @@ const reportTypes = [
     value: 'daily',
     label: '日报',
     description: '24小时汇总',
-    icon: 'DailyOutline'
+    icon: 'Calendar'
   },
   {
     value: 'weekly',
     label: '周报',
     description: '7天汇总',
-    icon: 'WeeklyOutline'
+    icon: 'Calendar'
   },
   {
     value: 'monthly',
     label: '月报',
     description: '30天汇总',
-    icon: 'MonthlyOutline'
+    icon: 'Calendar'
   },
   {
     value: 'quarterly',
     label: '季报',
     description: '90天汇总',
-    icon: 'QuarterlyOutline'
+    icon: 'Calendar'
   },
   {
     value: 'annual',
     label: '年报',
     description: '年度汇总',
-    icon: 'AnnualOutline'
+    icon: 'Calendar'
   },
   {
     value: 'custom',
     label: '自定义',
     description: '自定义日期范围',
-    icon: 'CustomOutline'
+    icon: 'Setting'
   }
 ]
 
 // Output formats configuration
 const outputFormats = [
-  { value: 'pdf', label: 'PDF', icon: 'PdfOutline' },
-  { value: 'html', label: 'HTML', icon: 'HtmlOutline' },
-  { value: 'excel', label: 'Excel', icon: 'ExcelOutline' }
+  { value: 'pdf', label: 'PDF', icon: 'Document' },
+  { value: 'html', label: 'HTML', icon: 'Document' },
+  { value: 'excel', label: 'Excel', icon: 'Document' }
 ]
 
 // Date presets
@@ -480,11 +466,9 @@ async function generateReport() {
   progressModal.show = true
   progressModal.percentage = 0
   progressModal.status = 'success'
-  progressModal.processing = true
   progressModal.message = '正在生成报表...'
   
   try {
-    // Simulate progress updates
     const progressInterval = setInterval(() => {
       if (progressModal.percentage < 90) {
         progressModal.percentage += Math.random() * 15
@@ -518,9 +502,6 @@ async function generateReport() {
     const data = await response.json()
     progressModal.percentage = 100
     progressModal.message = '报表生成成功！'
-    progressModal.processing = false
-    progressModal.status = 'success'
-    
     message.success('报表生成成功')
     
     setTimeout(() => {
@@ -530,8 +511,7 @@ async function generateReport() {
     return data
   } catch (error) {
     progressModal.percentage = 100
-    progressModal.status = 'error'
-    progressModal.processing = false
+    progressModal.status = 'exception'
     progressModal.message = '生成报表失败'
     message.error('生成报表失败')
     throw error
@@ -547,7 +527,8 @@ async function saveAsTemplate() {
       name: saveTemplateForm.name,
       description: saveTemplateForm.description,
       type: formData.type,
-      content: `<!-- Template for ${formData.type} report -->\n<!-- Settings: ${JSON.stringify({ format: formData.format, filters: { device_group: formData.device_group, alert_level: formData.alert_level } })} -->`,
+      content: `<!-- Template for ${formData.type} report -->
+<!-- Settings: ${JSON.stringify({ format: formData.format, filters: { device_group: formData.device_group, alert_level: formData.alert_level } })} -->`,
       active: true
     }
     
@@ -573,24 +554,26 @@ async function saveAsTemplate() {
 
 // Action Handlers
 function handleReset() {
-  dialog.warning({
-    title: '确认重置',
-    content: '确定要重置所有表单数据吗？',
-    positiveText: '重置',
-    negativeText: '取消',
-    onPositiveClick: () => {
-      formData.name = ''
-      formData.description = ''
-      formData.type = 'daily'
-      formData.template_id = null
-      formData.format = 'pdf'
-      formData.date_range = null
-      formData.device_group = null
-      formData.alert_level = null
-      previewContent.value = ''
-      message.success('表单重置成功')
+  dialog.confirm(
+    '确定要重置所有表单数据吗？',
+    '确认重置',
+    {
+      confirmButtonText: '重置',
+      cancelButtonText: '取消',
+      type: 'warning',
     }
-  })
+  ).then(() => {
+    formData.name = ''
+    formData.description = ''
+    formData.type = 'daily'
+    formData.template_id = null
+    formData.format = 'pdf'
+    formData.date_range = null
+    formData.device_group = null
+    formData.alert_level = null
+    previewContent.value = ''
+    message.success('表单重置成功')
+  }).catch(() => {})
 }
 
 function handleSaveTemplate() {

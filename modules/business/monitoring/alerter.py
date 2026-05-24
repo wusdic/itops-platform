@@ -775,3 +775,17 @@ class AlertTrigger:
                 for s in AlertSeverity
             }
         }
+
+
+# =============================================================================
+# 全局 AlertTrigger 单例
+# =============================================================================
+_alert_trigger: Optional[AlertTrigger] = None
+
+
+def get_alert_trigger() -> AlertTrigger:
+    """获取全局 AlertTrigger 单例"""
+    global _alert_trigger
+    if _alert_trigger is None:
+        _alert_trigger = AlertTrigger()
+    return _alert_trigger

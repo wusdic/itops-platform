@@ -1,198 +1,204 @@
 <template>
   <div class="adapter-page">
-    <n-tabs type="line" animated v-model:value="activeTab">
-      <n-tab-pane name="adapters" tab="协议适配器">
-        <n-card title="协议适配器模板" class="mb-4">
-          <template #header-extra>
-            <n-button type="primary" @click="openAddModal">
-              <template #icon><n-icon><AddOutline /></n-icon></template>
-              新建适配器
-            </n-button>
+    <el-tabs v-model="activeTab" type="line" animated>
+      <el-tab-pane name="adapters" label="协议适配器">
+        <el-card title="协议适配器模板" class="mb-4">
+          <template #header>
+            <div class="card-header">
+              <span>协议适配器模板</span>
+              <el-button type="primary" @click="openAddModal">
+                <el-icon><Plus /></el-icon>
+                新建适配器
+              </el-button>
+            </div>
           </template>
-          <n-data-table
-            :columns="adapterColumns"
+          <el-table
             :data="adapterList"
             :loading="adapterLoading"
-            :pagination="{ pageSize: 20 }"
             :row-key="row => row.id"
-            striped
-          />
-        </n-card>
-      </n-tab-pane>
+            stripe
+            style="width: 100%"
+          >
+            <el-table-column v-for="col in adapterColumns" :key="col.key" v-bind="col" />
+          </el-table>
+        </el-card>
+      </el-tab-pane>
 
-      <n-tab-pane name="device-config" tab="设备协议配置">
-        <n-card title="设备协议配置" class="mb-4">
-          <template #header-extra>
-            <n-button @click="loadDeviceProtocols" :loading="protocolLoading">
-              <template #icon><n-icon><RefreshOutline /></n-icon></template>
-              刷新
-            </n-button>
+      <el-tab-pane name="device-config" label="设备协议配置">
+        <el-card title="设备协议配置" class="mb-4">
+          <template #header>
+            <div class="card-header">
+              <span>设备协议配置</span>
+              <el-button @click="loadDeviceProtocols" :loading="protocolLoading">
+                <el-icon><RefreshRight /></el-icon>
+                刷新
+              </el-button>
+            </div>
           </template>
-          <n-space vertical :size="12">
-            <n-space>
-              <n-select
-                v-model:value="selectedDeviceId"
+          <el-space direction="vertical" :size="12">
+            <el-space>
+              <el-select
+                v-model="selectedDeviceId"
                 :options="deviceOptions"
                 placeholder="选择设备"
                 style="width: 300px"
                 filterable
-                @update:value="onDeviceChange"
+                @change="onDeviceChange"
               />
-              <n-button @click="testDeviceProtocol" :loading="testing" :disabled="!selectedDeviceId">测试连接</n-button>
-            </n-space>
-            <n-data-table
-              :columns="protocolColumns"
+              <el-button @click="testDeviceProtocol" :loading="testing" :disabled="!selectedDeviceId">测试连接</el-button>
+            </el-space>
+            <el-table
               :data="deviceProtocols"
               :loading="protocolLoading"
               :row-key="row => row.protocol_type"
-              striped
-            />
-          </n-space>
-        </n-card>
-      </n-tab-pane>
-    </n-tabs>
+              stripe
+              style="width: 100%"
+            >
+              <el-table-column v-for="col in protocolColumns" :key="col.key" v-bind="col" />
+            </el-table>
+          </el-space>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 新建/编辑适配器弹窗 -->
-    <n-modal v-model:show="showAddModal" preset="card" :title="editingId ? '编辑适配器' : '新建适配器'" style="width: 600px">
-      <n-form label-placement="left" label-width="120">
-        <n-form-item label="协议类型">
-          <n-select
-            v-model:value="form.protocol_type"
+    <el-dialog v-model="showAddModal" :title="editingId ? '编辑适配器' : '新建适配器'" width="600px">
+      <el-form label-position="left" label-width="120">
+        <el-form-item label="协议类型">
+          <el-select
+            v-model="form.protocol_type"
             :options="protocolOptions"
             placeholder="选择协议"
             :disabled="!!editingId"
             style="width: 100%"
           />
-        </n-form-item>
-        <n-form-item label="模板名称">
-          <n-input v-model:value="form.name" placeholder="如: MySQL标准模板" />
-        </n-form-item>
-        <n-form-item label="描述">
-          <n-input v-model:value="form.description" type="textarea" placeholder="模板描述" />
-        </n-form-item>
+        </el-form-item>
+        <el-form-item label="模板名称">
+          <el-input v-model="form.name" placeholder="如: MySQL标准模板" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="form.description" type="textarea" placeholder="模板描述" />
+        </el-form-item>
 
-        <n-divider>默认配置</n-divider>
+        <el-divider>默认配置</el-divider>
 
         <template v-if="form.protocol_type === 'snmp'">
-          <n-form-item label="端口">
-            <n-input-number v-model:value="form.default_config.port" :min="1" :max="65535" />
-          </n-form-item>
-          <n-form-item label="SNMP版本">
-            <n-select v-model:value="form.default_config.version" :options="snmpVersionOptions" style="width:100%" />
-          </n-form-item>
-          <n-form-item label="Community">
-            <n-input v-model:value="form.default_config.community" placeholder="public" />
-          </n-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+          </el-form-item>
+          <el-form-item label="SNMP版本">
+            <el-select v-model="form.default_config.version" :options="snmpVersionOptions" style="width:100%" />
+          </el-form-item>
+          <el-form-item label="Community">
+            <el-input v-model="form.default_config.community" placeholder="public" />
+          </el-form-item>
         </template>
 
         <template v-if="form.protocol_type === 'ssh'">
-          <n-form-item label="端口">
-            <n-input-number v-model:value="form.default_config.port" :min="1" :max="65535" />
-          </n-form-item>
-          <n-form-item label="用户名">
-            <n-input v-model:value="form.default_config.username" placeholder="root" />
-          </n-form-item>
-          <n-form-item label="密码">
-            <n-input v-model:value="form.default_config.password" type="password" placeholder="留空使用密钥" />
-          </n-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+          </el-form-item>
+          <el-form-item label="用户名">
+            <el-input v-model="form.default_config.username" placeholder="root" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.default_config.password" type="password" placeholder="留空使用密钥" show-password />
+          </el-form-item>
         </template>
 
         <template v-if="form.protocol_type === 'http' || form.protocol_type === 'zabbix' || form.protocol_type === 'prometheus' || form.protocol_type === 'redfish'">
-          <n-form-item label="端口">
-            <n-input-number v-model:value="form.default_config.port" :min="1" :max="65535" />
-          </n-form-item>
-          <n-form-item label="用户名">
-            <n-input v-model:value="form.default_config.username" placeholder="admin" />
-          </n-form-item>
-          <n-form-item label="密码">
-            <n-input v-model:value="form.default_config.password" type="password" placeholder="密码" />
-          </n-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+          </el-form-item>
+          <el-form-item label="用户名">
+            <el-input v-model="form.default_config.username" placeholder="admin" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.default_config.password" type="password" placeholder="密码" show-password />
+          </el-form-item>
         </template>
 
         <template v-if="form.protocol_type === 'mysql' || form.protocol_type === 'postgres'">
-          <n-form-item label="端口">
-            <n-input-number v-model:value="form.default_config.port" :min="1" :max="65535" />
-          </n-form-item>
-          <n-form-item label="用户名">
-            <n-input v-model:value="form.default_config.username" placeholder="root" />
-          </n-form-item>
-          <n-form-item label="密码">
-            <n-input v-model:value="form.default_config.password" type="password" />
-          </n-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+          </el-form-item>
+          <el-form-item label="用户名">
+            <el-input v-model="form.default_config.username" placeholder="root" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.default_config.password" type="password" show-password />
+          </el-form-item>
         </template>
 
         <template v-if="form.protocol_type === 'redis'">
-          <n-form-item label="端口">
-            <n-input-number v-model:value="form.default_config.port" :min="1" :max="65535" />
-          </n-form-item>
-          <n-form-item label="密码">
-            <n-input v-model:value="form.default_config.password" type="password" placeholder="无密码则留空" />
-          </n-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.default_config.password" type="password" placeholder="无密码则留空" show-password />
+          </el-form-item>
         </template>
 
         <template v-if="form.protocol_type === 'rabbitmq'">
-          <n-form-item label="端口">
-            <n-input-number v-model:value="form.default_config.port" :min="1" :max="65535" />
-          </n-form-item>
-          <n-form-item label="用户名">
-            <n-input v-model:value="form.default_config.username" placeholder="guest" />
-          </n-form-item>
-          <n-form-item label="密码">
-            <n-input v-model:value="form.default_config.password" type="password" placeholder="guest" />
-          </n-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+          </el-form-item>
+          <el-form-item label="用户名">
+            <el-input v-model="form.default_config.username" placeholder="guest" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.default_config.password" type="password" placeholder="guest" show-password />
+          </el-form-item>
         </template>
 
         <template v-if="form.protocol_type === 'vmware'">
-          <n-form-item label="端口">
-            <n-input-number v-model:value="form.default_config.port" :min="1" :max="65535" />
-          </n-form-item>
-          <n-form-item label="用户名">
-            <n-input v-model:value="form.default_config.user" placeholder="administrator@vsphere.local" />
-          </n-form-item>
-          <n-form-item label="密码">
-            <n-input v-model:value="form.default_config.password" type="password" />
-          </n-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+          </el-form-item>
+          <el-form-item label="用户名">
+            <el-input v-model="form.default_config.user" placeholder="administrator@vsphere.local" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.default_config.password" type="password" show-password />
+          </el-form-item>
         </template>
 
         <template v-if="form.protocol_type === 'browser'">
-          <n-form-item label="端口">
-            <n-input-number v-model:value="form.default_config.port" :min="1" :max="65535" />
-          </n-form-item>
-          <n-form-item label="用户名">
-            <n-input v-model:value="form.default_config.username" placeholder="admin" />
-          </n-form-item>
-          <n-form-item label="密码">
-            <n-input v-model:value="form.default_config.password" type="password" />
-          </n-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+          </el-form-item>
+          <el-form-item label="用户名">
+            <el-input v-model="form.default_config.username" placeholder="admin" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.default_config.password" type="password" show-password />
+          </el-form-item>
         </template>
 
-        <n-form-item label="超时(秒)">
-          <n-input-number v-model:value="form.default_config.timeout" :min="5" :max="300" />
-        </n-form-item>
+        <el-form-item label="超时(秒)">
+          <el-input-number v-model="form.default_config.timeout" :min="5" :max="300" />
+        </el-form-item>
 
-        <n-form-item label="启用">
-          <n-switch v-model:value="form.enabled" />
-        </n-form-item>
-      </n-form>
+        <el-form-item label="启用">
+          <el-switch v-model="form.enabled" />
+        </el-form-item>
+      </el-form>
 
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="showAddModal = false">取消</n-button>
-          <n-button type="primary" @click="saveAdapter" :loading="saving">保存</n-button>
-        </n-space>
+        <el-space justify="end">
+          <el-button @click="showAddModal = false">取消</el-button>
+          <el-button type="primary" @click="saveAdapter" :loading="saving">保存</el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, h } from 'vue'
-import { useMessage, useDialog } from 'naive-ui'
-import { NTag, NButton } from 'naive-ui'
-import { AddOutline } from '@vicons/ionicons5'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, RefreshRight } from '@element-plus/icons-vue'
 
-const message = useMessage()
-const dialog = useDialog()
 const activeTab = ref('adapters')
 const adapterLoading = ref(false)
 const protocolLoading = ref(false)
@@ -256,7 +262,7 @@ const loadAdapters = async () => {
     const data = await res.json()
     adapterList.value = data.items || []
   } catch (e) {
-    message.error('加载适配器失败: ' + e.message)
+    ElMessage.error('加载适配器失败: ' + e.message)
   } finally {
     adapterLoading.value = false
   }
@@ -282,7 +288,7 @@ const editAdapter = (row) => {
 
 const saveAdapter = async () => {
   if (!form.protocol_type || !form.name) {
-    message.warning('请填写协议类型和模板名称')
+    ElMessage.warning('请填写协议类型和模板名称')
     return
   }
   saving.value = true
@@ -305,38 +311,49 @@ const saveAdapter = async () => {
       const err = await res.json()
       throw new Error(err.detail || '保存失败')
     }
-    message.success('保存成功')
+    ElMessage.success('保存成功')
     showAddModal.value = false
     editingId.value = null
     loadAdapters()
   } catch (e) {
-    message.error(e.message)
+    ElMessage.error(e.message)
   } finally {
     saving.value = false
   }
 }
 
 const deleteAdapter = async (row) => {
-  dialog.warning({
-    title: '删除确认',
-    content: `确定删除适配器「${row.name}」吗？`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(`/api/v1/admin/adapters/${row.id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` },
-        })
-        if (!res.ok) throw new Error('删除失败')
-        message.success('删除成功')
-        loadAdapters()
-      } catch (e) {
-        message.error(e.message)
+  try {
+    await ElMessageBox.confirm(
+      `确定删除适配器「${row.name}」吗？`,
+      '删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
       }
+    )
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/v1/admin/adapters/${row.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error('删除失败')
+    ElMessage.success('删除成功')
+    loadAdapters()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '删除失败')
     }
-  })
+  }
+}
+
+const getTagType = (protocolType) => {
+  const colors = {
+    snmp: 'info', ssh: 'success', http: 'warning', mysql: 'error',
+    redis: 'info', postgres: 'success', vmware: 'warning', kafka: 'error',
+  }
+  return colors[protocolType] || 'default'
 }
 
 const adapterColumns = [
@@ -344,24 +361,21 @@ const adapterColumns = [
     title: '协议',
     key: 'protocol_type',
     width: 120,
-    render(row) {
-      const colors = {
-        snmp: 'info', ssh: 'success', http: 'warning', mysql: 'error',
-        redis: 'info', postgres: 'success', vmware: 'warning', kafka: 'error',
-      }
-      return h(NTag, { type: colors[row.protocol_type] || 'default', size: 'small' },
-        { default: () => row.protocol_type.toUpperCase() })
+    render({ row }) {
+      return h('span', [
+        h(ElTag, { type: getTagType(row.protocol_type), size: 'small' }, { default: () => row.protocol_type.toUpperCase() })
+      ])
     }
   },
-  { title: '模板名称', key: 'name', ellipsis: { tooltip: true } },
-  { title: '描述', key: 'description', ellipsis: { tooltip: true } },
+  { title: '模板名称', key: 'name', minWidth: 150, showOverflowTooltip: true },
+  { title: '描述', key: 'description', minWidth: 150, showOverflowTooltip: true },
   { title: '默认端口', key: 'default_config.port', width: 100 },
   {
     title: '状态',
     key: 'enabled',
     width: 80,
-    render(row) {
-      return h(NTag, { type: row.enabled ? 'success' : 'default', size: 'small' },
+    render({ row }) {
+      return h(ElTag, { type: row.enabled ? 'success' : 'info', size: 'small' },
         { default: () => row.enabled ? '启用' : '禁用' })
     }
   },
@@ -370,12 +384,12 @@ const adapterColumns = [
     key: 'actions',
     width: 150,
     fixed: 'right',
-    render(row) {
-      return h(NSpace, { size: 8 }, {
+    render({ row }) {
+      return h(ElSpace, { size: 8 }, {
         default: () => [
-          h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => editAdapter(row) },
+          h(ElButton, { size: 'small', text: true, type: 'primary', onClick: () => editAdapter(row) },
             { default: () => '编辑' }),
-          h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => deleteAdapter(row) },
+          h(ElButton, { size: 'small', text: true, type: 'danger', onClick: () => deleteAdapter(row) },
             { default: () => '删除' }),
         ]
       })
@@ -421,7 +435,7 @@ const loadDeviceProtocols = async () => {
     const data = await res.json()
     deviceProtocols.value = data.items || []
   } catch (e) {
-    message.error('加载设备协议失败')
+    ElMessage.error('加载设备协议失败')
   } finally {
     protocolLoading.value = false
   }
@@ -429,7 +443,7 @@ const loadDeviceProtocols = async () => {
 
 const testDeviceProtocol = async () => {
   if (!selectedDeviceId.value) {
-    message.warning('请先选择设备')
+    ElMessage.warning('请先选择设备')
     return
   }
   testing.value = true
@@ -444,12 +458,12 @@ const testDeviceProtocol = async () => {
     })
     const data = await res.json()
     if (data.success) {
-      message.success('连接成功: ' + data.message)
+      ElMessage.success('连接成功: ' + data.message)
     } else {
-      message.warning('连接失败: ' + data.message)
+      ElMessage.warning('连接失败: ' + data.message)
     }
   } catch (e) {
-    message.error('测试失败')
+    ElMessage.error('测试失败')
   } finally {
     testing.value = false
   }
@@ -476,9 +490,9 @@ const updateDeviceProtocol = async (row, field, value) => {
       body: JSON.stringify([payload]),
     })
     if (!res.ok) throw new Error()
-    message.success('保存成功')
+    ElMessage.success('保存成功')
   } catch (e) {
-    message.error('保存失败')
+    ElMessage.error('保存失败')
   }
 }
 
@@ -487,12 +501,8 @@ const protocolColumns = [
     title: '协议',
     key: 'protocol_type',
     width: 120,
-    render(row) {
-      const colors = {
-        snmp: 'info', ssh: 'success', http: 'warning', mysql: 'error',
-        redis: 'info', postgres: 'success', vmware: 'warning',
-      }
-      return h(NTag, { type: colors[row.protocol_type] || 'default', size: 'small' },
+    render({ row }) {
+      return h(ElTag, { type: getTagType(row.protocol_type), size: 'small' },
         { default: () => row.protocol_type.toUpperCase() })
     }
   },
@@ -500,39 +510,39 @@ const protocolColumns = [
     title: '适配器模板',
     key: 'adapter_template_id',
     width: 200,
-    render(row) {
+    render({ row }) {
       const opts = adapterList.value
         .filter(a => a.protocol_type === row.protocol_type && a.enabled)
         .map(a => ({ label: a.name, value: a.id }))
 
       if (!opts.length) return h('span', { style: 'color:#999' }, '无可用模板')
 
-      return h('n-select', {
-        value: row.adapter_template_id,
+      return h(ElSelect, {
+        modelValue: row.adapter_template_id,
         options: opts,
         size: 'small',
-        style: 'width:180px',
         placeholder: '选择模板',
-        onUpdateValue: (v) => updateDeviceProtocol(row, 'adapter_template_id', v),
+        style: 'width:180px',
         clearable: true,
+        'onUpdate:modelValue': (v) => updateDeviceProtocol(row, 'adapter_template_id', v),
       })
     }
   },
   {
     title: '覆盖参数(JSON)',
     key: 'overrides',
-    ellipsis: { tooltip: true },
-    render(row) {
+    showOverflowTooltip: true,
+    render({ row }) {
       const json = JSON.stringify(row.overrides || {})
-      return h('n-input', {
-        value: json,
+      return h(ElInput, {
+        modelValue: json,
         size: 'small',
         placeholder: '{}',
         style: 'width:200px',
-        onUpdateValue: (v) => {
+        'onUpdate:modelValue': (v) => {
           try { row.overrides = JSON.parse(v) } catch {}
         },
-        onBlur: () => updateDeviceProtocol(row, 'overrides', row.overrides),
+        blur: () => updateDeviceProtocol(row, 'overrides', row.overrides),
       })
     }
   },
@@ -540,11 +550,11 @@ const protocolColumns = [
     title: '启用',
     key: 'enabled',
     width: 80,
-    render(row) {
-      return h('n-switch', {
-        value: row.enabled,
+    render({ row }) {
+      return h(ElSwitch, {
+        modelValue: row.enabled,
         size: 'small',
-        onUpdateValue: (v) => updateDeviceProtocol(row, 'enabled', v),
+        'onUpdate:modelValue': (v) => updateDeviceProtocol(row, 'enabled', v),
       })
     }
   },
@@ -552,11 +562,11 @@ const protocolColumns = [
     title: '状态',
     key: 'status',
     width: 100,
-    render(row) {
+    render({ row }) {
       if (!row.adapter_template_id && (!row.overrides || Object.keys(row.overrides).length === 0)) {
-        return h(NTag, { type: 'default', size: 'small' }, { default: () => '未配置' })
+        return h(ElTag, { type: 'info', size: 'small' }, { default: () => '未配置' })
       }
-      return h(NTag, { type: row.enabled ? 'success' : 'warning', size: 'small' },
+      return h(ElTag, { type: row.enabled ? 'success' : 'warning', size: 'small' },
         { default: () => row.enabled ? '已配置' : '已禁用' })
     }
   },
@@ -571,4 +581,9 @@ onMounted(() => {
 <style scoped>
 .adapter-page { padding: 16px; }
 .mb-4 { margin-bottom: 16px; }
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 </style>

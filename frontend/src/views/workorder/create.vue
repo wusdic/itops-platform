@@ -1,46 +1,45 @@
 <template>
   <div class="page-container">
-    <n-card title="创建工单" :bordered="false">
-      <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" label-width="120" style="max-width: 800px">
-        <n-form-item label="工单标题" path="title">
-          <n-input v-model:value="form.title" placeholder="请输入工单标题" maxlength="100" show-count />
-        </n-form-item>
+    <el-card title="创建工单" shadow="never">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="left" label-width="120" style="max-width: 800px">
+        <el-form-item label="工单标题" prop="title">
+          <el-input v-model="form.title" placeholder="请输入工单标题" maxlength="100" show-word-limit />
+        </el-form-item>
 
-        <n-form-item label="优先级" path="priority">
-          <n-select v-model:value="form.priority" :options="priorityOptions" placeholder="请选择" style="width: 200px" />
-        </n-form-item>
+        <el-form-item label="优先级" prop="priority">
+          <el-select v-model="form.priority" :options="priorityOptions" placeholder="请选择" style="width: 200px" />
+        </el-form-item>
 
-        <n-form-item label="工单类型" path="type">
-          <n-select v-model:value="form.type" :options="typeOptions" placeholder="请选择工单类型" style="width: 100%" />
-        </n-form-item>
+        <el-form-item label="工单类型" prop="type">
+          <el-select v-model="form.type" :options="typeOptions" placeholder="请选择工单类型" style="width: 100%" />
+        </el-form-item>
 
-        <n-form-item label="关联设备">
-          <n-select v-model:value="form.device_id" :options="deviceOptions" placeholder="请选择关联设备（可选）" style="width: 100%" clearable />
-        </n-form-item>
+        <el-form-item label="关联设备">
+          <el-select v-model="form.device_id" :options="deviceOptions" placeholder="请选择关联设备（可选）" style="width: 100%" clearable />
+        </el-form-item>
 
-        <n-form-item label="工单描述" path="description">
-          <n-input v-model:value="form.description" type="textarea" :rows="6" placeholder="请详细描述工单内容" />
-        </n-form-item>
+        <el-form-item label="工单描述" prop="description">
+          <el-input v-model="form.description" type="textarea" :rows="6" placeholder="请详细描述工单内容" />
+        </el-form-item>
 
-        <n-form-item>
-          <n-space>
-            <n-button type="primary" @click="submitForm" :loading="submitting">提交工单</n-button>
-            <n-button @click="$router.push('/workorder/my')">取消</n-button>
-          </n-space>
-        </n-form-item>
-      </n-form>
-    </n-card>
+        <el-form-item>
+          <el-space>
+            <el-button type="primary" @click="submitForm" :loading="submitting">提交工单</el-button>
+            <el-button @click="$router.push('/workorder/my')">取消</el-button>
+          </el-space>
+        </el-form-item>
+      </el-form>
+    </el-card>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NCard, NForm, NFormItem, NInput, NSelect, NButton, NSpace, useMessage, useDialog } from 'naive-ui'
+import { ElMessage } from 'element-plus'
 import { CONFIG } from '@/config/constants'
 
 const router = useRouter()
-const message = useMessage()
 const submitting = ref(false)
 const formRef = ref(null)
 
@@ -89,7 +88,7 @@ async function loadDevices() {
     }))
   } catch (e) {
     deviceOptions.value = []
-    message.error(`加载设备列表失败: ${e.message}`)
+    ElMessage.error(`加载设备列表失败: ${e.message}`)
   }
 }
 
@@ -120,10 +119,10 @@ async function submitForm() {
       const err = await res.json().catch(() => ({}))
       throw new Error(err.error || `HTTP ${res.status}`)
     }
-    message.success('工单提交成功')
+    ElMessage.success('工单提交成功')
     router.push('/workorder/my')
   } catch (e) {
-    message.error(`提交失败: ${e.message}`)
+    ElMessage.error(`提交失败: ${e.message}`)
   } finally {
     submitting.value = false
   }

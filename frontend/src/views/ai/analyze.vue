@@ -1,73 +1,71 @@
 <template>
   <div class="ai-analyze-container">
-    <n-card>
+    <el-card>
       <template #header>
         <span>智能分析</span>
       </template>
-      <n-alert type="info" :show-icon="true">
+      <el-alert type="info" :closable="false" show-icon>
         AI 智能分析功能 - 输入日志或错误信息，AI 将自动分析问题原因并提供解决方案
-      </n-alert>
+      </el-alert>
 
-      <n-space vertical size="large" class="analyze-form">
-        <n-form-item label="分析类型">
-          <n-select
-            v-model:value="analyzeType"
-            :options="typeOptions"
+      <el-space direction="vertical" :size="16" class="analyze-form">
+        <el-form-item label="分析类型">
+          <el-select
+            v-model="analyzeType"
             placeholder="选择分析类型"
             style="width: 200px"
-          />
-        </n-form-item>
+          >
+            <el-option label="日志分析" value="log" />
+            <el-option label="错误分析" value="error" />
+            <el-option label="性能分析" value="performance" />
+            <el-option label="安全分析" value="security" />
+          </el-select>
+        </el-form-item>
 
-        <n-form-item label="分析内容">
-          <n-input
-            v-model:value="content"
+        <el-form-item label="分析内容">
+          <el-input
+            v-model="content"
             type="textarea"
             placeholder="输入日志、错误信息或系统状态描述..."
             :rows="6"
             :maxlength="2000"
-            show-count
+            show-word-limit
           />
-        </n-form-item>
+        </el-form-item>
 
-        <n-space>
-          <n-button type="primary" :loading="analyzing" @click="handleAnalyze">开始分析</n-button>
-          <n-button @click="handleReset">重置</n-button>
-        </n-space>
-      </n-space>
+        <el-space>
+          <el-button type="primary" :loading="analyzing" @click="handleAnalyze">开始分析</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </el-space>
+      </el-space>
 
       <div v-if="result" class="result-container">
-        <n-divider>分析结果</n-divider>
-        <n-spin :show="analyzing">
-          <n-card class="result-card" title="AI 分析报告">
-            <n-input
-              v-model:value="result"
+        <el-divider>分析结果</el-divider>
+        <div v-loading="analyzing">
+          <el-card class="result-card">
+            <el-input
+              v-model="result"
               type="textarea"
               :rows="12"
               readonly
               placeholder="分析结果将显示在这里..."
             />
-            <template #footer>
-              <n-space>
-                <n-button size="small" @click="handleCopy">复制结果</n-button>
-                <n-button size="small" type="primary" @click="handleSave">保存记录</n-button>
-              </n-space>
-            </template>
-          </n-card>
-        </n-spin>
+            <div class="result-footer">
+              <el-space>
+                <el-button size="small" @click="handleCopy">复制结果</el-button>
+                <el-button size="small" type="primary" @click="handleSave">保存记录</el-button>
+              </el-space>
+            </div>
+          </el-card>
+        </div>
       </div>
-    </n-card>
+    </el-card>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import {
-  NCard, NAlert, NInput, NSelect, NButton, NSpace,
-  NFormItem, NDivider, NSpin, NForm
-} from 'naive-ui'
-import { useMessage } from 'naive-ui'
-
-const message = useMessage()
+import { ElMessage } from 'element-plus'
 
 const analyzeType = ref('log')
 const content = ref('')
@@ -97,7 +95,7 @@ const fetchApi = async (url, options = {}) => {
 
 const handleAnalyze = async () => {
   if (!content.value.trim()) {
-    message.warning('请输入分析内容')
+    ElMessage.warning('请输入分析内容')
     return
   }
 
@@ -107,7 +105,6 @@ const handleAnalyze = async () => {
       method: 'POST',
       body: JSON.stringify({ query: content.value })
     })
-    // Support both {data: {...}} and direct result formats
     if (res.data) {
       result.value = typeof res.data === 'string' ? res.data : JSON.stringify(res.data, null, 2)
     } else if (typeof res === 'string') {
@@ -115,9 +112,9 @@ const handleAnalyze = async () => {
     } else {
       result.value = JSON.stringify(res, null, 2)
     }
-    message.success('分析完成')
+    ElMessage.success('分析完成')
   } catch (error) {
-    message.error('分析失败，请重试')
+    ElMessage.error('分析失败，请重试')
     result.value = '分析失败: ' + error.message
   } finally {
     analyzing.value = false
@@ -132,14 +129,14 @@ const handleReset = () => {
 
 const handleCopy = () => {
   navigator.clipboard.writeText(result.value).then(() => {
-    message.success('已复制到剪贴板')
+    ElMessage.success('已复制到剪贴板')
   }).catch(() => {
-    message.error('复制失败')
+    ElMessage.error('复制失败')
   })
 }
 
 const handleSave = () => {
-  message.info('保存功能开发中')
+  ElMessage.info('保存功能开发中')
 }
 </script>
 
@@ -155,5 +152,9 @@ const handleSave = () => {
 }
 .result-card {
   margin-top: 12px;
+}
+.result-footer {
+  margin-top: 12px;
+  text-align: right;
 }
 </style>

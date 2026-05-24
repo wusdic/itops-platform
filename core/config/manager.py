@@ -72,7 +72,44 @@ class ConfigLoader:
     def add_watch_callback(self, callback: callable):
         """添加配置变更回调"""
         self._watch_callbacks.append(callback)
-    
+
+    def _notify_callbacks(self, new_config: Dict):
+        """通知所有回调配置已变更"""
+        for callback in self._watch_callbacks:
+            try:
+                callback(new_config)
+            except Exception:
+                pass
+
+    def start_watching(self, interval: float = 2.0):
+        """
+        启动文件监视轮询线程
+        interval: 轮询间隔（秒），默认2秒
+        """
+        if hasattr(self, '_watcher') and self._watcher is not None:
+            return  # 已在运行
+
+        def watch_loop():
+            while getattr(watch_loop, '_running', True):
+                if self._should_reload():
+                    new_config = self.load(reload=True)
+                    self._notify_callbacks(new_config)
+                import time
+                time.sleep(interval)
+
+        watch_loop._running = True
+        self._watch_loop = watch_loop  # store reference for stop_watching
+        t = threading.Thread(target=watch_loop, daemon=True)
+        t.start()
+        self._watcher = t
+
+    def stop_watching(self):
+        """停止文件监视"""
+        if hasattr(self, '_watcher') and self._watcher is not None:
+            if hasattr(self, '_watch_loop'):
+                self._watch_loop._running = False
+            self._watcher = None
+
     def _deep_merge(self, base: Dict, override: Dict) -> Dict:
         """深度合并字典"""
         result = base.copy()
@@ -424,7 +461,15 @@ class ConfigManager:
     def add_watch_callback(self, callback: callable):
         """添加配置变更监听"""
         self._watch_callbacks.append(callback)
-    
+
+    def start_watching(self, interval: float = 2.0):
+        """启动配置文件热更新轮询"""
+        self._loader.start_watching(interval)
+
+    def stop_watching(self):
+        """停止配置文件热更新轮询"""
+        self._loader.stop_watching()
+
     def load(self, config_dir: str = None):
         """加载配置"""
         if config_dir:

@@ -1,80 +1,119 @@
 <template>
   <div class="page-container">
-    <n-card title="脚本管理" :bordered="false">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon><n-icon><AddOutline /></n-icon></template>
-          新建规则
-        </n-button>
+    <el-card>
+      <template #header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span>脚本管理</span>
+          <el-button type="primary" @click="handleAdd">
+            <el-icon><Plus /></el-icon>
+            新建规则
+          </el-button>
+        </div>
       </template>
 
-      <n-space style="margin-bottom: 12px">
-        <n-input v-model:value="searchKeyword" placeholder="搜索规则名称" clearable style="width: 200px" @update:value="loadData">
-          <template #prefix><n-icon><SearchOutline /></n-icon></template>
-        </n-input>
-        <n-select v-model:value="filterType" :options="typeOptions" placeholder="规则类型" clearable style="width: 140px" @update:value="loadData" />
-      </n-space>
+      <el-space style="margin-bottom: 12px">
+        <el-input v-model="searchKeyword" placeholder="搜索规则名称" clearable style="width: 200px" @change="loadData">
+          <template #prefix><el-icon><Search /></el-icon></template>
+        </el-input>
+        <el-select v-model="filterType" :options="typeOptions" placeholder="规则类型" clearable style="width: 140px" @change="loadData" />
+      </el-space>
 
-      <n-data-table
-        :columns="columns"
-        :data="ruleList"
-        :loading="loading"
-        :pagination="pagination"
-        :row-key="row => row.id"
+      <el-table :data="ruleList" v-loading="loading" style="width: 100%">
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="name" label="规则名称" show-overflow-tooltip />
+        <el-table-column prop="type" label="类型" width="120">
+          <template #default="{ row }">
+            <el-tag size="small">{{ getTypeText(row.type) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="enabled" label="启用状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="conditions_count" label="条件数" width="90">
+          <template #default="{ row }">
+            <span>{{ Array.isArray(row.conditions) ? row.conditions.length : (row.conditions ? '1' : '0') }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="actions_count" label="动作数" width="90">
+          <template #default="{ row }">
+            <span>{{ Array.isArray(row.actions) ? row.actions.length : (row.actions ? '1' : '0') }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="180" />
+        <el-table-column label="操作" width="220" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" quaternary type="info" @click="handleTestRule(row)">测试</el-button>
+            <el-button size="small" quaternary type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button size="small" quaternary type="danger" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.pageSize"
+        :total="pagination.total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @size-change="loadData"
+        @current-change="loadData"
+        style="margin-top: 16px; justify-content: flex-end;"
       />
-    </n-card>
+    </el-card>
 
     <!-- 新建/编辑规则 -->
-    <n-modal v-model:show="dialogVisible" preset="card" :title="dialogTitle" style="width: 700px">
-      <n-form :model="form" label-placement="left" label-width="100">
-        <n-form-item label="规则名称" required>
-          <n-input v-model:value="form.name" placeholder="请输入规则名称" />
-        </n-form-item>
-        <n-form-item label="规则类型">
-          <n-select v-model:value="form.type" :options="typeOptions" placeholder="请选择" style="width: 100%" />
-        </n-form-item>
-        <n-form-item label="启用状态">
-          <n-switch v-model:value="form.enabled" />
-        </n-form-item>
-        <n-form-item label="条件配置">
-          <n-input v-model:value="form.conditions" type="textarea" :rows="4" placeholder="请输入触发条件 (JSON格式)" />
-        </n-form-item>
-        <n-form-item label="动作配置">
-          <n-input v-model:value="form.actions" type="textarea" :rows="4" placeholder="请输入执行动作 (JSON格式)" />
-        </n-form-item>
-        <n-form-item label="描述">
-          <n-input v-model:value="form.description" type="textarea" :rows="2" placeholder="请输入描述" />
-        </n-form-item>
-      </n-form>
+    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="700px">
+      <el-form :model="form" label-placement="left" label-width="100">
+        <el-form-item label="规则名称" required>
+          <el-input v-model="form.name" placeholder="请输入规则名称" />
+        </el-form-item>
+        <el-form-item label="规则类型">
+          <el-select v-model="form.type" :options="typeOptions" placeholder="请选择" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="启用状态">
+          <el-switch v-model="form.enabled" />
+        </el-form-item>
+        <el-form-item label="条件配置">
+          <el-input v-model="form.conditions" type="textarea" :rows="4" placeholder="请输入触发条件 (JSON格式)" />
+        </el-form-item>
+        <el-form-item label="动作配置">
+          <el-input v-model="form.actions" type="textarea" :rows="4" placeholder="请输入执行动作 (JSON格式)" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="请输入描述" />
+        </el-form-item>
+      </el-form>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="dialogVisible = false">取消</n-button>
-          <n-button type="primary" @click="submitForm" :loading="submitting">确定</n-button>
-        </n-space>
+        <el-space justify="end">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitForm" :loading="submitting">确定</el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
 
     <!-- 测试结果 -->
-    <n-modal v-model:show="testDialogVisible" preset="card" title="测试规则" style="width: 600px">
-      <n-spin :show="testing">
-        <n-input type="textarea" :value="testResult" :rows="15" readonly placeholder="暂无测试结果" />
-      </n-spin>
+    <el-dialog v-model="testDialogVisible" title="测试规则" width="600px">
+      <div v-loading="testing" style="padding: 8px 0;">
+        <el-input type="textarea" v-model="testResult" :rows="15" readonly placeholder="暂无测试结果" />
+      </div>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="testDialogVisible = false">关闭</n-button>
-          <n-button type="primary" @click="handleTest" :loading="testing">重新测试</n-button>
-        </n-space>
+        <el-space justify="end">
+          <el-button @click="testDialogVisible = false">关闭</el-button>
+          <el-button type="primary" @click="handleTest" :loading="testing">重新测试</el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { NCard, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSelect, NSpace, NTag, NIcon, NSwitch, NSpin, useMessage } from 'naive-ui'
-import { AddOutline, SearchOutline, PlayOutline, RefreshOutline } from '@vicons/ionicons5'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Plus, Search } from '@element-plus/icons-vue'
 
-const message = useMessage()
+const message = ElMessage
 const loading = ref(false)
 const submitting = ref(false)
 const testing = ref(false)
@@ -87,15 +126,12 @@ const dialogTitle = ref('新建规则')
 const testResult = ref('')
 const currentTestRule = ref(null)
 
-const pagination = {
+const pagination = reactive({
   page: 1,
   pageSize: 10,
-  total: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (page) => { pagination.page = page; loadData(); },
-  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
-}
+  total: 0
+})
+
 const form = reactive({ id: null, name: '', type: 'threshold', enabled: true, conditions: '', actions: '', description: '' })
 
 const typeOptions = [
@@ -105,36 +141,7 @@ const typeOptions = [
   { label: '周期触发', value: 'periodic' }
 ]
 
-const columns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '规则名称', key: 'name', ellipsis: { tooltip: true } },
-  { title: '类型', key: 'type', width: 120,
-    render: (r) => {
-      const typeMap = { threshold: '阈值触发', trend: '趋势触发', anomaly: '异常触发', periodic: '周期触发' }
-      return h(NTag, { size: 'small', type: 'info' }, () => typeMap[r.type] || r.type || '-')
-    }
-  },
-  { title: '启用状态', key: 'enabled', width: 100,
-    render: (r) => h(NTag, { size: 'small', type: r.enabled ? 'success' : 'default' }, () => r.enabled ? '启用' : '停用')
-  },
-  { title: '条件数', key: 'conditions_count', width: 90,
-    render: (r) => h('span', {}, Array.isArray(r.conditions) ? r.conditions.length : (r.conditions ? '1' : '0'))
-  },
-  { title: '动作数', key: 'actions_count', width: 90,
-    render: (r) => h('span', {}, Array.isArray(r.actions) ? r.actions.length : (r.actions ? '1' : '0'))
-  },
-  { title: '创建时间', key: 'created_at', width: 180 },
-  {
-    title: '操作', key: 'actions', width: 220, fixed: 'right',
-    render(row) {
-      return h(NSpace, { size: 8 }, () => [
-        h(NButton, { size: 'small', quaternary: true, type: 'info', onClick: () => handleTestRule(row) }, () => '测试'),
-        h(NButton, { size: 'small', quaternary: true, type: 'primary', onClick: () => handleEdit(row) }, () => '编辑'),
-        h(NButton, { size: 'small', quaternary: true, type: 'error', onClick: () => handleDelete(row) }, () => '删除')
-      ])
-    }
-  }
-]
+const getTypeText = (t) => ({ threshold: '阈值触发', trend: '趋势触发', anomaly: '异常触发', periodic: '周期触发' })[t] || t
 
 async function loadData() {
   loading.value = true
@@ -230,7 +237,6 @@ async function submitForm() {
     const method = form.id ? 'PUT' : 'POST'
     const url = form.id ? `/api/v1/automation/trigger-rules/${form.id}` : '/api/v1/automation/trigger-rules'
     
-    // Parse conditions and actions if they're JSON strings
     let payload = { ...form }
     try {
       if (payload.conditions) {

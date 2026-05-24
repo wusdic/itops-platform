@@ -1,79 +1,109 @@
 <template>
   <div class="page-container">
-    <n-card title="故障案例库" :bordered="false">
-      <template #header-extra>
-        <n-button type="primary" @click="handleAdd">
-          <template #icon><n-icon><AddOutline /></n-icon></template>
-          添加案例
-        </n-button>
+    <el-card>
+      <template #header>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span>故障案例库</span>
+          <el-button type="primary" @click="handleAdd">
+            <el-icon><Plus /></el-icon>
+            添加案例
+          </el-button>
+        </div>
       </template>
 
       <!-- 搜索筛选 -->
-      <n-space style="margin-bottom: 16px">
-        <n-input v-model:value="searchKeyword" placeholder="搜索标题/关键词" clearable style="width: 200px" @keyup.enter="loadData" />
-        <n-select v-model:value="filterSeverity" :options="severityOptions" placeholder="严重程度" clearable style="width: 140px" @update:value="loadData" />
-        <n-select v-model:value="filterStatus" :options="statusOptions" placeholder="处理状态" clearable style="width: 140px" @update:value="loadData" />
-      </n-space>
+      <el-space style="margin-bottom: 16px">
+        <el-input v-model="searchKeyword" placeholder="搜索标题/关键词" clearable style="width: 200px" @keyup.enter="loadData" />
+        <el-select v-model="filterSeverity" :options="severityOptions" placeholder="严重程度" clearable style="width: 140px" @change="loadData" />
+        <el-select v-model="filterStatus" :options="statusOptions" placeholder="处理状态" clearable style="width: 140px" @change="loadData" />
+      </el-space>
 
-      <n-data-table
-        :columns="columns"
-        :data="list"
-        :loading="loading"
-        :pagination="pagination"
-        :row-key="row => row.id"
-        @update:page="handlePageChange"
-        @update:page-size="handlePageSizeChange"
+      <el-table :data="list" v-loading="loading" style="width: 100%">
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column label="标题" show-overflow-tooltip>
+          <template #default="{ row }">
+            <a href="javascript:void(0)" style="color:#18a058; cursor: pointer" @click="showDetail(row)">{{ row.title }}</a>
+          </template>
+        </el-table-column>
+        <el-table-column label="严重程度" width="90">
+          <template #default="{ row }">
+            <el-tag :type="getSeverityType(row.severity)" size="small">{{ row.severity || '-' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="getStatusType(row.status)" size="small">{{ row.status || '-' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="keywords" label="关键词" width="160" show-overflow-tooltip />
+        <el-table-column prop="occurred_at" label="发生时间" width="170" />
+        <el-table-column label="操作" width="80">
+          <template #default="{ row }">
+            <el-button size="small" quaternary type="info" @click="showDetail(row)">查看</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.pageSize"
+        :total="pagination.total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
+        style="margin-top: 16px; justify-content: flex-end;"
       />
-    </n-card>
+    </el-card>
 
     <!-- 详情抽屉 -->
-    <n-drawer v-model:show="detailDrawer" :width="640" placement="right">
-      <n-drawer-content :title="currentCase?.title || '案例详情'">
-        <n-descriptions v-if="currentCase" label-placement="top" :column="1">
-          <n-descriptions-item label="案例ID">{{ currentCase.id }}</n-descriptions-item>
-          <n-descriptions-item label="严重程度">
-            <n-tag :type="getSeverityType(currentCase.severity)" size="small">{{ currentCase.severity }}</n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="处理状态">
-            <n-tag :type="getStatusType(currentCase.status)" size="small">{{ currentCase.status }}</n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="关键词">{{ currentCase.keywords || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="影响范围">{{ currentCase.impact || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="发生时间">{{ currentCase.occurred_at || '-' }}</n-descriptions-item>
-          <n-descriptions-item label="解决时间">{{ currentCase.resolved_at || '-' }}</n-descriptions-item>
-        </n-descriptions>
-        <n-divider />
-        <n-tabs type="line">
-          <n-tab-pane name="desc" tab="问题描述">
-            <div style="white-space: pre-wrap; line-height: 1.8">{{ currentCase?.description || '暂无' }}</div>
-          </n-tab-pane>
-          <n-tab-pane name="root" tab="根因分析">
-            <div style="white-space: pre-wrap; line-height: 1.8">{{ currentCase?.root_cause || '暂无' }}</div>
-          </n-tab-pane>
-          <n-tab-pane name="solution" tab="解决方案">
-            <div style="white-space: pre-wrap; line-height: 1.8">{{ currentCase?.solution || '暂无' }}</div>
-          </n-tab-pane>
-          <n-tab-pane name="lessons" tab="经验教训">
-            <div style="white-space: pre-wrap; line-height: 1.8">{{ currentCase?.lessons_learned || '暂无' }}</div>
-          </n-tab-pane>
-        </n-tabs>
-        <template #footer>
-          <n-space justify="end">
-            <n-button @click="detailDrawer = false">关闭</n-button>
-          </n-space>
-        </template>
-      </n-drawer-content>
-    </n-drawer>
+    <el-drawer v-model="detailDrawer" :size="640" direction="rtl">
+      <template #title>
+        <span>{{ currentCase?.title || '案例详情' }}</span>
+      </template>
+      <el-descriptions v-if="currentCase" :column="1" border>
+        <el-descriptions-item label="案例ID">{{ currentCase.id }}</el-descriptions-item>
+        <el-descriptions-item label="严重程度">
+          <el-tag :type="getSeverityType(currentCase.severity)" size="small">{{ currentCase.severity }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="处理状态">
+          <el-tag :type="getStatusType(currentCase.status)" size="small">{{ currentCase.status }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="关键词">{{ currentCase.keywords || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="影响范围">{{ currentCase.impact || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="发生时间">{{ currentCase.occurred_at || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="解决时间">{{ currentCase.resolved_at || '-' }}</el-descriptions-item>
+      </el-descriptions>
+      <el-divider />
+      <el-tabs type="line">
+        <el-tab-pane label="问题描述" name="desc">
+          <div style="white-space: pre-wrap; line-height: 1.8">{{ currentCase?.description || '暂无' }}</div>
+        </el-tab-pane>
+        <el-tab-pane label="根因分析" name="root">
+          <div style="white-space: pre-wrap; line-height: 1.8">{{ currentCase?.root_cause || '暂无' }}</div>
+        </el-tab-pane>
+        <el-tab-pane label="解决方案" name="solution">
+          <div style="white-space: pre-wrap; line-height: 1.8">{{ currentCase?.solution || '暂无' }}</div>
+        </el-tab-pane>
+        <el-tab-pane label="经验教训" name="lessons">
+          <div style="white-space: pre-wrap; line-height: 1.8">{{ currentCase?.lessons_learned || '暂无' }}</div>
+        </el-tab-pane>
+      </el-tabs>
+      <template #footer>
+        <el-space justify="end">
+          <el-button @click="detailDrawer = false">关闭</el-button>
+        </el-space>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, h } from 'vue'
-import { useMessage } from 'naive-ui'
-import { AddOutline } from '@vicons/ionicons5'
-import { NTag, NButton } from 'naive-ui'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 
-const message = useMessage()
+const message = ElMessage
 const loading = ref(false)
 const list = ref([])
 const searchKeyword = ref('')
@@ -82,15 +112,11 @@ const filterStatus = ref(null)
 const detailDrawer = ref(false)
 const currentCase = ref(null)
 
-const pagination = {
+const pagination = reactive({
   page: 1,
   pageSize: 10,
-  total: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (page) => { pagination.page = page; loadData(); },
-  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
-}
+  total: 0
+})
 
 const severityOptions = [
   { label: '严重', value: 'critical' },
@@ -106,25 +132,12 @@ const statusOptions = [
   { label: '已关闭', value: 'closed' },
 ]
 
-const columns = [
-  { title: 'ID', key: 'id', width: 70 },
-  { title: '标题', key: 'title', ellipsis: { tooltip: true }, render: (row) => h('a', { href: 'javascript:void(0)', style: 'color:#18a058', onClick: () => showDetail(row) }, row.title) },
-  { title: '严重程度', key: 'severity', width: 90,
-    render: (row) => h(NTag, { type: getSeverityType(row.severity), size: 'small' }, () => row.severity || '-') },
-  { title: '状态', key: 'status', width: 90,
-    render: (row) => h(NTag, { type: getStatusType(row.status), size: 'small' }, () => row.status || '-') },
-  { title: '关键词', key: 'keywords', width: 160, ellipsis: { tooltip: true } },
-  { title: '发生时间', key: 'occurred_at', width: 170 },
-  { title: '操作', key: 'actions', width: 80,
-    render: (row) => h(NButton, { size: 'small', quaternary: true, type: 'info', onClick: () => showDetail(row) }, () => '查看') },
-]
-
 function getSeverityType(s) {
-  return { critical: 'error', high: 'warning', medium: 'info', low: 'default' }[s] || 'default'
+  return { critical: 'danger', high: 'warning', medium: 'primary', low: 'info' }[s] || 'info'
 }
 
 function getStatusType(s) {
-  return { open: 'error', in_progress: 'warning', resolved: 'success', closed: 'default' }[s] || 'default'
+  return { open: 'danger', in_progress: 'warning', resolved: 'success', closed: 'info' }[s] || 'info'
 }
 
 function showDetail(row) {

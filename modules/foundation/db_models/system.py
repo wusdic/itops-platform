@@ -24,6 +24,7 @@ class OperationLog(Base):
     action = Column(String(64), index=True)  # create, update, delete, login, etc.
     resource = Column(String(64), index=True)  # device, workorder, alert, etc.
     resource_id = Column(String(64))  # 操作资源的ID
+    watermark_id = Column(String(256))  # 防篡改水印ID
 
     # 操作详情
     method = Column(String(16))  # GET, POST, PUT, DELETE
@@ -237,9 +238,11 @@ class SystemUser(Base):
     __tablename__ = "system_users"
 
     id = Column(String(64), primary_key=True)  # 用户ID，如 u001
+    tenant_id = Column(String(64), index=True)  # TODO: 迁移时取消注释
     username = Column(String(64), unique=True, nullable=False, index=True)
     password_hash = Column(String(256), nullable=False)
     email = Column(String(128))
+    department_id = Column(Integer, nullable=True, index=True)
     status = Column(String(32), default="active")  # active/inactive/locked/pending
     roles = Column(Text)  # JSON 数组存储角色列表
     last_login = Column(DateTime)
@@ -248,6 +251,87 @@ class SystemUser(Base):
 
     __table_args__ = (
         Index('idx_username_active', 'username', 'status'),
+    )
+
+
+class Department(Base):
+    """
+    组织架构/部门模型
+    """
+    __tablename__ = "departments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False, unique=True, index=True)
+    code = Column(String(64), unique=True, index=True)
+    parent_id = Column(Integer, nullable=True, index=True)
+    manager_id = Column(String(64), nullable=True)
+    description = Column(Text)
+    status = Column(String(20), default="active")  # active / inactive
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_parent_id', 'parent_id'),
+        Index('idx_status', 'status'),
+    )
+
+
+class Tenant(Base):
+    """
+    租户模型
+    支持多租户 SaaS 部署
+    """
+    __tablename__ = "tenants"
+
+    id = Column(String(64), primary_key=True)  # 如 t001
+    name = Column(String(128), nullable=False, unique=True, index=True)
+    code = Column(String(64), unique=True, index=True)  # 租户代码，用于域名/子目录
+    status = Column(String(20), default="active")  # active / suspended / trial
+    plan = Column(String(32), default="basic")  # basic / standard / premium / enterprise
+    
+    # 配额限制
+    max_devices = Column(Integer, default=100)
+    max_users = Column(Integer, default=20)
+    max_storage_gb = Column(Integer, default=50)
+    
+    # 联系方式
+    contact_name = Column(String(128))
+    contact_email = Column(String(128))
+    contact_phone = Column(String(32))
+    
+    # 到期时间（试用/订阅）
+    expires_at = Column(DateTime)
+    
+    # 超级租户标记（可管理所有租户数据）
+    is_master = Column(Integer, default=0)  # 1=超级租户，可访问所有数据
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_tenant_status', 'status'),
+        Index('idx_tenant_code', 'code'),
+    )
+
+
+class TenantConfig(Base):
+    """
+    租户配置模型
+    存储各租户的配置覆盖值
+    """
+    __tablename__ = "tenant_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(64), index=True)  # 所属租户
+    config_key = Column(String(128), nullable=False)
+    config_value = Column(Text)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_tenant_config_key', 'tenant_id', 'config_key', unique=True),
     )
 
 

@@ -27,7 +27,7 @@
         <span class="stat-label">待处理</span>
       </div>
       <div class="update-time">
-        <n-spin v-if="loading" :size="14" stroke-width="20" />
+        <el-icon v-if="loading" class="is-loading"><Loading /></el-icon>
         <span v-else-if="lastUpdateTime">最后更新: {{ lastUpdateTime }}</span>
         <span v-else>加载中...</span>
       </div>
@@ -35,77 +35,105 @@
 
     <!-- Filter Bar -->
     <div class="filter-bar">
-      <n-space :size="12" align="center">
-        <n-select v-model:value="filterLevel" :options="levelOptions" placeholder="告警级别" clearable style="width: 130px" @update:value="onFilterChange" />
-        <n-select v-model:value="filterStatus" :options="statusOptions" placeholder="处理状态" clearable style="width: 130px" @update:value="onFilterChange" />
-        <n-button type="primary" :loading="loading" @click="loadAlerts">
-          <template #icon><n-icon><Refresh /></n-icon></template>
+      <el-space :size="12" align="center">
+        <el-select v-model="filterLevel" :options="levelOptions" placeholder="告警级别" clearable style="width: 130px" @change="onFilterChange" />
+        <el-select v-model="filterStatus" :options="statusOptions" placeholder="处理状态" clearable style="width: 130px" @change="onFilterChange" />
+        <el-button type="primary" :loading="loading" @click="loadAlerts">
+          <el-icon><Refresh /></el-icon>
           刷新
-        </n-button>
-      </n-space>
+        </el-button>
+      </el-space>
     </div>
 
     <!-- Alert Table -->
-    <n-card :bordered="false" class="table-card">
+    <el-card :bordered="false" class="table-card">
       <template #header>
         <span>告警列表 <span class="table-count">共 {{ total }} 条</span></span>
       </template>
-      <n-data-table
-        :columns="columns"
+      <el-table
         :data="alerts"
-        :loading="loading"
-        :pagination="paginationConfig"
-        :key="paginationVersion"
+        v-loading="loading"
         :row-key="row => row.id"
         :row-class-name="getRowClassName"
-        :bordered="false"
-        :remote="true"
-        :single-line="false"
-      />
-    </n-card>
+        :border="false"
+        style="width: 100%"
+      >
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="title" label="告警名称" :show-overflow-tooltip="true" />
+        <el-table-column prop="level" label="级别" width="90">
+          <template #default="{ row }">
+            <el-tag :type="getLevelType(row.level)" size="small">{{ getLevelLabel(row.level) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="getStatusType(row.status)" size="small">{{ getStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="device_name" label="设备" :show-overflow-tooltip="true" width="140" />
+        <el-table-column prop="occurred_at" label="发生时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.occurred_at || row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-space :size="4">
+              <el-button type="primary" link size="small" :disabled="row.status === 'resolved' || actionLoading" @click="openDetail(row)">查看</el-button>
+              <el-button v-if="row.status === 'active'" type="warning" link size="small" :disabled="actionLoading" @click="handleAcknowledge(row)">确认</el-button>
+              <el-button v-if="row.status !== 'resolved'" type="success" link size="small" :disabled="actionLoading" @click="handleResolve(row)">解决</el-button>
+            </el-space>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div class="pagination-wrapper">
+        <el-pagination
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :total="total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          @size-change="loadAlerts"
+          @current-change="loadAlerts"
+        />
+      </div>
+    </el-card>
 
     <!-- Detail Drawer -->
-    <n-drawer v-model:show="showDrawer" :width="720" placement="right">
-      <n-drawer-content title="告警详情">
-        <n-descriptions v-if="currentAlert" :column="1" label-placement="left" bordered size="large">
-          <n-descriptions-item label="告警ID">{{ currentAlert.id }}</n-descriptions-item>
-          <n-descriptions-item label="告警名称">{{ currentAlert.title }}</n-descriptions-item>
-          <n-descriptions-item label="告警级别">
-            <n-tag :type="getLevelType(currentAlert.level)" size="small">{{ getLevelLabel(currentAlert.level) }}</n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="处理状态">
-            <n-tag :type="getStatusType(currentAlert.status)" size="small">{{ getStatusLabel(currentAlert.status) }}</n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="设备">{{ currentAlert.device_name }} ({{ currentAlert.device_ip }})</n-descriptions-item>
-          <n-descriptions-item label="告警信息">{{ currentAlert.message }}</n-descriptions-item>
-          <n-descriptions-item label="发生时间">{{ formatTime(currentAlert.occurred_at || currentAlert.created_at) }}</n-descriptions-item>
-          <n-descriptions-item v-if="currentAlert.acknowledged_at" label="确认时间">{{ formatTime(currentAlert.acknowledged_at) }}</n-descriptions-item>
-          <n-descriptions-item v-if="currentAlert.resolved_at" label="解决时间">{{ formatTime(currentAlert.resolved_at) }}</n-descriptions-item>
-        </n-descriptions>
-        <template #footer>
-          <n-space justify="end">
-            <n-button @click="showDrawer = false">关闭</n-button>
-            <n-button v-if="currentAlert && currentAlert.status === 'active'" type="warning" :loading="actionLoading" @click="handleAcknowledge(currentAlert)">确认</n-button>
-            <n-button v-if="currentAlert && currentAlert.status !== 'resolved'" type="primary" :loading="actionLoading" @click="handleResolve(currentAlert)">标记已解决</n-button>
-          </n-space>
-        </template>
-      </n-drawer-content>
-    </n-drawer>
+    <el-drawer v-model="showDrawer" :size="720" direction="rtl">
+      <template #title>
+        <span>告警详情</span>
+      </template>
+      <el-descriptions v-if="currentAlert" :column="1" border size="large" label-placement="left">
+        <el-descriptions-item label="告警ID">{{ currentAlert.id }}</el-descriptions-item>
+        <el-descriptions-item label="告警名称">{{ currentAlert.title }}</el-descriptions-item>
+        <el-descriptions-item label="告警级别">
+          <el-tag :type="getLevelType(currentAlert.level)" size="small">{{ getLevelLabel(currentAlert.level) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="处理状态">
+          <el-tag :type="getStatusType(currentAlert.status)" size="small">{{ getStatusLabel(currentAlert.status) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="设备">{{ currentAlert.device_name }} ({{ currentAlert.device_ip }})</el-descriptions-item>
+        <el-descriptions-item label="告警信息">{{ currentAlert.message }}</el-descriptions-item>
+        <el-descriptions-item label="发生时间">{{ formatTime(currentAlert.occurred_at || currentAlert.created_at) }}</el-descriptions-item>
+        <el-descriptions-item v-if="currentAlert.acknowledged_at" label="确认时间">{{ formatTime(currentAlert.acknowledged_at) }}</el-descriptions-item>
+        <el-descriptions-item v-if="currentAlert.resolved_at" label="解决时间">{{ formatTime(currentAlert.resolved_at) }}</el-descriptions-item>
+      </el-descriptions>
+      <template #footer>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <el-button @click="showDrawer = false">关闭</el-button>
+          <el-button v-if="currentAlert && currentAlert.status === 'active'" type="warning" :loading="actionLoading" @click="handleAcknowledge(currentAlert)">确认</el-button>
+          <el-button v-if="currentAlert && currentAlert.status !== 'resolved'" type="primary" :loading="actionLoading" @click="handleResolve(currentAlert)">标记已解决</el-button>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watchEffect } from 'vue'
-import {
-  NCard, NDataTable, NButton, NSpace, NSelect, NDrawer, NDrawerContent,
-  NDescriptions, NDescriptionsItem, NTag, NIcon, NSpin, useMessage, useDialog
-} from 'naive-ui'
-import { Refresh } from '@vicons/ionicons5'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh, Loading } from '@element-plus/icons-vue'
 import { formatDate, formatTime } from '@/utils/date'
-
-// ── 所有组件调用必须在 setup 顶层 ──────────────────────────────
-const message = useMessage()
-const dialog = useDialog()
 
 const alerts = ref([])
 const alertStats = ref({ critical: 0, warning: 0, info: 0, active: 0 })
@@ -113,43 +141,6 @@ const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
-
-const itemCountRef = ref(0)
-const pageCountRef = ref(1)
-const paginationVersion = ref(0)
-// 共享纯 JS 对象 — getPaginationConfig() 每次返回同一引用，Naive UI 内部 Object.assign 作用在同一对象上
-const paginationConfig = {
-  page: 1,
-  pageSize: 20,
-  pageCount: 1,
-  itemCount: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (p) => {
-    page.value = p
-    paginationConfig.page = p
-    paginationVersion.value++
-    loadAlerts()
-  },
-  onUpdatePageSize: (s) => {
-    pageSize.value = s
-    page.value = 1
-    paginationConfig.pageSize = s
-    paginationConfig.page = 1
-    paginationVersion.value++
-    loadAlerts()
-  }
-}
-// watchEffect 主动同步：total/page/pageSize 变化时 Naive UI 收到最新值
-watchEffect(() => {
-  paginationConfig.page = page.value
-  paginationConfig.pageSize = pageSize.value
-  paginationConfig.total = total.value
-  paginationConfig.itemCount = total.value
-  paginationConfig.pageCount = Math.max(1, Math.ceil((total.value || 0) / (pageSize.value || 1)))
-})
-
-const getPaginationConfig = () => paginationConfig
 
 const showDrawer = ref(false)
 const currentAlert = ref(null)
@@ -177,14 +168,14 @@ const levelMap = { critical: '严重', high: '高', medium: '警告', low: '低'
 const statusMap = { active: '活跃', acknowledged: '已确认', resolved: '已解决' }
 
 const getLevelType = (level) => {
-  if (!level) return 'default'
-  const map = { critical: 'error', high: 'error', medium: 'warning', low: 'info', info: 'info' }
-  return map[level] || 'default'
+  if (!level) return 'info'
+  const map = { critical: 'danger', high: 'danger', medium: 'warning', low: 'info', info: 'info' }
+  return map[level] || 'info'
 }
 const getStatusType = (status) => {
-  if (!status) return 'default'
+  if (!status) return 'info'
   const map = { active: 'warning', acknowledged: 'info', resolved: 'success' }
-  return map[status] || 'default'
+  return map[status] || 'info'
 }
 const getLevelLabel = (level) => levelMap[level] || level || '-'
 const getStatusLabel = (status) => statusMap[status] || status || '-'
@@ -197,68 +188,6 @@ const getRowClassName = ({ row }) => {
   return ''
 }
 
-// ── columns 用 defineColumns 风格在 setup 内定义 ──────────────────
-const columns = [
-  { title: 'ID', key: 'id', width: 80 },
-  { title: '告警名称', key: 'title', ellipsis: { tooltip: true } },
-  {
-    title: '级别', key: 'level', width: 90,
-    render: (row) => {
-      if (!row) return null
-      return h(NTag, { type: getLevelType(row.level), size: 'small' }, () => getLevelLabel(row.level))
-    }
-  },
-  {
-    title: '状态', key: 'status', width: 90,
-    render: (row) => {
-      if (!row) return null
-      return h(NTag, { type: getStatusType(row.status), size: 'small' }, () => getStatusLabel(row.status))
-    }
-  },
-  { title: '设备', key: 'device_name', ellipsis: { tooltip: true }, width: 140 },
-  {
-    title: '发生时间', key: 'occurred_at', width: 170,
-    render: (row) => {
-      if (!row) return null
-      return formatTime(row.occurred_at || row.created_at)
-    }
-  },
-  {
-    title: '操作', key: 'actions', width: 200,
-    render: (row) => {
-      if (!row) return null
-      const buttons = []
-      // 查看按钮
-      buttons.push(h(NButton, {
-        size: 'small',
-        type: 'primary',
-        ghost: true,
-        disabled: row.status === 'resolved' || actionLoading.value,
-        onClick: () => openDetail(row)
-      }, () => '查看'))
-      // 确认按钮
-      if (row.status === 'active') {
-        buttons.push(h(NButton, {
-          size: 'small',
-          type: 'warning',
-          disabled: actionLoading.value,
-          onClick: () => handleAcknowledge(row)
-        }, () => '确认'))
-      }
-      // 解决按钮
-      if (row.status !== 'resolved') {
-        buttons.push(h(NButton, {
-          size: 'small',
-          type: 'success',
-          disabled: actionLoading.value,
-          onClick: () => handleResolve(row)
-        }, () => '解决'))
-      }
-      return h(NSpace, { size: 'small' }, () => buttons)
-    }
-  }
-]
-
 const openDetail = (alert) => {
   currentAlert.value = alert
   showDrawer.value = true
@@ -266,11 +195,10 @@ const openDetail = (alert) => {
 
 const onFilterChange = () => {
   page.value = 1
-  loadAlertStats()      // 筛选变化时重新加载统计
+  loadAlertStats()
   loadAlerts()
 }
 
-// 独立加载告警统计（从专用 stats API，不依赖当前页数据）
 async function loadAlertStats() {
   try {
     const token = localStorage.getItem('token') || ''
@@ -313,77 +241,73 @@ const quickFilter = (type) => {
 }
 
 const handleAcknowledge = async (alert) => {
-  dialog.warning({
-    title: '确认操作',
-    content: `确定要确认告警"${alert.title}"吗？`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      actionLoading.value = true
-      try {
-        const token = localStorage.getItem('token') || ''
-        const res = await fetch(`/api/v1/monitoring/alerts/${alert.id}/acknowledge`, {
-          method: 'PUT',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-        })
-        if (res.status === 401) {
-          message.warning('登录已过期，请重新登录')
-          localStorage.removeItem('token')
-          window.location.href = '/login'
-          return
-        }
-        if (res.ok) {
-          message.success('告警已确认')
-          showDrawer.value = false
-          loadAlerts()
-        } else {
-          const err = await res.json().catch(() => ({}))
-          message.error(err.message || '确认告警失败')
-        }
-      } catch (e) {
-        message.error('确认告警失败')
-      } finally {
-        actionLoading.value = false
+  ElMessageBox.confirm(`确定要确认告警"${alert.title}"吗？`, '确认操作', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    actionLoading.value = true
+    try {
+      const token = localStorage.getItem('token') || ''
+      const res = await fetch(`/api/v1/monitoring/alerts/${alert.id}/acknowledge`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      })
+      if (res.status === 401) {
+        ElMessage.warning('登录已过期，请重新登录')
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+        return
       }
+      if (res.ok) {
+        ElMessage.success('告警已确认')
+        showDrawer.value = false
+        loadAlerts()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        ElMessage.error(err.message || '确认告警失败')
+      }
+    } catch (e) {
+      ElMessage.error('确认告警失败')
+    } finally {
+      actionLoading.value = false
     }
-  })
+  }).catch(() => {})
 }
 
 const handleResolve = async (alert) => {
-  dialog.warning({
-    title: '确认操作',
-    content: `确定要解决告警"${alert.title}"吗？`,
-    positiveText: '确定',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      actionLoading.value = true
-      try {
-        const token = localStorage.getItem('token') || ''
-        const res = await fetch(`/api/v1/monitoring/alerts/${alert.id}/resolve`, {
-          method: 'PUT',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-        })
-        if (res.status === 401) {
-          message.warning('登录已过期，请重新登录')
-          localStorage.removeItem('token')
-          window.location.href = '/login'
-          return
-        }
-        if (res.ok) {
-          message.success('告警已解决')
-          showDrawer.value = false
-          loadAlerts()
-        } else {
-          const err = await res.json().catch(() => ({}))
-          message.error(err.message || '解决告警失败')
-        }
-      } catch (e) {
-        message.error('解决告警失败')
-      } finally {
-        actionLoading.value = false
+  ElMessageBox.confirm(`确定要解决告警"${alert.title}"吗？`, '确认操作', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    actionLoading.value = true
+    try {
+      const token = localStorage.getItem('token') || ''
+      const res = await fetch(`/api/v1/monitoring/alerts/${alert.id}/resolve`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      })
+      if (res.status === 401) {
+        ElMessage.warning('登录已过期，请重新登录')
+        localStorage.removeItem('token')
+        window.location.href = '/login'
+        return
       }
+      if (res.ok) {
+        ElMessage.success('告警已解决')
+        showDrawer.value = false
+        loadAlerts()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        ElMessage.error(err.message || '解决告警失败')
+      }
+    } catch (e) {
+      ElMessage.error('解决告警失败')
+    } finally {
+      actionLoading.value = false
     }
-  })
+  }).catch(() => {})
 }
 
 const loadAlerts = async () => {
@@ -402,14 +326,14 @@ const loadAlerts = async () => {
     })
 
     if (res.status === 401) {
-      message.warning('登录已过期，请重新登录')
+      ElMessage.warning('登录已过期，请重新登录')
       localStorage.removeItem('token')
       window.location.href = '/login'
       return
     }
 
     if (!res.ok) {
-      message.error(`加载失败: HTTP ${res.status}`)
+      ElMessage.error(`加载失败: HTTP ${res.status}`)
       return
     }
 
@@ -430,19 +354,14 @@ const loadAlerts = async () => {
       totalCount = data.data.total || items.length
     }
 
-    // Stats are loaded separately by loadAlertStats(), not from current page data
     alerts.value = items
     total.value = totalCount
-    itemCountRef.value = totalCount
-    pageCountRef.value = Math.max(1, Math.ceil((totalCount || 0) / (pageSize.value || 1)))
-    paginationVersion.value++
-    // Ensure current page doesn't exceed total
-    if (page.value > pageCountRef.value) {
+    if (page.value > Math.max(1, Math.ceil((totalCount || 0) / (pageSize.value || 1)))) {
       page.value = 1
     }
   } catch (e) {
     if (isActive.value) {
-      message.error('加载告警列表失败')
+      ElMessage.error('加载告警列表失败')
     }
   } finally {
     if (isActive.value) {
@@ -516,10 +435,13 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; color: #909399; margin-left: auto; min-height: 20px;
 }
-.update-time .n-spin { flex-shrink: 0; }
+.update-time .is-loading { animation: rotating 2s linear infinite; }
+@keyframes rotating { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .filter-bar { margin-bottom: 12px; }
 .table-count { font-size: 13px; color: #909399; font-weight: normal; margin-left: 8px; }
+
+.pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 16px; }
 
 :deep(.row-active) { background-color: #fff2f0 !important; border-left: 3px solid #f53f3f; }
 :deep(.row-acknowledged) { background-color: #fffbe6 !important; border-left: 3px solid #ff7d00; }

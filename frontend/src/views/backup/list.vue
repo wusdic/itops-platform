@@ -6,97 +6,96 @@
         <p class="page-subtitle">查看和管理数据备份记录</p>
       </div>
       <div class="page-actions">
-        <n-button type="primary" @click="loadData">刷新</n-button>
+        <el-button type="primary" @click="loadData">刷新</el-button>
       </div>
     </div>
 
-    <n-card class="filter-bar">
-      <n-space align="center">
-        <n-input
-          v-model:value="searchKeyword"
+    <el-card class="filter-bar">
+      <el-space align="center">
+        <el-input
+          v-model="searchKeyword"
           placeholder="搜索备份名称"
           clearable
           style="width: 200px"
-          @update:value="handleSearch"
+          @input="handleSearch"
         />
-        <n-select
-          v-model:value="filterType"
+        <el-select
+          v-model="filterType"
           placeholder="备份类型"
           :options="typeOptions"
           clearable
           style="width: 120px"
-          @update:value="handleSearch"
+          @change="handleSearch"
         />
-        <n-select
-          v-model:value="filterStatus"
+        <el-select
+          v-model="filterStatus"
           placeholder="备份状态"
           :options="statusOptions"
           clearable
           style="width: 120px"
-          @update:value="handleSearch"
+          @change="handleSearch"
         />
-        <n-date-picker
-          v-model:value="timeRange"
+        <el-date-picker
+          v-model="timeRange"
           type="daterange"
           clearable
           style="width: 260px"
-          @update:value="handleSearch"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          @change="handleSearch"
         />
-      </n-space>
-    </n-card>
+      </el-space>
+    </el-card>
 
-    <n-card class="table-container">
-      <n-data-table
-        :columns="columns"
+    <el-card class="table-container">
+      <el-table
         :data="backupList"
         :loading="loading"
-        :pagination="false"
         :row-key="(row) => row.id"
-      />
+        style="width: 100%"
+      >
+        <el-table-column v-for="col in columns" :key="col.key" v-bind="col" />
+      </el-table>
       <div class="pagination">
-        <n-pagination
-          v-model:page="pagination.page"
+        <el-pagination
+          v-model:current-page="pagination.page"
           v-model:page-size="pagination.pageSize"
           :page-count="totalPages"
+          :total="pagination.total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
           show-quick-jumper
-          @update:page="loadData"
-          @update:page-size="loadData"
+          @size-change="loadData"
+          @current-change="loadData"
         />
       </div>
-    </n-card>
+    </el-card>
 
-    <n-modal v-model:show="detailModalVisible" preset="card" title="备份详情" style="max-width: 600px;">
-      <n-descriptions label-placement="top" :column="1" v-if="currentBackup">
-        <n-descriptions-item label="备份名称">{{ currentBackup.name || currentBackup.backup_name }}</n-descriptions-item>
-        <n-descriptions-item label="备份类型">{{ currentBackup.type === 'full' ? '全量' : '增量' }}</n-descriptions-item>
-        <n-descriptions-item label="备份时间">{{ formatTime(currentBackup.backup_at || currentBackup.created_at) }}</n-descriptions-item>
-        <n-descriptions-item label="备份大小">{{ currentBackup.size || '-' }}</n-descriptions-item>
-        <n-descriptions-item label="状态">{{ currentBackup.status === 'success' ? '成功' : '失败' }}</n-descriptions-item>
-        <n-descriptions-item label="操作人">{{ currentBackup.operator || '-' }}</n-descriptions-item>
-        <n-descriptions-item label="备注">{{ currentBackup.remark || '-' }}</n-descriptions-item>
-      </n-descriptions>
+    <el-dialog v-model="detailModalVisible" title="备份详情" width="600px" max-width="600px">
+      <el-descriptions label-placement="top" :column="1" border v-if="currentBackup">
+        <el-descriptions-item label="备份名称">{{ currentBackup.name || currentBackup.backup_name }}</el-descriptions-item>
+        <el-descriptions-item label="备份类型">{{ currentBackup.type === 'full' ? '全量' : '增量' }}</el-descriptions-item>
+        <el-descriptions-item label="备份时间">{{ formatTime(currentBackup.backup_at || currentBackup.created_at) }}</el-descriptions-item>
+        <el-descriptions-item label="备份大小">{{ currentBackup.size || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="状态">{{ currentBackup.status === 'success' ? '成功' : '失败' }}</el-descriptions-item>
+        <el-descriptions-item label="操作人">{{ currentBackup.operator || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="备注">{{ currentBackup.remark || '-' }}</el-descriptions-item>
+      </el-descriptions>
       <template #footer>
-        <n-space justify="end">
-          <n-button @click="detailModalVisible = false">关闭</n-button>
-          <n-button type="primary" @click="handleRestore">恢复此备份</n-button>
-        </n-space>
+        <el-space justify="end">
+          <el-button @click="detailModalVisible = false">关闭</el-button>
+          <el-button type="primary" @click="handleRestore">恢复此备份</el-button>
+        </el-space>
       </template>
-    </n-modal>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, h } from 'vue'
-
-import {
-  NCard, NInput, NSelect, NButton, NSpace,
-  NDataTable, NPagination, NTag, NModal,
-  NDescriptions, NDescriptionsItem, NDivider, NDatePicker, useDialog
-} from 'naive-ui'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { formatDate } from '@/utils/date'
-
-const message = useMessage()
-const dialog = useDialog()
 
 const loading = ref(false)
 const searchKeyword = ref('')
@@ -107,15 +106,11 @@ const backupList = ref([])
 const detailModalVisible = ref(false)
 const currentBackup = ref(null)
 
-const pagination = {
+const pagination = reactive({
   page: 1,
   pageSize: 10,
   total: 0,
-  showSizePicker: true,
-  pageSizes: [10, 20, 50, 100],
-  onChange: (page) => { pagination.page = page; loadData(); },
-  onUpdatePageSize: (size) => { pagination.pageSize = size; pagination.page = 1; loadData(); }
-}
+})
 const totalPages = computed(() => Math.ceil(pagination.total / pagination.pageSize) || 1)
 
 const typeOptions = [
@@ -134,8 +129,8 @@ const getTypeText = (type) => {
 }
 
 const getStatusTagType = (status) => {
-  const map = { success: 'success', failed: 'error', running: 'warning' }
-  return map[status] || 'default'
+  const map = { success: 'success', failed: 'danger', running: 'warning' }
+  return map[status] || 'info'
 }
 
 const getStatusText = (status) => {
@@ -154,24 +149,24 @@ const columns = [
     title: '备份类型',
     key: 'type',
     width: 100,
-    render: (row) => h(NTag, { type: 'info', size: 'small' }, () => getTypeText(row.type))
+    render: ({ row }) => h(ElTag, { type: 'info', size: 'small' }, () => getTypeText(row.type))
   },
   {
     title: '状态',
     key: 'status',
     width: 100,
-    render: (row) => h(NTag, { type: getStatusTagType(row.status), size: 'small' }, () => getStatusText(row.status))
+    render: ({ row }) => h(ElTag, { type: getStatusTagType(row.status), size: 'small' }, () => getStatusText(row.status))
   },
-  { title: '备份时间', key: 'backup_at', width: 180, render: (row) => formatTime(row.backup_at || row.created_at) },
+  { title: '备份时间', key: 'backup_at', width: 180, render: ({ row }) => formatTime(row.backup_at || row.created_at) },
   { title: '备份大小', key: 'size', width: 120 },
   { title: '操作人', key: 'operator', width: 120 },
   {
     title: '操作',
     key: 'actions',
     width: 150,
-    render: (row) => h(NSpace, { size: 'small' }, () => [
-      h(NButton, { size: 'small', onClick: () => handleView(row) }, () => '详情'),
-      h(NButton, { size: 'small', type: 'primary', onClick: () => handleRestore(row) }, () => '恢复')
+    render: ({ row }) => h(ElSpace, { size: 'small' }, () => [
+      h(ElButton, { size: 'small', onClick: () => handleView(row) }, () => '详情'),
+      h(ElButton, { size: 'small', type: 'primary', onClick: () => handleRestore(row) }, () => '恢复')
     ])
   }
 ]
@@ -243,31 +238,34 @@ const handleRestore = async (row) => {
   }
   if (!currentBackup.value) return
 
-  dialog.warning({
-    title: '确认恢复',
-    content: `确定要恢复备份 "${currentBackup.value.name || currentBackup.value.backup_name}" 吗？恢复操作会覆盖当前数据，此操作不可逆。`,
-    positiveText: '确认恢复',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const token = localStorage.getItem('token') || ''
-        const res = await fetch(`/api/v1/admin/backups/${currentBackup.value.id}/restore`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({})
-        })
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }))
-          message.error(`恢复失败: ${err.message || res.status}`)
-          return
-        }
-        message.success('备份恢复成功')
-        detailModalVisible.value = false
-      } catch (e) {
-        message.error(`恢复失败: ${e.message}`)
+  try {
+    await ElMessageBox.confirm(
+      `确定要恢复备份 "${currentBackup.value.name || currentBackup.value.backup_name}" 吗？恢复操作会覆盖当前数据，此操作不可逆。`,
+      '确认恢复',
+      {
+        confirmButtonText: '确认恢复',
+        cancelButtonText: '取消',
+        type: 'warning',
       }
+    )
+    const token = localStorage.getItem('token') || ''
+    const res = await fetch(`/api/v1/admin/backups/${currentBackup.value.id}/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({})
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }))
+      ElMessage.error(`恢复失败: ${err.message || res.status}`)
+      return
     }
-  })
+    ElMessage.success('备份恢复成功')
+    detailModalVisible.value = false
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(`恢复失败: ${e.message}`)
+    }
+  }
 }
 
 onMounted(() => {
