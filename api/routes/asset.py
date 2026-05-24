@@ -124,21 +124,47 @@ def _map_device_status(status: str) -> DBDeviceStatus:
     mapping = {
         'online': DBDeviceStatus.ONLINE,
         'offline': DBDeviceStatus.OFFLINE,
+        'warning': DBDeviceStatus.WARNING,
+        'critical': DBDeviceStatus.CRITICAL,
         'maintenance': DBDeviceStatus.MAINTENANCE,
-        'decommissioned': DBDeviceStatus.DECOMMISSIONED,
+        'unknown': DBDeviceStatus.UNKNOWN,
     }
-    return mapping.get(status, DBDeviceStatus.OFFLINE)
+    return mapping.get(status.lower(), DBDeviceStatus.OFFLINE)
 
 
 def _device_to_dict(device: Device) -> dict:
     """设备模型转字典"""
+    # DB 存的是大写 ENUM 值（'SERVER_LINUX', 'OFFLINE'），API 响应用小写（'server', 'offline'）
+    def _to_api_device_type(val):
+        if not val:
+            return 'other'
+        v = str(val).lower()
+        # 'server_linux' / 'server_windows' / 'server_vmware' → 'server'
+        if v.startswith('server'):
+            return 'server'
+        if v.startswith('network'):
+            return 'network'
+        if v.startswith('storage'):
+            return 'storage'
+        if v.startswith('security'):
+            return 'security'
+        return v
+
+    def _to_api_status(val):
+        if not val:
+            return 'offline'
+        v = str(val).lower()
+        if v in ('online', 'offline', 'warning', 'critical', 'maintenance', 'unknown'):
+            return v
+        return 'unknown'
+
     return {
         'id': device.id,
         'name': device.name,
         'hostname': device.hostname,
         'ip_address': device.ip_address,
-        'device_type': str(device.device_type) if device.device_type else 'other',
-        'status': str(device.status) if device.status else 'offline',
+        'device_type': _to_api_device_type(device.device_type),
+        'status': _to_api_status(device.status),
         'os_type': device.os_type,
         'os_version': device.os_version,
         'manufacturer': device.manufacturer,
@@ -367,7 +393,7 @@ async def create_device(
         name=device.hostname,
         hostname=device.hostname,
         ip_address=device.ip_address,
-        device_type=device.device_type,  # 存储为字符串，由 StringEnum 处理
+        device_type=_map_device_type(device.device_type).value.upper(),  # 'server' → 'SERVER_LINUX'
         os_type=device.os_type,
         os_version=device.os_version,
         manufacturer=device.manufacturer,
@@ -382,7 +408,7 @@ async def create_device(
         cabinet=device.cabinet,
         business_id=device.business_id,
         tags=device.tags,
-        status=device.status if device.status else 'offline',
+        status=_map_device_status(device.status).value.upper() if device.status else 'OFFLINE',  # 'offline' → 'OFFLINE'
     )
     
     db.add(db_device)

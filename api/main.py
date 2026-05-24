@@ -435,12 +435,16 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """全局异常处理器"""
+        import traceback
+        tb = traceback.format_exc()
+        print(f"EXCEPTION: {exc}\n{tb}", flush=True)
         logger.exception(f"Unhandled exception: {exc}")
         return JSONResponse(
             status_code=500,
             content={
                 "error": "Internal Server Error",
                 "message": str(exc),
+                "detail": tb,
                 "path": str(request.url),
             },
         )

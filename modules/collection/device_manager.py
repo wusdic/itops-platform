@@ -354,7 +354,7 @@ class DeviceManager:
                 device = session.query(Device).filter(Device.name == device_name).first()
                 if device:
                     old_status = device.status
-                    device.status = str(db_status)  # 使用字符串值而非枚举对象
+                    device.status = str(db_status.value).upper() if hasattr(db_status, 'value') else str(db_status)  # DB 用大写 ENUM 值
                     device.last_status_check = datetime.now()
                     session.commit()
 

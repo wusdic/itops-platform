@@ -8,8 +8,8 @@
 
 溯源验证：
   用户提供 watermark_id → 反查 operation_logs → 验证操作未被篡改
-  watermark_id 格式：{action}:{resource}:{resource_id}:{operator}:{timestamp}:{hmac_prefix}
-  示例：update:device:dev-001:admin:1779554818:a1b2c3d4e5f6
+  watermark_id 格式：{action}|{resource}|{resource_id}|{operator}|{timestamp}|{hmac_prefix}
+  示例：update|device|dev-001|admin|1779554818|a1b2c3d4e5f6
 """
 
 import hmac
@@ -45,7 +45,7 @@ def generate_watermark(
         timestamp = time.time()
 
     # 构造消息
-    msg = f"{action}:{resource}:{resource_id}:{operator}:{int(timestamp)}"
+    msg = f"{action}|{resource}|{resource_id}|{operator}|{int(timestamp)}"
     h = hmac.new(
         WATERMARK_SECRET.encode(),
         msg.encode(),
@@ -66,19 +66,21 @@ def verify_watermark(watermark_id: str) -> Dict[str, Any]:
     Returns:
         {"valid": True/False, "reason": "...", "details": {...}}
     """
-    parts = watermark_id.split(":")
-    if len(parts) != 6:
+    # 水印格式：{action}|{resource}|{resource_id}|{operator}|{timestamp}:{hmac_prefix}
+    parts = watermark_id.split("|")
+    if len(parts) != 5:
         return {"valid": False, "reason": "水印格式错误"}
 
-    action, resource, resource_id, operator, ts_str, hmac_prefix = parts
+    action, resource, resource_id, operator, last = parts
+    ts_str, hmac_prefix = last.rsplit(":", 1)
 
     try:
         ts = int(ts_str)
     except ValueError:
         return {"valid": False, "reason": "时间戳格式错误"}
 
-    # 重建消息并重新计算 HMAC
-    msg = f"{action}:{resource}:{resource_id}:{operator}:{ts}"
+    # 重建消息并重新计算 HMAC（必须用 | 分隔，与 generate_watermark 一致）
+    msg = f"{action}|{resource}|{resource_id}|{operator}|{ts}"
     expected_hmac = hmac.new(
         WATERMARK_SECRET.encode(),
         msg.encode(),
@@ -110,20 +112,18 @@ def verify_watermark(watermark_id: str) -> Dict[str, Any]:
 
 def parse_watermark(watermark_id: str) -> Optional[Dict[str, str]]:
     """解析水印 ID 各字段（不验证）"""
-    parts = watermark_id.split(":")
-    if len(parts) != 6:
+    parts = watermark_id.split("|")
+    if len(parts) != 5:
         return None
-    action, resource, resource_id, operator, ts_str, _ = parts
-    try:
-        return {
-            "action": action,
-            "resource": resource,
-            "resource_id": resource_id,
-            "operator": operator,
-            "timestamp": ts_str,
-        }
-    except ValueError:
-        return None
+    action, resource, resource_id, operator, last = parts
+    ts_str, _ = last.rsplit(":", 1)
+    return {
+        "action": action,
+        "resource": resource,
+        "resource_id": resource_id,
+        "operator": operator,
+        "timestamp": ts_str,
+    }
 
 
 def batch_generate_watermarks(
