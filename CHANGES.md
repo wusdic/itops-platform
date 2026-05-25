@@ -1,6 +1,111 @@
 # ITOps Platform 代码修改记录
 
-## 2026-05-25 第三次更新 — 修复 workorders 尾随斜杠 + discovery scan-history
+## 2026-05-26 第四次更新 — 前后端 API 路径对齐 + layout CSS 修复
+
+### 修改概述
+
+本次为规模最大的一次前后端 API 路径对齐，涉及 **21 个文件**，解决了"后端接口存在但前端路径错"导致的页面空白/假数据问题。
+
+### layout CSS 修复
+
+- **文件**: `frontend/src/views/layout/index.vue`
+- **根因**: `.layout` 是 `el-container`，默认 `flex-direction: column`，导致 mobile-header、aside、main 三者垂直堆叠
+- **修复**: 加上 `flex-direction: row`，aside 和 main 正确左右排列
+- **验证**: Ctrl+Shift+R 刷新浏览器，左侧 64px 图标侧边栏 + 右侧内容区左右两栏 ✅
+
+### API 路径修复汇总
+
+#### P0-1b: monitoring/maintenance.vue
+- `reason` → `description`，补 `target_type=device`，`device_id` → `target_id`
+- 实测 `POST /maintenance-windows` 200 ✅
+
+#### P0-1c: monitoring/triggers.vue test 端点
+- 后端 `test` 端点接受 UUID 和整数 ID，前端用 `row.id` 实际正常，报告误报
+
+#### P0-2a: discovery targets.vue import hosts
+- `/import/hosts` → `/discovery/devices/import`，实测 200 ✅
+
+#### P0-2b: discovery targets.vue import 请求体
+- `{ips: JSON.stringify(...)}` → `{ips: [...]}`，实测 200 ✅
+
+#### P0-2c: discovery targets.vue ARP 扫描轮询
+- 后端 `/arp/scan` 是**同步**返回（无 task_id），前端错误做了轮询
+- 修复：直接使用 startRes.json() 结果，移除轮询逻辑
+
+#### P0-2d: discovery scan.vue PUT/DELETE networks
+- 后端参数名 `network_id` 但实际接受整数 ID，路径 `/networks/${id}` 匹配，报告误报
+
+#### P0-3: knowledge.js recommendSimilar
+- `/similar` → `/recommend-similar`，旧路径 404，新路径 200（AI 超时正常）
+
+#### P0-4: inspection.js 3处路径
+- `getByTaskId`: `/inspection/tasks/${taskId}/results` → `/inspection/results/${taskId}` ✅ 200
+- `exportTaskReport`: 路径已正确（之前报告写反了）
+
+#### P0-5: automation.js evaluate
+- 后端用 Query 参数，改为 `request.post('/automation/evaluate', null, { params: data })`
+- 实测 Query 200，body 422（证明修复生效）
+
+#### P0-6: automation.js checkpoint
+- 后端无此 API，已从 API 文件中删除（死代码）
+
+#### P0-7: backup 模块完全重构
+- `api/index.js`: 6 个函数重写，字段映射 `type→backup_type`，`status→completed/failed/running`，`operator→created_by`，`backup_at→created_at`
+- `restore.vue`: 完全重写，支持新建备份（full/incremental/manual）、restore 操作，download 降级为"开发中"
+- `list.vue`: 完全重写，列表+详情弹窗，实时状态展示
+- 实测 `POST /admin/backups` ✅ 200，`POST /admin/backups/{id}/restore` ✅ 200
+
+#### P0-8: workorder.js analyze API
+- `analyzeRootCause`/`analyzeRemediation` 从 body 改为 query 参数，移除路径中的 `{id}`
+- 实测 `POST /workorders/analyze/root-cause?workorder_id=X` ✅ 200
+
+#### P0-9: role.vue 删除权限分配功能
+- 后端不存在 `/roles/{id}/permissions` API，删除相关所有代码
+
+#### P0-10: logs.vue cleanup 路径
+- `/logs/cleanup` → `/admin/logs/cleanup`，实测 200 ✅ `{"status":"ok","message":"日志清理完成"}`
+
+#### P1-1: monitoring/maintenance.vue
+- 移除 mock 数据、修复 `status`→`is_active` 参数、移除不支持的 `keyword` 参数
+
+#### P1-3: system/dict.vue + system/menu.vue
+- dict.vue: `handleItems` 从 mock 改为调用 `GET /admin/dict/all-items?type_id=X` API，完整实现增删改
+- menu.vue: fallback 图标从无效名改为有效 key
+
+#### P1-4: notification/message.vue
+- 3处路径修复：`/notifications/history` → `/notifications/messages`
+- 4处静默 catch 改为 `ElMessage.error`
+
+#### P1-5: ai/analyze.vue
+- 删除"保存记录"按钮（后端无 API），清理 `handleSave` 死代码
+
+#### layout/index.vue 修改密码 + 通知计数
+- 修改密码：实现 `PUT /auth/password` 对话框（后端存在该 API）
+- 个人中心：后端无 `GET /auth/me`，改为 `ElMessage.warning('该功能暂不可用')`
+- 通知计数：`getHistory()` → `getMessages()`
+
+### Git 提交记录
+
+| Commit | 描述 | 文件数 |
+|--------|------|--------|
+| a48a35b | fix: 前后端API路径对齐 + 功能完整性修复 | 21 files |
+| 64cbb7b | feat: 实现修改密码功能 + 修复通知计数路径 | 2 files |
+| 7303975 | fix: 修复layout CSS - sidebar与main同排显示 | 1 file |
+| 5bc8cb5 | fix: 补充layout CSS flex-direction:row | 1 file |
+
+### 已知遗留问题
+
+| 问题 | 说明 |
+|------|------|
+| **P1-10 仪表盘自定义布局** | 后端 `dashboard/persistence.py` 已实现，但前端 `dashboard/index.vue` 仍调用不存在的 API（`getDashboardLayout`/`saveDashboardLayout`）。需前端改造或禁用该按钮。 |
+| **P2 架构问题（28+项）** | 分片路由、deployment 文件、容器网络、MinIO 配置等，需单独 Track 处理。 |
+| **个人中心** | 后端无 `GET /auth/me`，已改为占位提示。 |
+| **AI 保存分析记录** | 后端无对应 API，按钮已删除。 |
+| **适配器管理 / 参数配置** | 未逐一验证，可能为占位页面。 |
+| **LDAP SSO** | 后端 `ldap_client.py` 已实现，需接入 `api/routes/auth.py` 登录流程（P1-11）。 |
+| **系统备份恢复** | MinIO backup 方法已实现，需新建 `api/routes/backup.py` 对接 `backup_manager.py`（P1-12）。 |
+
+---
 
 ### 后端代码修复
 

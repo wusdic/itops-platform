@@ -3,8 +3,7 @@
 > **本部署方案完全不依赖 Docker**。所有服务直接运行在物理机上，使用 systemd 管理进程、MySQL 存储数据、Nginx 反向代理。
 >
 > **本项目有两个代码仓库：**
-> - [wusdic/itops_platform](https://github.com/wusdic/itops_platform) — 开发版（含 Docker 开发环境）
-> - [wusdic/itops-deploy](https://github.com/wusdic/itops-deploy) — 生产物理机部署版（本文档）
+> - [wusdic/itops_platform](https://github.com/wusdic/itops_platform) — 主代码库（含 Docker 开发环境 + 前端 + 后端 + 部署脚本）
 
 ---
 

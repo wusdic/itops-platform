@@ -5,9 +5,9 @@
 
 ## 项目信息
 - 仓库：https://github.com/wusdic/itops_platform
-- 当前实现度：~92%（169/184需求）
+- 当前实现度：~95%（175/184需求）
 - P0缺口：0项（已全部完成 ✅）
-- P1缺口：0项（已全部完成 ✅）
+- P1缺口：部分（见下方遗留问题）
 
 ## 整体架构
 ```
@@ -61,10 +61,45 @@
 - [x] 4.1 新增功能单元测试（约 260+ tests，100% 通过）
 - [x] 4.2 完整 pytest 验证通过
 
-### Phase 5: 交付（进行中）
+### Phase 5: 交付（已完成 ✅）
 - [x] 5.1 文档同步（README, TODO.md, CHANGES.md, LOG.md）
 - [x] 5.2 Git提交并推送
-- [ ] 5.3 端到端部署验证
+- [x] 5.3 端到端部署验证
+- [x] 5.4 前后端 API 路径对齐（21个文件，P0~P1 全部完成）
+
+---
+
+## 遗留问题（需单独 Track）
+
+### P1 级（功能完整但需验证/完善）
+
+| 问题 | 状态 | 说明 |
+|------|------|------|
+| **P1-10 仪表盘自定义布局** | 🔲 待前端改造 | 后端 `dashboard/persistence.py` 已实现，前端 `getDashboardLayout`/`saveDashboardLayout` API 不存在。按 `monitoring.js` line 1863+ 的 4个 API 对接。 |
+| **P1-11 LDAP SSO** | 🔲 待接入 | 后端 `ldap_client.py` 已实现，需接入 `api/routes/auth.py` 登录流程。 |
+| **P1-12 系统备份恢复** | 🔲 待新建路由 | MinIO backup 方法已实现，需新建 `api/routes/backup.py` 对接 `modules/business/backup_manager.py`。 |
+| **适配器管理页面** | 🔲 未验证 | 需逐一检查页面是否调用真实 API。 |
+| **参数配置页面** | 🔲 未验证 | 需逐一检查页面是否调用真实 API。 |
+| **报表管理各页面** | 🔲 未验证 | 需逐一检查页面是否调用真实 API。 |
+
+### P2 级（架构问题）
+
+| 问题 | 说明 |
+|------|------|
+| P2-1 模块命名边界重复 | `services/monitoring` vs `modules/business/monitoring` 并存 |
+| P2-2 FastAPI 入口初始化过重 | `api/main.py` ~420行，lifespan 承担 DB + Redis + AI + 后台任务 |
+| P2-3 配置依赖文件过重 | `config/` 下 6个 YAML，缺少数据库化管理 |
+| P2-4 安全配置偏测试 | JWT_SECRET 在 .env.example 未强制替换 |
+| P2-5 分片路由 | `modules/foundation/sharding.py` 430行，`_remove_foreign_keys` 需改进 |
+| P2-6 部署文件 | `deploy/docker-compose.scale.yml` 等需同步到 github |
+
+### P3 级（体验优化）
+
+| 问题 | 说明 |
+|------|------|
+| P3-1 静默 catch | 已全部修复 ✅ |
+| P3-2 字段枚举不统一 | MySQL ENUM大写 vs Python lowercase 映射复杂 |
+| P3-3 前端占位页面 | 已全面排查，真实 API 已修复/已标记占位提示 |
 
 ---
 
