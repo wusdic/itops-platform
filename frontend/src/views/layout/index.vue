@@ -353,6 +353,7 @@ onUnmounted(() => {
 .layout {
   height: 100vh;
   display: flex;
+  flex-direction: row;
 }
 
 .main {
