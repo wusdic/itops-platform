@@ -15,19 +15,9 @@
 
     <!-- Filter Bar -->
     <div class="filter-bar">
-      <el-input
-        v-model="searchKeyword"
-        placeholder="搜索维护时段名称"
-        clearable
-        style="width: 240px"
-        @keyup.enter="loadData"
-      >
-        <template #prefix><el-icon><Search /></el-icon></template>
-      </el-input>
       <el-select v-model="filterStatus" placeholder="状态" clearable style="width: 140px" @change="loadData">
-        <el-option label="计划中" value="scheduled" />
-        <el-option label="进行中" value="active" />
-        <el-option label="已结束" value="ended" />
+        <el-option label="已启用" :value="true" />
+        <el-option label="已禁用" :value="false" />
       </el-select>
       <el-button @click="loadData" :loading="loading">
         <el-icon><Refresh /></el-icon> 刷新
@@ -117,8 +107,7 @@ const tableData = ref([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const searchKeyword = ref('')
-const filterStatus = ref('')
+const filterStatus = ref(null)
 
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -163,15 +152,16 @@ const loadDevices = async () => {
       const data = await res.json()
       deviceOptions.value = data.items || data.data?.items || []
     }
-  } catch (e) { /* silent */ }
+  } catch (e) {
+    ElMessage.error('加载设备列表失败')
+  }
 }
 
 const loadData = async () => {
   loading.value = true
   try {
     const params = { page: page.value, page_size: pageSize.value }
-    if (searchKeyword.value) params.keyword = searchKeyword.value
-    if (filterStatus.value) params.status = filterStatus.value
+    if (filterStatus.value) params.is_active = filterStatus.value
 
     const res = await maintenanceWindows.getList(params)
     const data = res.data || {}
@@ -184,14 +174,8 @@ const loadData = async () => {
       total.value = data.total || tableData.value.length
     }
   } catch (e) {
-    ElMessage.error('加载失败: ' + e.message)
-    // Mock data
-    tableData.value = [
-      { id: 1, name: '服务器例行维护', device_name: 'Web Server 01', device_ip: '192.168.1.10', start_time: '2026-05-26T02:00:00Z', end_time: '2026-05-26T06:00:00Z', status: 'scheduled', reason: '系统升级' },
-      { id: 2, name: '数据库维护窗口', device_name: 'DB Master', device_ip: '192.168.1.20', start_time: '2026-05-25T22:00:00Z', end_time: '2026-05-26T02:00:00Z', status: 'active', reason: '数据迁移' },
-      { id: 3, name: '网络设备维护', device_name: 'Core Switch', device_ip: '192.168.1.1', start_time: '2026-05-24T00:00:00Z', end_time: '2026-05-24T04:00:00Z', status: 'ended', reason: '固件更新' }
-    ]
-    total.value = 3
+    ElMessage.error('加载失败: ' + (e.message || '未知错误'))
+    tableData.value = []
   } finally {
     loading.value = false
   }
@@ -223,7 +207,16 @@ const handleSave = async () => {
 
   saveLoading.value = true
   try {
-    const data = { ...form }
+    // 字段映射：前端 form 字段 → 后端 MaintenanceWindowCreate 字段
+    const data = {
+      name: form.name,
+      description: form.reason,          // reason → description
+      target_type: 'device',             // 必填，固定为 device
+      target_id: String(form.device_id),  // device_id → target_id (string)
+      start_time: form.start_time,
+      end_time: form.end_time,
+      is_active: true
+    }
     if (isEdit.value) {
       await maintenanceWindows.update(currentId.value, data)
       ElMessage.success('更新成功')

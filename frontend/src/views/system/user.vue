@@ -186,8 +186,8 @@ async function loadData() {
   try {
     const token = localStorage.getItem('token') || ''
     const params = new URLSearchParams({ page: pagination.page, page_size: pagination.pageSize })
-    if (filterStatus.value) params.append('status', filterStatus.value)
-    if (searchKeyword.value) params.append('search', searchKeyword.value)
+    if (filterStatus.value) params.append('is_active', filterStatus.value)
+    if (searchKeyword.value) params.append('keyword', searchKeyword.value)
     const res = await fetch(`/api/v1/admin/users?${params}`, {
       headers: { Authorization: `Bearer ${token}` }
     })

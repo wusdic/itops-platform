@@ -119,7 +119,7 @@ async function loadTypes() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     notificationTypes.value = data.types || []
-  } catch (_) {}
+  } catch (e) { ElMessage.error('加载通知类型失败') }
 }
 
 function getAlertType(type) {

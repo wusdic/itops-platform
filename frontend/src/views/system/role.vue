@@ -20,7 +20,6 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="handlePermission(row)">权限</el-button>
             <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
             <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -59,23 +58,6 @@
       </template>
     </el-dialog>
 
-    <!-- 权限分配 -->
-    <el-dialog v-model="permDialogVisible" title="分配权限" width="600px">
-      <el-tree
-        ref="permissionTreeRef"
-        :data="permissionTree"
-        show-checkbox
-        node-key="key"
-        :props="{ label: 'label', children: 'children' }"
-        :default-expand-all="true"
-        :default-checked-keys="defaultCheckedKeys"
-        @check="handlePermissionCheck"
-      />
-      <template #footer>
-        <el-button @click="permDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitPermission" :loading="permSubmitting">保存权限</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -86,15 +68,10 @@ import { Plus } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const submitting = ref(false)
-const permSubmitting = ref(false)
 const isEdit = ref(false)
 const roleList = ref([])
 const dialogVisible = ref(false)
-const permDialogVisible = ref(false)
 const dialogTitle = ref('添加角色')
-const currentRoleId = ref(null)
-const currentCheckedKeys = ref([])
-const permissionTreeRef = ref(null)
 const formRef = ref(null)
 
 const pagination = reactive({
@@ -109,66 +86,6 @@ const rules = {
   name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
   code: [{ required: true, message: '请输入角色编码', trigger: 'blur' }]
 }
-
-const permissionTree = ref([
-  {
-    key: 'root',
-    label: '全部权限',
-    children: [
-      { key: 'dashboard', label: '仪表盘', children: [
-        { key: 'dashboard:view', label: '查看' },
-        { key: 'dashboard:export', label: '导出' }
-      ]},
-      { key: 'monitoring', label: '监控中心', children: [
-        { key: 'monitoring:device', label: '设备管理', children: [
-          { key: 'monitoring:device:view', label: '查看' },
-          { key: 'monitoring:device:edit', label: '编辑' },
-          { key: 'monitoring:device:delete', label: '删除' }
-        ]},
-        { key: 'monitoring:alert', label: '告警管理', children: [
-          { key: 'monitoring:alert:view', label: '查看' },
-          { key: 'monitoring:alert:handle', label: '处理' }
-        ]},
-        { key: 'monitoring:perf', label: '性能监控', children: [
-          { key: 'monitoring:perf:view', label: '查看' }
-        ]}
-      ]},
-      { key: 'workorder', label: '工单管理', children: [
-        { key: 'workorder:view', label: '查看' },
-        { key: 'workorder:create', label: '创建' },
-        { key: 'workorder:process', label: '处理' },
-        { key: 'workorder:close', label: '关闭' }
-      ]},
-      { key: 'system', label: '系统管理', children: [
-        { key: 'system:user', label: '用户管理', children: [
-          { key: 'system:user:view', label: '查看' },
-          { key: 'system:user:edit', label: '编辑' },
-          { key: 'system:user:delete', label: '删除' }
-        ]},
-        { key: 'system:role', label: '角色管理', children: [
-          { key: 'system:role:view', label: '查看' },
-          { key: 'system:role:edit', label: '编辑' },
-          { key: 'system:role:delete', label: '删除' },
-          { key: 'system:role:permission', label: '权限分配' }
-        ]},
-        { key: 'system:menu', label: '菜单管理', children: [
-          { key: 'system:menu:view', label: '查看' },
-          { key: 'system:menu:edit', label: '编辑' }
-        ]}
-      ]},
-      { key: 'ai', label: 'AI 助手', children: [
-        { key: 'ai:chat', label: 'AI 聊天' },
-        { key: 'ai:copilot', label: 'AI 分类' }
-      ]},
-      { key: 'knowledge', label: '知识库', children: [
-        { key: 'knowledge:view', label: '查看' },
-        { key: 'knowledge:edit', label: '编辑' }
-      ]}
-    ]
-  }
-])
-
-const defaultCheckedKeys = ref([])
 
 async function loadData() {
   loading.value = true
@@ -220,68 +137,6 @@ function handleDelete(row) {
         ElMessage.error(`删除失败: ${e.message}`)
       }
     }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
-}
-
-// 打开权限分配弹窗
-async function handlePermission(row) {
-  currentRoleId.value = row.id
-  currentCheckedKeys.value = []
-  permDialogVisible.value = true
-
-  // 加载该角色的现有权限
-  try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/admin/roles/${row.id}/permissions`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) {
-      if (res.status !== 404) throw new Error(`HTTP ${res.status}`)
-      // API 不存在，使用默认空权限
-      defaultCheckedKeys.value = []
-    } else {
-      const data = await res.json()
-      defaultCheckedKeys.value = data.permissions || data.data?.permissions || []
-      currentCheckedKeys.value = [...defaultCheckedKeys.value]
-    }
-  } catch (e) {
-    defaultCheckedKeys.value = []
-    currentCheckedKeys.value = []
-  }
-}
-
-// 权限勾选变化
-function handlePermissionCheck(data, checked) {
-  currentCheckedKeys.value = checked.checkedKeys
-}
-
-// 提交权限
-async function submitPermission() {
-  if (!currentRoleId.value) return
-  permSubmitting.value = true
-  try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/admin/roles/${currentRoleId.value}/permissions`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ permissions: currentCheckedKeys.value })
-    })
-    if (!res.ok) {
-      if (res.status !== 404) throw new Error(`HTTP ${res.status}`)
-      throw new Error('API_NOT_FOUND')
-    }
-    ElMessage.success('权限分配成功')
-    permDialogVisible.value = false
-  } catch (e) {
-    if (e.message === 'API_NOT_FOUND') {
-      // 模拟成功（本地演示）
-      ElMessage.success('权限分配成功（API不存在，演示模式）')
-      permDialogVisible.value = false
-    } else {
-      ElMessage.error(`权限分配失败: ${e.message}`)
-    }
-  } finally {
-    permSubmitting.value = false
-  }
 }
 
 async function submitForm() {

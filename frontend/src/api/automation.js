@@ -31,8 +31,7 @@ const automation = {
     getById: (id) => request.get(`/automation/executions/${id}`),
     getLogs: (id, params) => request.get(`/automation/executions/${id}/logs`, { params }),
     getSnapshot: (id) => request.get(`/automation/executions/${id}/snapshot`),
-    rollback: (id) => request.post(`/automation/executions/${id}/rollback`),
-    checkpoint: (id) => request.post(`/automation/executions/${id}/checkpoint`)
+    rollback: (id) => request.post(`/automation/executions/${id}/rollback`)
   },
 
   // ========== 触发规则 ==========
@@ -51,7 +50,7 @@ const automation = {
   },
 
   // ========== 其他 ==========
-  evaluate: (data) => request.post('/automation/evaluate', data)
+  evaluate: (data) => request.post('/automation/evaluate', null, { params: data })
 }
 
 export default automation

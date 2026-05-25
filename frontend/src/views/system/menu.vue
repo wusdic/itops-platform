@@ -163,39 +163,39 @@ async function loadMenus() {
     })
   } catch {
     menuTree.value = [
-      { key: 'dashboard', label: '仪表盘', iconName: 'GridOutline', path: '/dashboard', sort: 0 },
-      { key: 'monitoring', label: '监控中心', iconName: 'ServerOutline', sort: 1, children: [
+      { key: 'dashboard', label: '仪表盘', iconName: 'DataBoard', path: '/dashboard', sort: 0 },
+      { key: 'monitoring', label: '监控中心', iconName: 'Monitor', sort: 1, children: [
         { key: '/monitoring/devices', label: '设备监控', path: '/monitoring/devices', sort: 0 },
         { key: '/monitoring/alerts', label: '告警管理', path: '/monitoring/alerts', sort: 1 },
         { key: '/monitoring/performance', label: '性能监控', path: '/monitoring/performance', sort: 2 },
         { key: '/management/vendor-credentials', label: '厂商账密', path: '/management/vendor-credentials', sort: 3 },
       ]},
-      { key: 'workorder', label: '工单管理', iconName: 'ConstructOutline', sort: 2, children: [
+      { key: 'workorder', label: '工单管理', iconName: 'Tickets', sort: 2, children: [
         { key: '/workorder/list', label: '工单列表', path: '/workorder/list', sort: 0 },
         { key: '/workorder/create', label: '创建工单', path: '/workorder/create', sort: 1 },
         { key: '/workorder/my', label: '我的工单', path: '/workorder/my', sort: 2 },
       ]},
-      { key: 'ai', label: 'AI助手', iconName: 'FlashOutline', sort: 4, children: [
+      { key: 'ai', label: 'AI助手', iconName: 'MagicStick', sort: 4, children: [
         { key: '/ai/chat', label: 'AI聊天', path: '/ai/chat', sort: 0 },
         { key: '/ai/copilot', label: '知识库问答', path: '/ai/copilot', sort: 1 },
         { key: '/ai/analyze', label: '智能分析', path: '/ai/analyze', sort: 2 },
       ]},
-      { key: 'automation', label: '自动化', iconName: 'FlashOutline', sort: 5, children: [
+      { key: 'automation', label: '自动化', iconName: 'Lightning', sort: 5, children: [
         { key: '/automation/script', label: '脚本管理', path: '/automation/script', sort: 0 },
         { key: '/automation/task', label: '任务调度', path: '/automation/task', sort: 1 },
         { key: '/automation/evaluate', label: '指标评估', path: '/automation/evaluate', sort: 2 },
         { key: '/automation/execute', label: '执行记录', path: '/automation/execute', sort: 3 },
       ]},
-      { key: 'backup', label: '备份管理', iconName: 'DocumentTextOutline', sort: 6, children: [
+      { key: 'backup', label: '备份管理', iconName: 'Document', sort: 6, children: [
         { key: '/backup/list', label: '备份记录', path: '/backup/list', sort: 0 },
         { key: '/backup/restore', label: '恢复管理', path: '/backup/restore', sort: 1 },
       ]},
-      { key: 'notification', label: '消息中心', iconName: 'SettingsOutline', sort: 7, children: [
+      { key: 'notification', label: '消息中心', iconName: 'Bell', sort: 7, children: [
         { key: '/notification/message', label: '我的消息', path: '/notification/message', sort: 0 },
         { key: '/notification/history', label: '消息历史', path: '/notification/history', sort: 1 },
         { key: '/notification/config', label: '通知配置', path: '/notification/config', sort: 2 },
       ]},
-      { key: 'system', label: '系统管理', iconName: 'SettingsOutline', sort: 99, children: [
+      { key: 'system', label: '系统管理', iconName: 'Setting', sort: 99, children: [
         { key: '/system/user', label: '用户管理', path: '/system/user', sort: 0 },
         { key: '/system/role', label: '角色管理', path: '/system/role', sort: 1 },
         { key: '/system/menu', label: '菜单管理', path: '/system/menu', sort: 2 },
@@ -204,7 +204,7 @@ async function loadMenus() {
         { key: '/system/logs', label: '日志查看', path: '/system/logs', sort: 5 },
         { key: '/system/adapters', label: '适配器管理', path: '/system/adapters', sort: 6 },
       ]},
-      { key: 'report', label: '报表管理', iconName: 'DocumentTextOutline', sort: 100, children: [
+      { key: 'report', label: '报表管理', iconName: 'TrendCharts', sort: 100, children: [
         { key: '/report/list', label: '报表管理', path: '/report/list', sort: 0 },
         { key: '/report/create', label: '生成报表', path: '/report/create', sort: 1 },
         { key: '/report/template', label: '模板管理', path: '/report/template', sort: 2 },

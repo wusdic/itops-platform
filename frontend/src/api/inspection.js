@@ -15,14 +15,14 @@ const inspection = {
 
   // ========== 巡检结果 ==========
   results: {
-    getByTaskId: (taskId, params) => request.get(`/inspection/tasks/${taskId}/results`, { params })
+    getByTaskId: (taskId, params) => request.get(`/inspection/results/${taskId}`, { params })
   },
 
   // ========== 巡检报告 ==========
   reports: {
-    getByTaskId: (taskId, params) => request.get(`/inspection/tasks/${taskId}/reports`, { params }),
+    getByTaskId: (taskId, params) => request.get(`/inspection/reports/${taskId}`, { params }),
     getTemplate: (params) => request.get('/inspection/reports/template', { params }),
-    export: (taskId, params) => request.get(`/inspection/tasks/${taskId}/reports/export`, { params, responseType: 'blob' })
+    export: (taskId, params) => request.get(`/inspection/reports/${taskId}/export`, { params, responseType: 'blob' })
   },
 
   // ========== 统计 ==========

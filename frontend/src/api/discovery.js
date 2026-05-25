@@ -16,16 +16,15 @@ const discovery = {
   // ========== 扫描 ==========
   scan: {
     scan: (data) => request.post('/discovery/scan', data),
-    scanAndImport: (data) => request.post('/discovery/scan/import', data),
-    scanAndImportStream: (data) => request.post('/discovery/scan/import/stream', data),
-    getHistory: (params) => request.get('/discovery/scan/history', { params }),
+    scanAndImport: (data) => request.post('/discovery/scan-and-import', data),
+    scanAndImportStream: (data) => request.post('/discovery/scan-and-import-stream', data),
+    getHistory: (params) => request.get('/discovery/scan-history', { params }),
 
-    // IP 扫描
-    scanIp: (data) => request.post('/discovery/scan/ip', data),
+    scanIp: (data) => request.post('/discovery/ip/scan', data),
     // SNMP 扫描
-    scanSnmp: (data) => request.post('/discovery/scan/snmp', data),
+    scanSnmp: (data) => request.post('/discovery/snmp/scan', data),
     // ARP 扫描
-    scanArp: (data) => request.post('/discovery/scan/arp', data)
+    scanArp: (data) => request.post('/discovery/arp/scan', data)
   },
 
   // ========== 导入 ==========

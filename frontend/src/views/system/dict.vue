@@ -81,14 +81,16 @@
 
     <!-- 字典项管理 -->
     <el-dialog v-model="itemsDialogVisible" title="字典项管理" width="700px">
-      <el-table :data="dictItems" style="width: 100%">
+      <el-table :data="dictItems" style="width: 100%" v-loading="itemsLoading">
         <el-table-column prop="label" label="标签" min-width="120" />
         <el-table-column prop="value" label="值" min-width="120" />
-        <el-table-column prop="sort" label="排序" width="80" />
+        <el-table-column prop="sort_order" label="排序" width="80">
+          <template #default="{ row }">{{ row.sort_order || row.sort || 0 }}</template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.status === '1' ? 'success' : 'danger'" size="small">
-              {{ row.status === '1' ? '启用' : '禁用' }}
+            <el-tag :type="(row.status === '1' || row.status === 'active') ? 'success' : 'danger'" size="small">
+              {{ (row.status === '1' || row.status === 'active') ? '启用' : '禁用' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -103,6 +105,31 @@
         <el-button type="primary" size="small" @click="handleAddItem">添加字典项</el-button>
       </template>
     </el-dialog>
+
+    <!-- 字典项编辑弹窗 -->
+    <el-dialog v-model="itemDialogVisible" :title="currentEditingItem.id ? '编辑字典项' : '添加字典项'" width="400px">
+      <el-form :model="currentEditingItem" label-width="80px" label-position="left">
+        <el-form-item label="标签" required>
+          <el-input v-model="currentEditingItem.label" placeholder="请输入显示标签" />
+        </el-form-item>
+        <el-form-item label="值" required>
+          <el-input v-model="currentEditingItem.value" placeholder="请输入字典值" />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="currentEditingItem.sort_order" :min="0" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="currentEditingItem.status" style="width: 100%">
+            <el-option label="启用" value="1" />
+            <el-option label="禁用" value="0" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="itemDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitItemForm">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -112,6 +139,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
 const loading = ref(false)
+const itemsLoading = ref(false)
 const searchKeyword = ref('')
 const dictList = ref([])
 const dialogVisible = ref(false)
@@ -192,18 +220,92 @@ const handleDelete = (row) => {
     }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
 }
 
-const handleItems = (row) => {
+// 字典项管理
+const handleItems = async (row) => {
   currentDictId.value = row.id
-  dictItems.value = [
-    { id: 1, label: '是', value: '1', sort: 1, status: '1' },
-    { id: 2, label: '否', value: '0', sort: 2, status: '1' }
-  ]
   itemsDialogVisible.value = true
+  itemsLoading.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/v1/admin/dict/all-items?type_id=${row.id}&page=1&page_size=100`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error('请求失败')
+    const data = await res.json()
+    dictItems.value = (data.items || []).map(item => ({
+      ...item,
+      status: item.status === 'active' ? '1' : '0'
+    }))
+  } catch (error) {
+    ElMessage.error('加载字典项失败')
+    dictItems.value = []
+  } finally {
+    itemsLoading.value = false
+  }
 }
 
-const handleAddItem = () => { ElMessage.info('字典项管理功能需后端提供独立 API 接口支持') }
-const handleEditItem = (row) => { ElMessage.info(`编辑字典项「${row.label}」（${row.value}）需后端 API 支持`) }
-const handleDeleteItem = (row) => { ElMessage.info(`删除字典项「${row.label}」需后端 API 支持`) }
+const handleAddItem = () => {
+  currentEditingItem.value = { id: null, label: '', value: '', sort_order: 0, status: '1' }
+  itemDialogVisible.value = true
+}
+
+const handleEditItem = (row) => {
+  currentEditingItem.value = { ...row }
+  itemDialogVisible.value = true
+}
+
+const handleDeleteItem = (row) => {
+  ElMessageBox.confirm(`确定删除字典项「${row.label}」吗?`, '提示', { type: 'warning' })
+    .then(async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`/api/v1/admin/dict/items/${row.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (!res.ok) throw new Error('删除失败')
+        ElMessage.success('删除成功')
+        handleItems({ id: currentDictId.value })
+      } catch (error) {
+        ElMessage.error('删除失败')
+      }
+    }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
+}
+
+const itemDialogVisible = ref(false)
+const currentEditingItem = ref({ id: null, label: '', value: '', sort: 0, status: '1' })
+
+const submitItemForm = async () => {
+  if (!currentEditingItem.value.label || !currentEditingItem.value.value) {
+    ElMessage.warning('请填写标签和值')
+    return
+  }
+  try {
+    const token = localStorage.getItem('token')
+    const payload = {
+      type_id: currentDictId.value,
+      label: currentEditingItem.value.label,
+      value: currentEditingItem.value.value,
+      sort_order: currentEditingItem.value.sort || 0,
+      status: currentEditingItem.value.status === '1' ? 'active' : 'inactive'
+    }
+    const url = currentEditingItem.value.id
+      ? `/api/v1/admin/dict/items/${currentEditingItem.value.id}`
+      : '/api/v1/admin/dict/all-items'
+    const method = currentEditingItem.value.id ? 'PUT' : 'POST'
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    })
+    if (!res.ok) throw new Error('操作失败')
+    ElMessage.success(currentEditingItem.value.id ? '更新成功' : '创建成功')
+    itemDialogVisible.value = false
+    handleItems({ id: currentDictId.value })
+  } catch (error) {
+    ElMessage.error('操作失败')
+  }
+}
 
 const submitForm = async () => {
   try {

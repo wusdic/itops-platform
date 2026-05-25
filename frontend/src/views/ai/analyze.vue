@@ -53,7 +53,6 @@
             <div class="result-footer">
               <el-space>
                 <el-button size="small" @click="handleCopy">复制结果</el-button>
-                <el-button size="small" type="primary" @click="handleSave">保存记录</el-button>
               </el-space>
             </div>
           </el-card>

@@ -130,7 +130,7 @@ const loadData = async () => {
       params.append('is_read', filterRead.value)
     }
 
-    const res = await fetchApi(`/api/v1/notifications/history?${params}`)
+    const res = await fetchApi(`/api/v1/notifications/messages?${params}`)
     if (res.items) {
       messages.value = res.items
       pagination.total = res.total || 0
@@ -172,18 +172,18 @@ const handleViewMessage = (msg) => {
 
 const handleMarkRead = async (msg) => {
   try {
-    await fetchApi(`/api/v1/notifications/history/${msg.id}/read`, { method: 'PUT' })
+    await fetchApi(`/api/v1/notifications/messages/${msg.id}/read`, { method: 'PUT' })
     msg.is_read = true
     ElMessage.success('已标为已读')
-  } catch (_) {}
+  } catch (e) { ElMessage.error('操作失败') }
 }
 
 const handleMarkAllRead = async () => {
   try {
-    await fetchApi('/api/v1/notifications/history/read-all', { method: 'PUT' })
+    await fetchApi('/api/v1/notifications/messages/read-all', { method: 'PUT' })
     ElMessage.success('全部已标为已读')
     loadData()
-  } catch (_) {}
+  } catch (e) { ElMessage.error('操作失败') }
 }
 
 onMounted(() => {

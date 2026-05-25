@@ -3,11 +3,8 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 
-// 全局样式（SCSS）
-import './styles/variables.scss'
-import './styles/common.scss'
-import './styles/element-plus-overrides.css'
-import './styles/global.scss'
+// Element Plus 全局样式
+import 'element-plus/dist/index.css'
 
 // Element Plus 中文语言包
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'

@@ -323,7 +323,7 @@ async function startScan() {
     while (true) {
       await new Promise(r => setTimeout(r, 1000))
 
-      const pollRes = await fetch(`/api/v1/discovery/scan-and-import-stream/${scan_id}`, {
+      const pollRes = await fetch(`/api/v1/discovery/scan/${scan_id}/status`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!pollRes.ok) continue

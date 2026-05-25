@@ -25,7 +25,7 @@ const knowledge = {
     create: (data) => request.post('/knowledge/fault-case', data),
     update: (id, data) => request.put(`/knowledge/fault-case/${id}`, data),
     delete: (id) => request.delete(`/knowledge/fault-case/${id}`),
-    recommendSimilar: (id, data) => request.post(`/knowledge/fault-case/${id}/similar`, data)
+    recommendSimilar: (id, data) => request.post(`/knowledge/fault-case/${id}/recommend-similar`, data)
   },
 
   // ========== 分类 ==========

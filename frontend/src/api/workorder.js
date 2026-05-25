@@ -41,8 +41,8 @@ export const workorder = {
   startSlaTimer: (id) => request.post(`/workorders/${id}/sla/timer/start`),
 
   // AI 分析
-  analyzeRootCause: (id, data) => request.post(`/workorders/${id}/analyze/root-cause`, data),
-  analyzeRemediation: (id, data) => request.post(`/workorders/${id}/analyze/remediation`, data)
+  analyzeRootCause: (data) => request.post('/workorders/analyze/root-cause', null, { params: data }),
+  analyzeRemediation: (data) => request.post('/workorders/analyze/remediation', null, { params: data })
 }
 
 export default workorder

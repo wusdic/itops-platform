@@ -486,7 +486,7 @@ function resetConfigs() {
 async function handleCleanup() {
   cleaning.value = true
   try {
-    await fetchApi('/logs/cleanup', { method: 'POST' })
+    await fetchApi('/admin/logs/cleanup', { method: 'POST' })
     ElMessage.success('过期日志已清理')
     await loadStats()
   } catch (e) {

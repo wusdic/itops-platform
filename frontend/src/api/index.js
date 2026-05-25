@@ -48,11 +48,13 @@ export const ai = {
   getStats: () => request.get('/ai/stats')
 }
 
-// 备份
+// 备份（新 BackupManager API）
 export const backup = {
-  getList: (params) => request.get('/admin/backup', { params }),
-  create: (data) => request.post('/admin/backup', data),
-  restore: (id, data) => request.post(`/admin/backup/${id}/restore`, data)
+  getList: (params) => request.get('/admin/backups', { params }),
+  getById: (id) => request.get(`/admin/backups/${id}`),
+  create: (data) => request.post('/admin/backups', data),
+  restore: (id, data) => request.post(`/admin/backups/${id}/restore`, data),
+  delete: (id) => request.delete(`/admin/backups/${id}`)
 }
 
 export { default as request } from './request'
