@@ -34,6 +34,7 @@ from .automation import (
 )
 from .menu import Menu
 from .dict_model import DictType, DictItem
+from .inspection import InspectionTask, InspectionResult, InspectionCheckItem
 
 __all__ = [
     'Base',
@@ -81,6 +82,9 @@ __all__ = [
     'Menu',
     'DictType',
     'DictItem',
+    'InspectionTask',
+    'InspectionResult',
+    'InspectionCheckItem',
 ]
 
 __version__ = '1.0.0'
