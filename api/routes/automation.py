@@ -253,16 +253,25 @@ async def delete_script(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """删除脚本（检查是否有 Task 引用）"""
+    """删除脚本（检查是否有 Task 或 Execution 引用）"""
     # 检查是否有任务引用
     task = db.query(AutomationTask).filter(AutomationTask.script_id == script_id).first()
     if task:
         raise HTTPException(status_code=400, detail=f"Script is used by task {task.name}, cannot delete")
 
+    # 检查是否有执行记录引用（script_id 是 NOT NULL + RESTRICT，必须先清理）
+    execution = db.query(AutomationExecution).filter(AutomationExecution.script_id == script_id).first()
+    if execution:
+        raise HTTPException(status_code=400, detail=f"Script has execution records, cannot delete. Please delete execution records first.")
+
     script = db.query(AutomationScript).filter(AutomationScript.id == script_id).first()
     if not script:
         raise HTTPException(status_code=404, detail=f"Script {script_id} not found")
 
+    # 手动按正确顺序删除关联记录（ORM cascade 可能触发 RESTRICT 冲突）
+    # 1. 删除版本记录（ondelete=CASCADE，数据库自动处理）
+    db.query(AutomationScriptVersion).filter(AutomationScriptVersion.script_id == script_id).delete()
+    # 2. 删除脚本
     db.delete(script)
     db.commit()
 

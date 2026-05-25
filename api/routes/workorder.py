@@ -162,6 +162,7 @@ def _workorder_to_dict(wo: WorkOrder) -> dict:
 
 # ============== 工单接口 ==============
 
+@router.get("", summary="获取工单列表")
 @router.get("/", summary="获取工单列表")
 async def get_workorders(
     status_filter: Optional[str] = Query(None, alias="status", description="状态过滤"),

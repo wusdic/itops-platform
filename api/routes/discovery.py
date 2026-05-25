@@ -677,6 +677,66 @@ async def get_scan_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ScanHistoryItem(BaseModel):
+    """扫描历史记录项"""
+    task_id: str
+    scan_type: str = Field(description="扫描类型: ip, snmp, arp")
+    network: Optional[str] = Field(None, description="扫描网段")
+    status: str = Field(description="状态: pending/running/completed/failed")
+    progress: int = Field(default=0, description="进度 0-100")
+    hosts_found: int = Field(default=0, description="发现主机数")
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    message: Optional[str] = None
+
+
+@router.get("/scan-history", summary="获取扫描历史列表")
+async def get_scan_history(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    scan_type: Optional[str] = Query(None, description="扫描类型过滤"),
+    status: Optional[str] = Query(None, description="状态过滤"),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    获取扫描历史记录列表（分页）
+    """
+    try:
+        # 扫描历史存于 Redis（key: scan:history）
+        from modules.storage.redis_client.client import RedisClient
+        redis = RedisClient()
+        raw = redis.lrange("scan:history", 0, -1) or []
+        
+        items = []
+        for entry in raw:
+            try:
+                items.append(ScanHistoryItem(**json.loads(entry)))
+            except Exception:
+                continue
+        
+        # 过滤
+        if scan_type:
+            items = [i for i in items if i.scan_type == scan_type]
+        if status:
+            items = [i for i in items if i.status == status]
+        
+        total = len(items)
+        # 分页
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_items = items[start:end]
+        
+        return {
+            "items": [i.model_dump() for i in page_items],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    except Exception as e:
+        logger.error(f"获取扫描历史失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/hosts", summary="获取发现的主机列表")
 async def get_discovered_hosts(
     status: Optional[str] = Query(None, description="状态过滤 (up/down)"),

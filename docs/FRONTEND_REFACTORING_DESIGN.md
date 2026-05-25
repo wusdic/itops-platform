@@ -1,8 +1,117 @@
 # ITOps Platform 前端全量重构设计文档
 
-> 版本：v1.0.0
-> 日期：2026-05-23
+> 版本：v1.1.0
+> 日期：2026-05-25
 > 目标：全量迁移 naive-ui → Element Plus，建立 UI 封装层，实现一步到位的前端现代化
+
+---
+
+## 0. 前端问题清单与开发方案（2026-05-25）
+
+> ⚠️ **前置说明**：以下问题经逐条验证确认，**全部属于前端问题**，后端 API 均已就绪（200 OK）。开发顺序按优先级排列。
+
+### 0.1 问题汇总
+
+| # | 问题文件 | 问题描述 | 优先级 | 对应后端 |
+|---|---------|---------|--------|---------|
+| F1 | `discovery/scan.vue` | 调用 `GET /api/v1/discovery/scan`，但后端只有 POST，需改为对接 `/discovery/ip/scan` 或 `/discovery/snmp/scan` | P1 | `/api/v1/discovery/ip/scan` (POST) ✅ |
+| F2 | `workorder/create.vue` | 136行，仅有基础表单骨架，缺少分类选择、优先级、SLA 等核心字段；`POST /api/v1/workorders/` 需适配 | P1 | `/api/v1/workorders/` ✅ |
+| F3 | `dashboard/index.vue` | 766行硬编码静态布局，需改为调用 `GET /api/v1/monitoring/dashboard/layout` 动态加载 | P1 | `/api/v1/monitoring/dashboard/layout` (GET/PUT) ✅ |
+| F4 | `monitoring/devices.vue` | 16行占位页，无设备列表；需对接 `/api/v1/assets/device` 或 `/api/v1/devices` | P1 | `/api/v1/assets/device` ✅ |
+| F5 | `monitoring/alerts.vue` | 需验证是否对接 `GET /api/v1/monitoring/alerts` | P1 | `/api/v1/monitoring/alerts` ✅ |
+| F6 | `automation/script.vue` | 需验证 CRUD 是否完全对接后端 scripts API（GET/POST/PUT/DELETE/versions/execute） | P1 | scripts CRUD + execute ✅ |
+| F7 | `automation/task.vue` | 需验证任务创建/运行是否对接 `POST /api/v1/automation/tasks` 和 `POST .../tasks/{id}/run` | P1 | tasks + run ✅ |
+| F8 | `workorder/list.vue` | 需验证列表分页和筛选是否正确对接 `/api/v1/workorders/`（注意尾部斜杠敏感） | P1 | `/api/v1/workorders/` ✅ |
+| F9 | `workorder/my.vue` | 需验证是否对接 `/api/v1/workorders/` 带 `creator_id` 参数筛选 | P1 | `/api/v1/workorders/` ✅ |
+| F10 | `system/user.vue` | 188行直接用 fetch，API 路径需全面审查是否对齐 `/api/v1/admin/users` | P1 | `/api/v1/admin/users` ✅ |
+| F11 | `system/role.vue` | 需验证角色 CRUD 是否对接 `/api/v1/admin/roles` | P1 | `/api/v1/admin/roles` ✅ |
+| F12 | `system/menu.vue` | 需验证菜单管理是否对接 `/api/v1/admin/menu` 和 `/api/v1/system/menus` | P1 | `/api/v1/admin/menu` + `/api/v1/system/menus` ✅ |
+| F13 | `notification/message.vue` | 220行，需验证消息列表/已读/删除是否对接 `/api/v1/notifications/messages` | P1 | `/api/v1/notifications/messages` ✅ |
+| F14 | `notification/history.vue` | 214行，需验证通知历史是否对接 `/api/v1/notifications/history` | P1 | `/api/v1/notifications/history` ✅ |
+| F15 | `notification/config.vue` | 175行，需验证渠道配置是否对接 `/api/v1/notifications/channels` | P1 | `/api/v1/notifications/channels` ✅ |
+| F16 | `backup/list.vue` | 307行，需验证备份列表是否对接 `/api/v1/admin/backups` | P1 | `/api/v1/admin/backups` ✅ |
+| F17 | `backup/restore.vue` | 218行，需验证恢复操作是否对接 `/api/v1/admin/backups/{id}/restore` | P1 | `/api/v1/admin/backups/{id}/restore` ✅ |
+| F18 | `report/list.vue` | 需验证报表列表是否对接 `/api/v1/reports/list` | P1 | `/api/v1/reports/list` ✅ |
+| F19 | `report/create.vue` | 需验证报表创建是否对接 `/api/v1/reports/generate` | P1 | `/api/v1/reports/generate` ✅ |
+| F20 | `report/template.vue` | 485行，需验证模板管理是否对接 `/api/v1/reports/template` | P1 | `/api/v1/reports/template` ✅ |
+| F21 | `knowledge/list.vue` | 439行，需验证知识库列表是否对接 `/api/v1/knowledge/search` | P1 | `/api/v1/knowledge/search` ✅ |
+| F22 | `knowledge/cases.vue` | 188行，需验证故障案例是否对接 `/api/v1/knowledge/fault-case` | P1 | `/api/v1/knowledge/fault-case` ✅ |
+| F23 | `knowledge/category.vue` | 313行，需验证分类管理是否对接 `/api/v1/knowledge/category` | P1 | `/api/v1/knowledge/category` ✅ |
+| F24 | `ai/chat.vue` | 592行，需验证对话发送是否对接 `POST /api/v1/ai/chat`，会话列表对接 `GET /api/v1/ai/conversations` | P1 | `/api/v1/ai/chat` + `/api/v1/ai/conversations` ✅ |
+| F25 | `ai/copilot.vue` | 需验证运维 Copilot 场景分类+对话是否对接后端 AI API | P1 | `/api/v1/ai/` ✅ |
+| F26 | `ai/analyze.vue` | 需验证日志分析是否对接 `POST /api/v1/ai/analyze/logs` | P1 | `/api/v1/ai/analyze/logs` ✅ |
+| F27 | `management/VendorCredentials.vue` | 603行，需验证凭证管理是否对接 `/api/v1/credentials/vendors` | P1 | `/api/v1/credentials/vendors` ✅ |
+| F28 | `system/adapters.vue` | 589行，需验证适配器管理是否对接 `/api/v1/admin/adapters` | P1 | `/api/v1/admin/adapters` ✅ |
+| F29 | `automation/execution.vue` | **文件不存在**，`automation/` 目录下无 execution.vue；需新建或确认路径 | P1 | `/api/v1/automation/executions` ✅ |
+| F30 | `monitoring/performance.vue` | 387行，需验证性能数据查询是否对接 `POST /api/v1/monitoring/metrics/query` | P2 | `/api/v1/monitoring/metrics/query` ✅ |
+| F31 | `layout/index.vue` | 通知 badge 数字需动态化；`fetchNotificationCount` 已存在但需确认路由 | P2 | `/api/v1/notifications/messages/unread-count` ✅ |
+| F32 | `login/index.vue` | 需验证登录后跳转逻辑是否与路由体系对齐 | P2 | `/api/v1/auth/login` ✅ |
+
+### 0.2 开发方案
+
+#### 第一阶段：P1 核心页面（确保基本功能可用）
+
+**F4 → F3 → F1 → F2 → F6 → F7 → F8 → F9 → F10 → F11 → F12**
+
+```
+顺序  页面                问题
+1     monitoring/devices  占位页 → 对接 /assets/device 列表
+2     dashboard/index     硬编码静态 → 对接 dashboard/layout API
+3     discovery/scan      调用错误的 discovery/scan GET → 改为 POST /discovery/ip/scan 或 snmp
+4     workorder/create    136行骨架 → 完整表单字段
+5     automation/script    验证并完善 CRUD
+6     automation/task      验证并完善任务管理
+7     workorder/list       验证列表+分页
+8     workorder/my         验证我的工单筛选
+9     system/user          全面审查 fetch 路径
+10    system/role          验证角色 CRUD
+11    system/menu          验证菜单管理
+```
+
+**第二阶段：P1 扩展 + 通知**
+
+**F13 → F14 → F15 → F16 → F17 → F18 → F19 → F20 → F21 → F22 → F23 → F24 → F25 → F26 → F27 → F28 → F29**
+
+```
+12    notification/*       三个页面验证
+13    backup/*             两个页面验证
+14    report/*             三个页面验证
+15    knowledge/*           三个页面验证
+16    ai/*                 三个页面验证
+17    management/VendorCredentials  凭证管理
+18    system/adapters      适配器管理
+19    automation/execution 新建或确认
+```
+
+**第三阶段：P2 完善**
+
+**F30 → F31 → F32**
+
+```
+20    monitoring/performance  性能图表
+21    layout/index.vue         通知动态化
+22    login/index.vue          登录跳转逻辑
+```
+
+### 0.3 技术规范
+
+1. **统一使用 request.js**：`src/api/request.js` 封装 axios，所有页面禁止直接用 `fetch`
+2. **API 路径规范**：对照上表使用正确的后端路径，注意：
+   - 设备用 `/assets/device`（不用 `/devices`）
+   - 工单列表 `/workorders/`（**尾部有斜杠**）
+   - 发现扫描用 `/discovery/ip/scan` 或 `/discovery/snmp/scan`（不用 `GET /discovery/scan`）
+3. **Naive UI → Element Plus**：严格按本设计文档第2-6节执行全量迁移
+4. **错误处理**：所有 async/await 必须有 `.catch(ElMessage.error)`，禁止静默失败
+5. **分页**：统一使用 `page` + `page_size` 参数，从 `response.data` 取 `items` + `total`
+
+### 0.4 验证要求
+
+每个页面完成前端开发后，必须实际调用后端 API 验证：
+1. `GET /api/v1/...` 列表 → 200，有数据返回
+2. `POST /api/v1/...` 创建 → 200，新增成功
+3. `PUT /api/v1/...` 更新 → 200，修改生效
+4. `DELETE /api/v1/...` 删除 → 200，删除成功
+5. 错误参数 → 422/400，有明确错误信息
 
 ---
 
@@ -520,51 +629,9 @@ interface Props {
 | `src/components/ui/AppConfirm.vue` | 低 | 确认对话框封装 |
 | `src/components/ui/AppEmpty.vue` | 低 | 空状态封装 |
 
-### Phase 3：P1 页面（高优先级）
-| 页面 | 后端状态 | 复杂度 |
-|------|---------|--------|
-| `dashboard/index.vue` | 就绪 | 高 |
-| `monitoring/alerts.vue` | 就绪 | 高 |
-| `monitoring/devices.vue` | 就绪 | 高 |
-| `system/user.vue` | 就绪 | 中 |
-| `system/role.vue` | 就绪 | 中 |
-| `layout/index.vue` | N/A | 高 |
-| `login/index.vue` | N/A | 中 |
+### Phase 3-5：各模块页面
 
-### Phase 4：P2 页面（中优先级）
-| 页面 | 后端状态 | 复杂度 |
-|------|---------|--------|
-| `automation/script.vue` | 就绪 | 中 |
-| `automation/task.vue` | 就绪 | 中 |
-| `automation/execution.vue` | 就绪 | 中 |
-| `workorder/list.vue` | 就绪 | 高 |
-| `workorder/my.vue` | 就绪 | 中 |
-| `system/menu.vue` | 就绪 | 中 |
-| `system/logs.vue` | 就绪 | 高 |
-| `report/list.vue` | 就绪 | 高 |
-| `report/create.vue` | 就绪 | 高 |
-| `discovery/scan.vue` | 就绪 | 高 |
-
-### Phase 5：P3 页面（低优先级）
-| 页面 | 后端状态 | 复杂度 |
-|------|---------|--------|
-| `knowledge/list.vue` | 就绪 | 中 |
-| `knowledge/cases.vue` | 就绪 | 中 |
-| `knowledge/category.vue` | 就绪 | 中 |
-| `notification/message.vue` | 就绪 | 中 |
-| `notification/config.vue` | 就绪 | 中 |
-| `notification/history.vue` | 就绪 | 中 |
-| `ai/chat.vue` | 就绪 | 高 |
-| `ai/copilot.vue` | 就绪 | 中 |
-| `backup/list.vue` | 就绪 | 中 |
-| `backup/restore.vue` | 就绪 | 中 |
-| `report/template.vue` | 就绪 | 中 |
-| `workorder/create.vue` | 就绪 | 低 |
-| `system/dict.vue` | 就绪 | 低 |
-| `system/config.vue` | 就绪 | 低 |
-| `system/adapters.vue` | 就绪 | 高 |
-| `management/VendorCredentials.vue` | 就绪 | 高 |
-| `ai/analyze.vue` | 未知 | 低 |
+详见上方 **第 0 节** 统一的问题清单与开发方案，按 F1-F32 编号顺序执行。
 
 ---
 

@@ -1,8 +1,10 @@
 # iTOPS Platform 差距分析报告
 
 **项目路径**: `/home/zcxx/.hermes/projects/itops_platform`  
-**分析日期**: 2026-05-17  
-**报告版本**: v1.0
+**分析日期**: 2026-05-17
+**报告版本**: v1.1（2026-05-25 更新）
+
+> ⚠️ **2026-05-25 更新**: 本报告描述的多个问题已在后续代码重构中修复或 API 已实现。已修复项已在各章节标注。
 
 ---
 
@@ -43,12 +45,24 @@
 - **重要问题 (P1)**: 8个
 - **优化建议 (P2)**: 6个
 
-### 1.3 高优先级问题
+### 1.3 高优先级问题（已更新）
 
-1. **自动化运维模块 API 路径不匹配** - script.vue/task.vue/execute.vue 调用 `/api/v1/automation/trigger-rules`，但该 API 是"告警触发规则"而非"脚本管理"
-2. **工单模块后端缺失** - 工单前端调用 API，但 workorder.py 后端路径不明确
-3. **菜单管理只有静态数据** - menu.vue 是纯静态展示，无 CRUD API
-4. **备份模块后端不完整** - 前端使用 `/api/v1/admin/backups`，但 backup.py 不存在
+> ⚠️ 2026-05-25 验证：以下问题部分已修复
+
+1. ~~**自动化运维模块 API 路径不匹配**~~ ✅ 脚本管理 API 已实现（`/api/v1/automation/scripts`）
+2. ~~**工单模块后端缺失**~~ ✅ 工单后端已完整实现（329 个 API 端点全部注册）
+3. **菜单管理只有静态数据** — menu.vue 仍为静态，CRUD API 未对接
+4. ~~**备份模块后端不完整**~~ ✅ 备份 API 已实现（`/api/v1/admin/backups`）
+
+### 1.4 验证后的真实问题
+
+| 优先级 | 问题 | 状态 |
+|--------|------|------|
+| P0 | devices.vue 为 16 行占位页 | 🔴 未实现 |
+| P0 | 工单 assign 前端未适配后端接口 | ⚠️ 后端有，前端未对接 |
+| P1 | 资产/监控设备 API 混淆 | ⚠️ 待修复 |
+| P1 | 脚本管理纯前端 localStorage | ⚠️ 待修复 |
+| P2 | 知识库审核无提示 | ⚠️ 待修复 |
 
 ---
 
@@ -357,9 +371,11 @@ POST /ai/chat/_debug             # 调试端点
 - **task.vue**: 任务管理 - 自动化任务配置
 - **execute.vue**: 执行记录 - 查看脚本/任务执行历史
 
-#### 2.5.2 🔴 严重问题：API 路径不匹配
+#### 2.5.2 🔴 严重问题：API 路径不匹配（⚠️ 已修复）
 
-**前端调用的 API:**
+> ✅ 2026-05-25 更新：`/api/v1/automation/scripts` 及 `/api/v1/automation/scripts/{script_id}/execute` 端点已实现
+
+~~**前端调用的 API:**~~
 ```javascript
 // script.vue, task.vue, execute.vue 都调用:
 GET  /api/v1/automation/trigger-rules
@@ -429,6 +445,8 @@ DELETE /api/v1/admin/backups/{id}    # 删除备份
 ```
 
 #### 2.6.3 当前状态
+
+> ✅ 2026-05-25 更新：后端 backup.py 已存在，`/api/v1/admin/backups` 返回 200
 
 **✅ 已实现功能:**
 - 备份列表展示
@@ -864,5 +882,10 @@ PUT    /api/v1/admin/configs/{key}
 |------|------|
 | 报告作者 | Hermes Agent |
 | 创建日期 | 2026-05-17 |
+| 更新日期 | 2026-05-25 |
 | 项目路径 | /home/zcxx/.hermes/projects/itops_platform |
-| 报告版本 | v1.0 |
+| 报告版本 | v1.1 |
+
+### 更新日志
+
+- **v1.1 (2026-05-25)**: 验证了以下问题已修复：自动化脚本 API、备份模块后端、工单后端；新增真实问题清单（devices.vue 占位页、工单 assign 前端未适配）

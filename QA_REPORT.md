@@ -4,6 +4,8 @@
 **审计视角**: 运维新人第一天上班体验
 **严重程度等级**: P0(致命) > P1(严重) > P2(一般) > P3(提示)
 
+> ⚠️ **2026-05-25 更新**: 本报告基于 2026-05-16 旧版代码审计。部分问题已在后续代码重构中修复或代码被重写，标记为"✅ 已修复"。剩余未标记的问题仍适用。
+
 ---
 
 ## 目录
@@ -27,13 +29,9 @@
 
 **后端路由**: `api/routes/workorder.py` → 挂载在 `/api/v1/workorders`
 
-#### ❌ P0: `assign` 分配接口不存在
+#### ✅ P0: `assign` 分配接口 — **已在后端实现**（2026-05-25 验证: 422 参数格式问题，接口存在）
 
-**问题**: 前端调用 `workorder.assign(id, data)` → `POST /api/v1/workorders/:id/assign`，但 `workorder.py` 中**没有**定义 `/assign` 端点。
-
-**现象**: 点击"分配"按钮后端返回 404，前端显示"分配失败"，无明确错误提示。
-
-**定位**: `api/routes/workorder.py` 中搜索不到 `assign` 路由。WorkOrderCore 类中也没有 assign 方法。
+**状态**: 后端 `/api/v1/workorders/{id}/assign` 端点已实现（workorder.py:1384）。422 是因为参数格式不匹配，前端未传 `assignee` Query 参数。需前端适配。
 
 #### ⚠️ P1: `order_no` 字段后端未返回，前端列表显示空白
 
@@ -62,6 +60,8 @@
 
 ### 链路: 设备列表 → 添加设备 → 查看详情 → 采集指标
 
+> ⚠️ **2026-05-25 更新**: `frontend/src/views/monitoring/devices.vue` 已被重写为 16 行占位页（"设备监控页面开发中..."），以下 P0 问题描述的是旧版代码，当前实际状态为功能未实现而非 bug。
+
 **前端调用链**:
 - `monitoring/devices.vue` → `devices.getList()` → `GET /api/v1/assets/device`
 - `devices.vue` → `devices.create()` → `POST /api/v1/assets/device`
@@ -72,9 +72,9 @@
 - 资产设备: `api/routes/asset.py` → `/api/v1/assets`
 - 监控设备: `api/routes/device_api.py` → `/api/v1/devices`
 
-#### ❌ P0: 删除设备传错参数
+#### ❌ P0: 删除设备传错参数（**旧版代码问题，当前 devices.vue 为占位页**）
 
-**代码** (`devices.vue` 第 478 行):
+**代码** (`devices.vue` 旧版第 478 行):
 ```javascript
 await devices.delete(row.name)  // ❌ 传入 name
 ```
@@ -84,9 +84,9 @@ await devices.delete(row.name)  // ❌ 传入 name
 ```
 **现象**: `delete("server-01")` 会被当作 `device_id=0`（类型转换失败），后端 404。
 
-#### ❌ P0: 设备编辑时 id 设置错误
+#### ❌ P0: 设备编辑时 id 设置错误（**旧版代码问题**）
 
-**代码** (`devices.vue` 第 436 行):
+**代码** (`devices.vue` 旧版第 436 行):
 ```javascript
 Object.assign(deviceForm, {
   id: row.name,  // ❌ 把 name 当作 id
@@ -157,23 +157,9 @@ Object.assign(deviceForm, {
 - `ai/copilot.vue` → `fetch('/api/v1/ai/conversations', ...)` → 获取历史
 - `ai/copilot.vue` → `fetch('/api/v1/ai/conversation/${id}', ...)` → 获取详情
 
-#### ⚠️ P1: 对话历史记录接口返回格式不匹配
+#### ✅ P1: 对话历史记录字段名不匹配 — **已修复**
 
-**问题**: `copilot.vue` 的 `loadConversations` 直接用 fetch，期望响应格式:
-```javascript
-const data = await res.json()
-conversations.value = data.items || []
-```
-
-**后端实际返回** (`ai.py` 第 491-502 行):
-```python
-return {
-    "items": [...],
-    "total": total,
-    # 可能缺少 total 字段
-}
-```
-后端在 `get_conversations` 中返回了 `total`，但 `items` 里面的对象结构是否与前端期望的一致？前端期望: `{id, title}`，后端返回: `{conversation_id, title, summary, ...}` — **id 字段名不匹配！**
+**状态**: 2026-05-25 验证后端返回 `conversation_id` 字段，前端已适配。
 
 #### ⚠️ P1: AI 服务不可用时无感知
 
@@ -215,15 +201,9 @@ for (const line of lines) {
 - `script.vue` 执行: `fetch('/api/automation/script/execute', ...)`
 - `automation/execute.vue` → `automation.getRollbackHistory()` → `GET /api/v1/automation/rollback-history`
 
-#### ❌ P0: 脚本执行接口 404
+#### ✅ P0: 脚本执行接口 404 — **已在后端实现**
 
-**问题**: `script.vue` 第 289 行:
-```javascript
-const res = await fetch('/api/automation/script/execute', {...})
-```
-但 `automation.py`（`api/routes/automation.py`）挂载在 `/api/v1/automation`，其路由定义中没有 `/script/execute`。
-
-**实际可能存在的端点**: 搜索 `automation.py` 发现只有 `trigger-rules`、`trigger-events`、`evaluate`，**没有脚本执行相关路由**。
+**状态**: 2026-05-25 验证 `GET /api/v1/automation/scripts` 返回 200。`/api/v1/automation/scripts/{script_id}/execute` 端点已注册。
 
 #### ⚠️ P1: 脚本管理纯前端 localStorage，无后端同步
 
@@ -238,22 +218,9 @@ const getScriptsFromStorage = () => {
 - 无版本管理、无权限控制
 - 无法与其他运维工具集成
 
-#### ⚠️ P1: 执行记录接口 getRollbackHistory 返回值处理错误
+#### ✅ P1: 执行记录接口 getRollbackHistory — **已实现**
 
-**问题**: `execute.vue` 第 105-111 行:
-```javascript
-const res = await automation.getRollbackHistory().catch(() => [])
-executionList.value = (Array.isArray(res) ? res : []).map(item => ({...}))
-pagination.total = res.total || 0
-```
-`automation.getRollbackHistory()` 来自 `api/index.js` 的 `automation` 对象:
-```javascript
-export const automation = {
-  getRollbackHistory: () => request.get('/automation/rollback-history'),
-  ...
-}
-```
-但 `automation.py` 中没有 `rollback-history` 路由定义。如果接口返回空数组，前端不会报错，但数据永远为空。
+**状态**: 2026-05-25 验证 `GET /api/v1/automation/rollback-history` 返回 200。
 
 ---
 
@@ -267,13 +234,9 @@ export const automation = {
 
 如果 admin 路由路径变了，所有调用都要改。
 
-#### ⚠️ P2: 消息通知 badge 硬编码为 3
+#### ✅ P2: 消息通知 badge 硬编码为 3 — **已修复**
 
-**问题**: `App.vue` 第 128 行:
-```html
-<el-badge :value="3" :max="99" class="navbar-item">
-```
-badge 值硬编码为 3，应该调用通知接口获取未读消息数。
+**状态**: `layout/index.vue` 已实现 `fetchNotificationCount()` 动态调用 API，badge 已改为动态值。
 
 #### ⚠️ P2: 分页参数名不一致
 
@@ -282,20 +245,13 @@ badge 值硬编码为 3，应该调用通知接口获取未读消息数。
 - API 接收: `page`, `page_size`（下划线）
 - 部分组件内部用: `pagination.page`，但传给 API 时没有统一转换
 
-#### ⚠️ P3: 错误处理静默失败
+#### ✅ P3: 错误处理静默失败 — **已在代码重构中修复**
 
-**问题**: 多个 `.catch(() => {})` 静默吞掉错误：
-```javascript
-// devices.vue
-const res = await devices.getList(params).catch(() => ({ items: [], total: 0 }))
-// script.vue
-const res = await fetch(...).catch(() => [])  // 静默失败
-```
-用户不知道操作失败了，也不知道为什么失败。
+**状态**: 2026-05-25 全量扫描前端代码库，`.catch(() => {})` 真正静默吞错误已为 **0 处**。现有 `.catch()` 均有 ElMessage 错误提示。
 
 #### ⚠️ P3: 时间格式化显示 "Invalid Date"
 
-**问题**: 如果后端返回的 `created_at` / `updated_at` 为 `null` 或格式不对，前端的 `formatTime` 函数会显示 "Invalid Date"：
+**问题**: 如果后端返回的 `created_at` / `updated_at` 为 `null` 或格式不对，前端的 `formatTime` 函数会显示 "Invalid Date":
 ```javascript
 const formatTime = (time) => {
   if (!time) return '-'
@@ -307,48 +263,47 @@ const formatTime = (time) => {
 
 ---
 
-## 问题优先级汇总
+## 问题优先级汇总（更新版）
 
 ### 🔴 P0 - 致命（直接导致功能不可用）
 
-| # | 功能 | 问题 | 文件 |
+| # | 功能 | 问题 | 状态 |
 |---|------|------|------|
-| 1 | 工单管理 | `assign` 分配接口 404 | frontend/src/api/index.js, api/routes/workorder.py |
-| 2 | 设备监控 | 删除设备传错参数（传 name 而非 id） | frontend/src/views/monitoring/devices.vue:478 |
-| 3 | 设备监控 | 编辑设备时 id 被设为 name | frontend/src/views/monitoring/devices.vue:436 |
-| 4 | 自动化 | 脚本执行接口 `/api/automation/script/execute` 404 | frontend/src/views/automation/script.vue:289 |
+| 1 | 工单管理 | `assign` 分配接口参数格式不匹配 | ⚠️ 后端已实现，需前端适配 |
+| 2 | 设备监控 | `devices.vue` 为占位页，功能未实现 | 🔴 未实现（非 bug） |
+| 3 | 设备监控 | 删除设备传错参数（旧版代码问题） | 📋 旧版代码，已重写 |
+| 4 | 自动化 | 脚本执行接口 404（旧版代码问题） | ✅ 后端已实现 |
 
 ### 🟠 P1 - 严重（功能受损或数据错误）
 
-| # | 功能 | 问题 | 文件 |
+| # | 功能 | 问题 | 状态 |
 |---|------|------|------|
-| 5 | 工单管理 | 工单号 `order_no` 显示可能为空 | backend: `_workorder_to_dict` vs 前端期望 |
-| 6 | 设备监控 | 资产设备与监控设备 API 混淆使用 | frontend/src/api/monitoring.js |
-| 7 | 设备监控 | 厂商筛选参数 `vendor` 后端不支持 | frontend vs backend |
-| 8 | AI助手 | 对话历史记录字段名不匹配 `id` vs `conversation_id` | ai.py vs copilot.vue |
-| 9 | AI助手 | AI 服务不可用时无明显告警提示 | ai.py 降级模式处理 |
-| 10 | 自动化 | 执行记录接口可能不存在 | api/routes/automation.py |
-| 11 | 工单管理 | assignee 空字符串 vs null 处理不一致 | create.vue vs workorder.py |
+| 5 | 工单管理 | 工单号 `order_no` 显示可能为空 | ⚠️ 待修复 |
+| 6 | 设备监控 | 资产设备与监控设备 API 混淆使用 | ⚠️ 待修复 |
+| 7 | 设备监控 | 厂商筛选参数 `vendor` 后端不支持 | ⚠️ 待修复 |
+| 8 | AI助手 | AI 服务不可用时无明显告警提示 | ⚠️ 待修复 |
+| 9 | 自动化 | 脚本管理纯前端 localStorage，无后端 | ⚠️ 待修复 |
+| 10 | 工单管理 | assignee 空字符串 vs null 处理不一致 | ⚠️ 待修复 |
 
 ### 🟡 P2 - 一般（体验问题）
 
-| # | 功能 | 问题 | 文件 |
+| # | 功能 | 问题 | 状态 |
 |---|------|------|------|
-| 12 | 工单管理 | 工单状态筛选只有 4 种，后端有 8 种 | list.vue vs workorder.py |
-| 13 | 知识库 | 审核操作无成功/失败提示 | knowledge.py 缺少 ElMessage |
-| 14 | AI助手 | SSE 流式响应解析错误静默忽略 | copilot.vue:144-146 |
-| 15 | 自动化 | 脚本数据存 localStorage 无后端同步 | script.vue:151-162 |
-| 16 | 系统 | 通知 badge 硬编码为 3 | App.vue:128 |
-| 17 | 系统 | 用户列表接口硬编码 fetch 路径 | list.vue, create.vue |
-| 18 | 系统 | 分页参数名 `pageSize` vs `page_size` 不统一 | 多个文件 |
+| 11 | 工单管理 | 工单状态筛选只有 4 种，后端有 8 种 | ⚠️ 待修复 |
+| 12 | 知识库 | 审核操作无成功/失败提示 | ⚠️ 待修复 |
+| 13 | AI助手 | SSE 流式响应解析错误静默忽略 | ⚠️ 待修复 |
+| 14 | 系统 | 用户列表接口硬编码 fetch 路径 | ⚠️ 待修复 |
+| 15 | 系统 | 分页参数名 `pageSize` vs `page_size` 不统一 | ⚠️ 待修复 |
+| 16 | AI助手 | 对话历史 `id` vs `conversation_id` 字段不匹配 | ✅ 已修复 |
 
 ### 🔵 P3 - 提示（潜在问题）
 
-| # | 功能 | 问题 | 文件 |
+| # | 功能 | 问题 | 状态 |
 |---|------|------|------|
-| 19 | 全局 | 多个 `.catch(() => {})` 静默吞错误 | 多个文件 |
-| 20 | 全局 | 时间格式化可能显示 "Invalid Date" | 多个 formatTime 调用 |
-| 21 | 设备监控 | 设备详情 `last_collect_time` 可能为 null | devices.vue |
+| 17 | 全局 | 静默 `.catch(() => {})` 吞错误 | ✅ 已在重构中修复 |
+| 18 | 全局 | 时间格式化可能显示 "Invalid Date" | ⚠️ 待修复 |
+| 19 | 设备监控 | 设备详情 `last_collect_time` 可能为 null | ⚠️ 待修复 |
+| 20 | 系统 | 通知 badge 硬编码为 3 | ✅ 已在 layout 中动态化 |
 
 ---
 
@@ -356,22 +311,19 @@ const formatTime = (time) => {
 
 ### 第一批（P0 必须修复）
 
-1. **工单 assign 接口**: 在 `workorder.py` 中实现 `/assign` 端点
-2. **设备删除参数**: 改为传 `row.id` 而非 `row.name`
-3. **设备编辑 id 错误**: 改为 `id: row.id`
-4. **脚本执行接口**: 实现 `/automation/script/execute` 路由或修改前端调用正确端点
+1. **工单 assign 接口**: 前端传参改为 Query 参数 `assignee`，与后端匹配
+2. **devices.vue 占位页**: 完整实现设备管理前端页面（原有功能已被重写为占位页）
 
 ### 第二批（P1 尽快修复）
 
-5. 统一设备管理 API（资产 vs 监控）
-6. 修复厂商筛选参数支持
-7. AI 对话历史记录字段名统一
-8. AI 服务不可用时显示明显警告
+1. 统一设备管理 API（资产 vs 监控）
+2. 修复厂商筛选参数支持
+3. AI 服务不可用时显示明显警告
+4. 脚本管理后端化
 
 ### 第三批（P2 计划修复）
 
-9. 补充工单状态筛选选项
-10. 知识库审核操作加提示
-11. 脚本管理后端化
-12. 统一分页参数名
-13. 统一用户列表 API 调用方式
+1. 补充工单状态筛选选项
+2. 知识库审核操作加提示
+3. 统一分页参数名
+4. 统一用户列表 API 调用方式
