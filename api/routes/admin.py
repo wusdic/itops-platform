@@ -1988,6 +1988,17 @@ class DictItemUpdate(BaseModel):
     status: Optional[str] = None
 
 
+@router.post("/dict/init", summary="初始化默认字典数据")
+async def init_dict_defaults(
+    current_user: CurrentUser = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """初始化默认字典数据（幂等，管理员专用）"""
+    from modules.business.dict_service import DictService
+    DictService.init_defaults(db)
+    return {"code": 0, "message": "字典初始化完成"}
+
+
 @router.get("/dict", summary="获取字典类型列表")
 async def get_dict_types(
     keyword: Optional[str] = Query(None, description="关键词搜索"),

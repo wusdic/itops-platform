@@ -446,7 +446,7 @@ class DeviceImporter:
                         snmp_community=(row.get('snmp_community') or '').strip() or None,
                         location=(row.get('location') or '').strip() or None,
                         idc=(row.get('idc') or '').strip() or None,
-                        status=DeviceStatus.UNKNOWN,
+                        status=DeviceStatus.UNKNOWN.value,
                         created_by=username,
                         updated_by=username,
                     )

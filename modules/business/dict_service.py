@@ -10,6 +10,100 @@ from sqlalchemy import or_
 
 from modules.foundation.db_models.dict_model import DictType, DictItem
 
+# 默认字典数据
+DEFAULT_DICTS = {
+    "device_type": {
+        "name": "设备类型",
+        "code": "device_type",
+        "items": [
+            {"label": "服务器", "value": "server", "color": "#409EFF", "sort_order": 1},
+            {"label": "网络设备", "value": "network", "color": "#67C23A", "sort_order": 2},
+            {"label": "安全设备", "value": "security", "color": "#E6A23C", "sort_order": 3},
+            {"label": "存储设备", "value": "storage", "color": "#909399", "sort_order": 4},
+            {"label": "容器", "value": "container", "color": "#F56C6C", "sort_order": 5},
+            {"label": "云资源", "value": "cloud", "color": "#9B59B6", "sort_order": 6},
+            {"label": "其他", "value": "other", "color": "#C0C4CC", "sort_order": 99},
+        ],
+    },
+    "alert_level": {
+        "name": "告警级别",
+        "code": "alert_level",
+        "items": [
+            {"label": "紧急", "value": "critical", "color": "#F56C6C", "sort_order": 1},
+            {"label": "重要", "value": "high", "color": "#E6A23C", "sort_order": 2},
+            {"label": "一般", "value": "medium", "color": "#409EFF", "sort_order": 3},
+            {"label": "提示", "value": "low", "color": "#909399", "sort_order": 4},
+            {"label": "信息", "value": "info", "color": "#67C23A", "sort_order": 5},
+        ],
+    },
+    "alert_status": {
+        "name": "告警状态",
+        "code": "alert_status",
+        "items": [
+            {"label": "活跃", "value": "active", "color": "#F56C6C", "sort_order": 1},
+            {"label": "已确认", "value": "acknowledged", "color": "#E6A23C", "sort_order": 2},
+            {"label": "已解决", "value": "resolved", "color": "#67C23A", "sort_order": 3},
+            {"label": "已关闭", "value": "closed", "color": "#909399", "sort_order": 4},
+            {"label": "已抑制", "value": "suppressed", "color": "#C0C4CC", "sort_order": 5},
+        ],
+    },
+    "workorder_status": {
+        "name": "工单状态",
+        "code": "workorder_status",
+        "items": [
+            {"label": "待处理", "value": "pending", "color": "#409EFF", "sort_order": 1},
+            {"label": "处理中", "value": "processing", "color": "#E6A23C", "sort_order": 2},
+            {"label": "已解决", "value": "resolved", "color": "#67C23A", "sort_order": 3},
+            {"label": "已关闭", "value": "closed", "color": "#909399", "sort_order": 4},
+            {"label": "已取消", "value": "cancelled", "color": "#C0C4CC", "sort_order": 5},
+        ],
+    },
+    "workorder_priority": {
+        "name": "工单优先级",
+        "code": "workorder_priority",
+        "items": [
+            {"label": "P1 - 紧急", "value": "P1", "color": "#F56C6C", "sort_order": 1},
+            {"label": "P2 - 高", "value": "P2", "color": "#E6A23C", "sort_order": 2},
+            {"label": "P3 - 中", "value": "P3", "color": "#409EFF", "sort_order": 3},
+            {"label": "P4 - 低", "value": "P4", "color": "#909399", "sort_order": 4},
+        ],
+    },
+    "workorder_type": {
+        "name": "工单类型",
+        "code": "workorder_type",
+        "items": [
+            {"label": "故障", "value": "fault", "color": "#F56C6C", "sort_order": 1},
+            {"label": "变更", "value": "change", "color": "#E6A23C", "sort_order": 2},
+            {"label": "巡检", "value": "inspection", "color": "#67C23A", "sort_order": 3},
+            {"label": "发布", "value": "release", "color": "#409EFF", "sort_order": 4},
+            {"label": "其他", "value": "other", "color": "#909399", "sort_order": 99},
+        ],
+    },
+    "vendor_type": {
+        "name": "厂商类型",
+        "code": "vendor_type",
+        "items": [
+            {"label": "服务器", "value": "server", "color": "#409EFF", "sort_order": 1},
+            {"label": "网络", "value": "network", "color": "#67C23A", "sort_order": 2},
+            {"label": "安全", "value": "security", "color": "#E6A23C", "sort_order": 3},
+            {"label": "存储", "value": "storage", "color": "#909399", "sort_order": 4},
+            {"label": "云服务", "value": "cloud", "color": "#9B59B6", "sort_order": 5},
+        ],
+    },
+    "notification_type": {
+        "name": "通知类型",
+        "code": "notification_type",
+        "items": [
+            {"label": "邮件", "value": "email", "color": "#409EFF", "sort_order": 1},
+            {"label": "短信", "value": "sms", "color": "#67C23A", "sort_order": 2},
+            {"label": "钉钉", "value": "dingtalk", "color": "#1677FF", "sort_order": 3},
+            {"label": "企业微信", "value": "wecom", "color": "#2EABFF", "sort_order": 4},
+            {"label": "飞书", "value": "feishu", "color": "#2EABFF", "sort_order": 5},
+            {"label": "Webhook", "value": "webhook", "color": "#909399", "sort_order": 6},
+        ],
+    },
+}
+
 
 class DictService:
     """字典服务类"""
@@ -80,6 +174,37 @@ class DictService:
     def get_type_by_code(self, code: str) -> Optional[DictType]:
         """根据代码获取字典类型"""
         return self.db.query(DictType).filter(DictType.code == code).first()
+
+    @staticmethod
+    def init_defaults(db: Session):
+        """初始化默认字典数据（幂等，仅在字典类型为空时插入）"""
+        existing = db.query(DictType).first()
+        if existing:
+            return  # 已有字典类型，跳过
+
+        for code, type_data in DEFAULT_DICTS.items():
+            dict_type = DictType(
+                name=type_data["name"],
+                code=type_data["code"],
+                description=type_data.get("description", ""),
+                status="active",
+            )
+            db.add(dict_type)
+            db.flush()
+
+            for item_data in type_data.get("items", []):
+                dict_item = DictItem(
+                    type_id=dict_type.id,
+                    label=item_data["label"],
+                    value=item_data["value"],
+                    sort_order=item_data.get("sort_order", 0),
+                    color=item_data.get("color"),
+                    css_class=item_data.get("css_class"),
+                    status="active",
+                )
+                db.add(dict_item)
+
+        db.commit()
 
     def create_type(self, data: Dict[str, Any]) -> DictType:
         """

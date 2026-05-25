@@ -17,13 +17,18 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 
-class CollectionStatus(str, Enum):
-    """采集状态"""
+class DeviceStatus(str, Enum):
+    """
+    设备状态枚举（统一枚举，覆盖采集层和设备层）。
+    
+    必须与 modules.foundation.db_models.device.DeviceStatus 保持同步。
+    注意：MySQL ENUM 存储大写，但应用层 .value 统一为小写。
+    """
     UNKNOWN = "unknown"
     ONLINE = "online"
     OFFLINE = "offline"
-    ERROR = "error"
-    COLLECTING = "collecting"
+    ERROR = "error"          # 采集层专用，对应 DeviceStatus.WARNING
+    COLLECTING = "collecting"  # 采集进行中，对应 DeviceStatus.UNKNOWN
 
 
 @dataclass
@@ -34,7 +39,7 @@ class DeviceMetrics:
     device_type: str
     vendor: str
     timestamp: datetime
-    status: 'CollectionStatus'
+    status: 'DeviceStatus'
     metrics: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
 
@@ -103,8 +108,7 @@ class DeviceMetrics:
             return 0
 
 
-# 别名，保持向后兼容
-DeviceStatus = CollectionStatus
+
 
 
 class DeviceManager:
@@ -181,9 +185,9 @@ class DeviceManager:
             except Exception as e:
                 logger.error(f"回调执行失败: {e}")
     
-    def get_device_status(self, device_name: str) -> CollectionStatus:
+    def get_device_status(self, device_name: str) -> DeviceStatus:
         """获取设备状态"""
-        return self._device_status.get(device_name, CollectionStatus.UNKNOWN)
+        return self._device_status.get(device_name, DeviceStatus.UNKNOWN)
     
     def _get_device_config_from_db(self, device_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -334,7 +338,7 @@ class DeviceManager:
             logger.warning(f"从数据库获取设备列表失败: {e}")
             return []
     
-    def _update_device_status_in_db(self, device_name: str, status: CollectionStatus) -> None:
+    def _update_device_status_in_db(self, device_name: str, status: DeviceStatus) -> None:
         """更新数据库中的设备状态"""
         try:
             from modules.foundation.db_models.device import Device, DeviceStatus as DBDeviceStatus
@@ -342,11 +346,11 @@ class DeviceManager:
 
             # 映射状态
             status_mapping = {
-                CollectionStatus.ONLINE: DBDeviceStatus.ONLINE,
-                CollectionStatus.OFFLINE: DBDeviceStatus.OFFLINE,
-                CollectionStatus.ERROR: DBDeviceStatus.WARNING,
-                CollectionStatus.UNKNOWN: DBDeviceStatus.UNKNOWN,
-                CollectionStatus.COLLECTING: DBDeviceStatus.UNKNOWN,
+                DeviceStatus.ONLINE: DBDeviceStatus.ONLINE,
+                DeviceStatus.OFFLINE: DBDeviceStatus.OFFLINE,
+                DeviceStatus.ERROR: DBDeviceStatus.WARNING,
+                DeviceStatus.UNKNOWN: DBDeviceStatus.UNKNOWN,
+                DeviceStatus.COLLECTING: DBDeviceStatus.UNKNOWN,
             }
             db_status = status_mapping.get(status, DBDeviceStatus.OFFLINE)
 
@@ -354,17 +358,17 @@ class DeviceManager:
                 device = session.query(Device).filter(Device.name == device_name).first()
                 if device:
                     old_status = device.status
-                    device.status = str(db_status.value).upper() if hasattr(db_status, 'value') else str(db_status)  # DB 用大写 ENUM 值
+                    device.status = str(db_status.value)  # 统一小写，与 SPEC.md 规则 D-7 一致
                     device.last_status_check = datetime.now()
                     session.commit()
 
                     # 状态变更时写日志（仅状态实际变化时）
                     if str(old_status) != str(db_status):
-                        if status == CollectionStatus.ONLINE:
+                        if status == DeviceStatus.ONLINE:
                             logger.info(f"[采集] 设备上线: {device_name} (IP: {device.ip_address})")
-                        elif status == CollectionStatus.OFFLINE:
+                        elif status == DeviceStatus.OFFLINE:
                             logger.warning(f"[采集] 设备离线: {device_name} (IP: {device.ip_address})")
-                        elif status == CollectionStatus.ERROR:
+                        elif status == DeviceStatus.ERROR:
                             logger.error(f"[采集] 设备异常: {device_name} (IP: {device.ip_address})")
                         else:
                             logger.info(f"[采集] 设备状态变更: {device_name} {old_status} → {db_status}")
@@ -474,7 +478,7 @@ class DeviceManager:
             return None
         
         # 更新状态
-        self._device_status[device_name] = CollectionStatus.COLLECTING
+        self._device_status[device_name] = DeviceStatus.COLLECTING
         
         # 确定使用的协议
         if force_protocol:
@@ -489,9 +493,9 @@ class DeviceManager:
             try:
                 metrics = await self._collect_with_protocol(device_config, protocol)
                 
-                if metrics and metrics.status == CollectionStatus.ONLINE:
+                if metrics and metrics.status == DeviceStatus.ONLINE:
                     # 采集成功
-                    self._device_status[device_name] = CollectionStatus.ONLINE
+                    self._device_status[device_name] = DeviceStatus.ONLINE
                     self._last_collect_time[device_name] = datetime.now()
                     self._last_metrics[device_name] = metrics
                     self._notify_callbacks(metrics)
@@ -504,7 +508,7 @@ class DeviceManager:
                     self._save_device_protocols_to_db(device_name, protocols)
 
                     # Update device metadata if collector returned useful info
-                    if metrics and metrics.status == CollectionStatus.ONLINE and metrics.metrics:
+                    if metrics and metrics.status == DeviceStatus.ONLINE and metrics.metrics:
                         self._update_device_metadata_in_db(device_name, metrics)
 
                     return metrics
@@ -535,11 +539,11 @@ class DeviceManager:
                 device_type=device_config.get('type', ''),
                 vendor=device_config.get('vendor', ''),
                 timestamp=datetime.now(),
-                status=CollectionStatus.OFFLINE,
+                status=DeviceStatus.OFFLINE,
                 error=last_error,
             )
         
-        self._device_status[device_name] = CollectionStatus.OFFLINE
+        self._device_status[device_name] = DeviceStatus.OFFLINE
         self._last_metrics[device_name] = metrics
         self._notify_callbacks(metrics)
         
@@ -547,7 +551,7 @@ class DeviceManager:
         self._stats['failed_collects'] += 1
         
         # 更新数据库中的设备状态
-        self._update_device_status_in_db(device_name, CollectionStatus.OFFLINE)
+        self._update_device_status_in_db(device_name, DeviceStatus.OFFLINE)
         
         return metrics
     
@@ -671,7 +675,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
 
@@ -697,7 +701,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics=metrics_data,
                 )
 
@@ -707,7 +711,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -742,7 +746,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
 
@@ -773,7 +777,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics=metrics_data,
                 )
 
@@ -783,7 +787,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -804,7 +808,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             collector.connect()
@@ -819,7 +823,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
 
@@ -829,7 +833,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -851,7 +855,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
 
@@ -868,7 +872,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             
@@ -884,7 +888,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics=metrics_data,
                 )
 
@@ -894,7 +898,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -919,7 +923,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             collector.connect()
@@ -934,7 +938,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             return DeviceMetrics(
@@ -943,7 +947,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -968,7 +972,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             collector.connect()
@@ -983,7 +987,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             return DeviceMetrics(
@@ -992,7 +996,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -1017,7 +1021,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             collector.connect()
@@ -1032,7 +1036,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             return DeviceMetrics(
@@ -1041,7 +1045,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -1066,7 +1070,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
 
@@ -1091,7 +1095,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
 
@@ -1101,7 +1105,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -1122,7 +1126,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             collector.connect()
@@ -1137,7 +1141,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
 
@@ -1147,7 +1151,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -1168,7 +1172,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
             metrics_data = collector.collect() if hasattr(collector, 'collect') else {}
@@ -1181,7 +1185,7 @@ class DeviceManager:
                     device_type=device_config.get('type'),
                     vendor=device_config.get('vendor'),
                     timestamp=datetime.now(),
-                    status=CollectionStatus.OFFLINE,
+                    status=DeviceStatus.OFFLINE,
                     metrics={},
                 )
 
@@ -1191,7 +1195,7 @@ class DeviceManager:
                 device_type=device_config.get('type'),
                 vendor=device_config.get('vendor'),
                 timestamp=datetime.now(),
-                status=CollectionStatus.ONLINE,
+                status=DeviceStatus.ONLINE,
                 metrics=metrics_data,
             )
         except Exception as e:
@@ -1303,11 +1307,11 @@ class DeviceManager:
         for protocol in protocols:
             try:
                 metrics = await self._collect_with_protocol(device_config, protocol)
-                if metrics and metrics.status == CollectionStatus.ONLINE:
-                    self._device_status[device_name] = CollectionStatus.ONLINE
+                if metrics and metrics.status == DeviceStatus.ONLINE:
+                    self._device_status[device_name] = DeviceStatus.ONLINE
                     self._last_collect_time[device_name] = datetime.now()
                     self._last_metrics[device_name] = metrics
-                    self._update_device_status_in_db(device_name, CollectionStatus.ONLINE)
+                    self._update_device_status_in_db(device_name, DeviceStatus.ONLINE)
                     self._notify_callbacks(metrics)
                     return metrics
                 else:
@@ -1320,8 +1324,8 @@ class DeviceManager:
                 continue
 
         # 所有协议都失败，设备离线
-        self._device_status[device_name] = CollectionStatus.OFFLINE
-        self._update_device_status_in_db(device_name, CollectionStatus.OFFLINE)
+        self._device_status[device_name] = DeviceStatus.OFFLINE
+        self._update_device_status_in_db(device_name, DeviceStatus.OFFLINE)
         if last_metrics:
             last_metrics.error = last_error
             return last_metrics
@@ -1337,7 +1341,7 @@ class DeviceManager:
 
         # 完整协议探测（会自动保存 working_protocols 到 DB）
         metrics = await self.collect_device(device_name)
-        if metrics and metrics.status == CollectionStatus.ONLINE and metrics.metrics:
+        if metrics and metrics.status == DeviceStatus.ONLINE and metrics.metrics:
             try:
                 saved = metrics.save_to_db()
                 if saved > 0:

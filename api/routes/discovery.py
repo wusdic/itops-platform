@@ -12,6 +12,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks, Body
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.dependencies import get_current_user, CurrentUser
@@ -19,6 +20,94 @@ from api.dependencies import get_current_user, CurrentUser
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["设备发现"])
+
+
+# ============== 后台扫描任务存储 ==============
+
+scan_tasks: dict = {}  # scan_id -> {"status": str, "progress": dict, "result": dict, "error": str}
+
+
+def _run_scan_task_sync(scan_id: str, cidr: str, username: str):
+    """同步包装器，供 BackgroundTasks 调用"""
+    import asyncio
+    asyncio.run(_async_scan_task(scan_id, cidr, username))
+
+
+async def _async_scan_task(scan_id: str, cidr: str, username: str):
+    """后台扫描任务（协程内运行）"""
+    task = scan_tasks.setdefault(scan_id, {
+        "status": "running",
+        "progress": {"complete": 0, "total": 0, "current_ip": "", "phase": "idle"},
+        "result": None,
+        "error": None,
+    })
+
+    def progress_callback(complete: int, total: int, current_ip: str):
+        task["progress"] = {
+            "complete": complete,
+            "total": total,
+            "current_ip": current_ip,
+            "phase": "scanning",
+        }
+
+    try:
+        from modules.collection.discovery.enhanced_scanner import get_enhanced_scanner
+        from modules.business.device_importer import DeviceImporter
+
+        scanner = get_enhanced_scanner()
+        importer = DeviceImporter()
+
+        task["status"] = "scanning"
+        task["progress"]["phase"] = "scanning"
+
+        # 阶段1：扫描
+        discovered = await scanner.scan_and_identify(cidr, progress_callback=progress_callback)
+        discovered = [h for h in discovered if h.status == 'up']
+        task["progress"]["complete"] = task["progress"]["total"]
+        task["status"] = "importing"
+        task["progress"]["phase"] = "importing"
+        task["progress"]["complete"] = 0
+
+        # 阶段2：导入
+        imported_count = 0
+        hosts_list = []
+        for i, host in enumerate(discovered):
+            existing = check_device_exists(host.ip)
+            if not existing:
+                device_data = {
+                    'name': host.hostname or f"auto-{host.ip.replace('.', '-')}",
+                    'ip_address': host.ip,
+                    'device_type': map_os_to_device_type(host.os_type),
+                    'os': host.os_type,
+                    'os_version': host.os_version,
+                    'vendor': host.vendor or 'Unknown',
+                    'model': host.model,
+                    'location': '',
+                }
+                result = importer.import_devices([device_data], username=username)
+                if result.success:
+                    imported_count += 1
+            hosts_list.append(host.to_dict())
+            task["progress"]["complete"] = i + 1
+            task["progress"]["total"] = len(discovered)
+            task["progress"]["current_ip"] = host.ip
+
+        task["status"] = "done"
+        task["progress"]["phase"] = "done"
+        task["progress"]["complete"] = len(discovered)
+        task["progress"]["total"] = len(discovered)
+        task["result"] = {
+            "total_discovered": len(discovered),
+            "newly_imported": imported_count,
+            "cidr": cidr,
+            "hosts": hosts_list,
+        }
+        logger.info(f"[Scan {scan_id}] 完成: 发现{len(discovered)}台, 新增导入{imported_count}台")
+
+    except Exception as e:
+        logger.error(f"[Scan {scan_id}] 扫描异常: {e}")
+        task["status"] = "error"
+        task["error"] = str(e)
 
 
 # ============== 请求/响应模型 ==============
@@ -52,7 +141,10 @@ class SNMPScanResponse(BaseModel):
 
 
 class DiscoveredHostResponse(BaseModel):
-    """发现的Host响应"""
+    """发现的Host响应（扫描层，与持久层 Device 模型是不同概念）
+    
+    status 字段含义为 "up"/"down"（可达性），与 DeviceStatus 是不同概念。
+    """
     ip: str
     hostname: Optional[str] = None
     mac: Optional[str] = None
@@ -61,7 +153,7 @@ class DiscoveredHostResponse(BaseModel):
     vendor: Optional[str] = None
     ports: List[int] = []
     services: dict
-    status: str
+    status: str  # "up"/"down"，扫描层可达性，与 DeviceStatus 是不同概念
     response_time: Optional[float] = None
     ttl: Optional[int] = None
     timestamp: str
@@ -187,9 +279,65 @@ async def scan_and_import_devices(
             'total_discovered': len(discovered),
             'newly_imported': imported,
             'cidr': request.cidr,
+            'hosts': [h.to_dict() for h in discovered],
         }
     except Exception as e:
         logger.error(f"扫描导入失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/scan-and-import-stream", summary="启动扫描（轮询进度）")
+async def scan_and_import_devices_stream(
+    request: IPScanRequest,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    启动扫描任务，立即返回 scan_id。
+    前端通过 GET /discovery/scan-and-import-stream/{scan_id} 轮询进度。
+    """
+    import uuid
+    scan_id = str(uuid.uuid4())
+
+    scan_tasks[scan_id] = {
+        "status": "pending",
+        "progress": {"complete": 0, "total": 0, "current_ip": "", "phase": "idle"},
+        "result": None,
+        "error": None,
+    }
+
+    background_tasks.add_task(_async_scan_task, scan_id, request.cidr, current_user.username)
+
+    return {"scan_id": scan_id, "status": "pending", "cidr": request.cidr}
+
+
+class ScanProgressResponse(BaseModel):
+    scan_id: str
+    status: str  # pending | scanning | importing | done | error
+    progress: dict  # {complete, total, current_ip, phase}
+    result: Optional[dict] = None  # only when status==done
+    error: Optional[str] = None
+
+
+@router.get("/scan-and-import-stream/{scan_id}", summary="查询扫描进度")
+async def get_scan_progress(
+    scan_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """轮询接口：返回当前扫描进度和结果"""
+    task = scan_tasks.get(scan_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="scan_id not found")
+    try:
+        return ScanProgressResponse(
+            scan_id=scan_id,
+            status=task["status"],
+            progress=task["progress"],
+            result=task["result"],
+            error=task["error"],
+        )
+    except Exception as e:
+        logger.error(f"ScanProgressResponse 构建失败: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -561,14 +709,13 @@ async def list_snmp_devices(
 
 @router.post("/devices/import", summary="导入发现的设备")
 async def import_discovered_devices(
-    ips: str = Body(..., description="要导入的IP列表(JSON数组)"),
+    ips: List[str] = Body(..., description="要导入的IP列表"),
     device_type: str = Body("server", description="设备类型"),
     vendor: Optional[str] = Body(None, description="厂商"),
     protocols: str = Body('{"primary": "snmp", "fallback": "ssh"}', description="采集协议(JSON)"),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     import json
-    ips = json.loads(ips)
     protocols = json.loads(protocols)
     """
     将发现的主机导入到设备库
@@ -770,7 +917,7 @@ async def get_discovered_hosts(
 
 @router.post("/import", summary="导入发现的主机")
 async def import_hosts(
-    ips: str = Body(..., description="要导入的IP列表(JSON数组)"),
+    ips: List[str] = Body(..., description="要导入的IP列表"),
     device_type: str = Body("server", description="设备类型"),
     vendor: Optional[str] = Body(None, description="厂商"),
     protocols: str = Body('{"primary": "snmp", "fallback": "ssh"}', description="采集协议(JSON)"),
@@ -783,7 +930,6 @@ async def import_hosts(
     """
     import json
     try:
-        ips = json.loads(ips) if isinstance(ips, str) else ips
         protocols = json.loads(protocols) if isinstance(protocols, str) else protocols
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON format: {e}")

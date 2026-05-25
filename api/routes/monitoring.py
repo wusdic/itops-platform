@@ -438,6 +438,15 @@ async def get_alert_stats(
         return {'total': 0, 'critical': 0, 'warning': 0, 'info': 0, 'active': 0}
 
 
+@router.get("/alerts/statistics", summary="获取告警统计(别名)", name="alerts_statistics_alias")
+async def get_alert_statistics(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """返回告警统计数据（/alerts/stats 的别名）"""
+    return await get_alert_stats(current_user, db)
+
+
 @router.get("/alerts", summary="获取告警列表")
 async def get_alerts(
     status_filter: Optional[str] = Query(None, alias="status", description="状态过滤"),

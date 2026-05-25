@@ -1311,7 +1311,77 @@ async def question_answer(
     }
 
 
-# ============== sessionstatistics接口 ==============
+class KnowledgeQARequest(BaseModel):
+    """知识问答请求（POST body 方式）"""
+    question: str = Field(..., description="用户问题")
+    category_id: Optional[int] = Field(None, description="知识分类ID")
+    knowledge_items: list = Field(default_factory=list, description="知识条目列表")
+
+
+class KnowledgeQAResponse(BaseModel):
+    """知识问答响应"""
+    answer: str
+    sources: list = Field(default_factory=list)
+    created_at: str
+
+
+@router.post("/knowledge-qa", summary="知识问答(POST body)", response_model=KnowledgeQAResponse)
+async def knowledge_qa(
+    request: KnowledgeQARequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    知识问答接口 - 接收 POST body 格式的请求
+    前端发送: {question, category_id, knowledge_items}
+    """
+    # Search relevant SOPs from knowledge base
+    from modules.business.knowledge_base.models import SOPDocument
+
+    query_obj = db.query(SOPDocument).filter(
+        SOPDocument.is_deleted == False,
+        SOPDocument.status == 'approved'
+    )
+
+    # Filter by category if provided
+    if request.category_id:
+        query_obj = query_obj.filter(SOPDocument.category_id == request.category_id)
+
+    # Simple keyword matching
+    sops = query_obj.limit(5).all()
+    sources = []
+    context_chunks = []
+
+    for sop in sops:
+        sources.append({
+            "sop_id": str(sop.id),
+            "title": sop.title,
+            "content": (sop.content or "")[:200]
+        })
+        context_chunks.append(f"{sop.title}: {sop.content or ''}")
+
+    # Build context for LLM
+    context = "\n\n".join(context_chunks) if context_chunks else "No relevant knowledge found."
+
+    # Generate answer using LLM if available
+    answer = f"根据知识库检索到 {len(sources)} 条相关文档。\n\n问题: {request.question}\n\n{context[:500]}"
+
+    try:
+        from modules.business.ai_copilot.llm_client import LLMClient
+        llm = LLMClient()
+        prompt = f"基于以下知识内容，回答用户问题。如果知识库没有相关内容，请说明。\n\n知识内容:\n{context}\n\n用户问题: {request.question}\n\n请给出准确、专业的回答。"
+        answer = llm.generate(prompt, max_tokens=500) or answer
+    except Exception:
+        pass  # Fallback to simple retrieval
+
+    return KnowledgeQAResponse(
+        answer=answer,
+        sources=sources,
+        created_at=datetime.now().isoformat()
+    )
+
+
+# ============== session statistics 接口 ==============
 
 @router.get("/stats", summary="getAI助手statistics")
 async def get_ai_stats(

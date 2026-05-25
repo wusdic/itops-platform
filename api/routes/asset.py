@@ -885,3 +885,42 @@ async def get_asset_stats(
             "maintenance": maintenance_devices,
         }
     }
+
+
+class BatchDeviceRequest(BaseModel):
+    ids: List[int] = Field(..., description="设备ID列表")
+    action: str = Field(..., description="操作: delete, enable, disable")
+
+
+@router.post("/device/batch", summary="批量操作设备")
+async def batch_device(
+    request: BatchDeviceRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """批量删除/启用/禁用设备"""
+    if not request.ids:
+        raise HTTPException(status_code=400, detail="设备ID列表不能为空")
+
+    devices = db.query(Device).filter(Device.id.in_(request.ids)).all()
+    if not devices:
+        raise HTTPException(status_code=404, detail="未找到指定设备")
+
+    results = []
+    for device in devices:
+        if request.action == "delete":
+            device.is_deleted = True
+            device.deleted_at = datetime.now()
+        elif request.action == "enable":
+            device.is_active = True
+        elif request.action == "disable":
+            device.is_active = False
+        results.append(device.id)
+
+    db.commit()
+    return {
+        "status": "success",
+        "action": request.action,
+        "affected": len(results),
+        "ids": results
+    }

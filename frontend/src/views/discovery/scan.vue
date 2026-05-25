@@ -30,6 +30,7 @@
           <el-card v-if="scanning || scanProgress > 0" size="small" shadow="never">
             <el-progress :percentage="scanProgress" :stroke-width="10" />
             <div class="scan-status">{{ scanStatus }}</div>
+            <div class="scan-current-ip" v-if="currentScanIp">正在扫描: {{ currentScanIp }}</div>
           </el-card>
 
           <!-- 已保存的扫描任务 -->
@@ -158,6 +159,7 @@ const cidr = ref('')
 const scanning = ref(false)
 const scanProgress = ref(0)
 const scanStatus = ref('')
+const currentScanIp = ref('')
 const scanResults = ref([])
 const selectedHosts = ref([])
 const scanHistory = ref([])
@@ -295,14 +297,16 @@ async function startScan() {
   const normalizedCidr = normalizeCIDR(cidr.value)
   scanning.value = true
   scanProgress.value = 0
-  scanStatus.value = '正在扫描...'
+  scanStatus.value = '正在启动扫描任务...'
   scanResults.value = []
   selectedHosts.value = []
+  currentScanIp.value = ''
 
   try {
     const token = localStorage.getItem('token')
-    // POST /api/v1/discovery/scan-and-import — 同步扫描，直接导入发现的设备
-    const res = await fetch('/api/v1/discovery/scan-and-import', {
+
+    // Step 1: 启动扫描任务，获得 scan_id
+    const startRes = await fetch('/api/v1/discovery/scan-and-import-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -312,33 +316,67 @@ async function startScan() {
       }),
     })
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.message || `HTTP ${res.status}`)
+    if (!startRes.ok) throw new Error(`启动扫描失败 HTTP ${startRes.status}`)
+    const { scan_id } = await startRes.json()
+
+    // Step 2: 每秒轮询进度
+    while (true) {
+      await new Promise(r => setTimeout(r, 1000))
+
+      const pollRes = await fetch(`/api/v1/discovery/scan-and-import-stream/${scan_id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!pollRes.ok) continue
+
+      const data = await pollRes.json()
+      const { status, progress, result, error } = data
+
+      if (progress) {
+        const { complete = 0, total = 0, current_ip = '', phase = '' } = progress
+        if (total > 0) {
+          scanProgress.value = Math.round(complete / total * 100)
+        }
+        if (current_ip) currentScanIp.value = current_ip
+
+        if (phase === 'scanning') {
+          scanStatus.value = `正在扫描 ${current_ip}（${complete}/${total}）`
+        } else if (phase === 'importing') {
+          scanStatus.value = `正在导入 ${current_ip}（${complete}/${total}）`
+        }
+      }
+
+      if (status === 'done') {
+        scanProgress.value = 100
+        const discovered = result?.total_discovered || 0
+        const imported = result?.newly_imported || 0
+        scanStatus.value = `扫描完成，发现 ${discovered} 台主机，已导入 ${imported} 台新设备`
+        scanResults.value = result?.hosts || []
+        if (discovered > 0) {
+          if (imported > 0) {
+            message.success(`发现 ${discovered} 台主机，导入 ${imported} 台新设备到设备列表`)
+          } else {
+            message.info(`发现 ${discovered} 台主机（均已存在，无需重复导入）`)
+          }
+        } else {
+          message.warning('未发现新设备，可能网络不可达或设备已在库中')
+        }
+        break
+
+      } else if (status === 'error') {
+        scanProgress.value = 0
+        scanStatus.value = `扫描失败: ${error}`
+        message.error(`扫描失败: ${error}`)
+        break
+      }
     }
 
-    scanProgress.value = 80
-    scanStatus.value = '解析响应...'
-
-    const data = await res.json()
-    // Backend returns {total_discovered, newly_imported, cidr} — hosts are imported directly to DB
-    const discovered = data.total_discovered || 0
-    const imported = data.newly_imported || 0
-    scanProgress.value = 100
-    if (discovered > 0) {
-      scanStatus.value = `扫描完成，发现 ${discovered} 台主机，已导入 ${imported} 台新设备到设备列表`
-      message.success(`发现 ${discovered} 台主机，导入 ${imported} 台新设备`)
-    } else {
-      scanStatus.value = '扫描完成，未发现主机（可能网络不可达或设备已存在）'
-      message.warning('未发现新设备，可能网络不可达或设备已在库中')
-    }
-    scanResults.value = []
   } catch (e) {
     scanProgress.value = 0
     scanStatus.value = `扫描失败: ${e.message}`
     message.error(`扫描失败: ${e.message}`)
   } finally {
     scanning.value = false
+    currentScanIp.value = ''
   }
 }
 
@@ -356,18 +394,19 @@ async function importSelected() {
   if (!selectedHosts.value.length) return
   const token = localStorage.getItem('token')
   try {
-    const res = await fetch('/api/v1/discovery/scan-and-import', {
+    // 使用正确的 /import 端点，传入 IP 列表
+    const res = await fetch('/api/v1/discovery/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        cidr: cidr.value,
-        hosts: selectedHosts.value,
+        ips: JSON.stringify(selectedHosts.value.map(h => h.ip)),
+        device_type: 'server',
       }),
     })
     if (res.ok) {
       const data = await res.json()
-      message.success(`成功导入 ${data.newly_imported || selectedHosts.value.length} 台新设备`)
-      scanResults.value = scanResults.value.filter(r => !selectedHosts.value.includes(r.ip))
+      message.success(`成功导入 ${selectedHosts.value.length} 台设备`)
+      scanResults.value = scanResults.value.filter(r => !selectedHosts.value.map(h => h.ip).includes(r.ip))
       selectedHosts.value = []
     } else {
       const err = await res.json().catch(() => ({}))
@@ -567,6 +606,12 @@ onMounted(async () => {
   margin-top: 8px;
   color: #909399;
   font-size: 13px;
+}
+.scan-current-ip {
+  margin-top: 4px;
+  color: #409eff;
+  font-size: 12px;
+  font-family: monospace;
 }
 .result-count {
   color: #909399;
