@@ -501,6 +501,59 @@ async def login_form(form_data: OAuth2PasswordRequestForm = Depends()):
     return Token(access_token=access_token, token_type="bearer", expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
 
 
+@router.post("/change-password-first-login", tags=["认证"])
+async def change_password_first_login(
+    password_data: ChangePasswordRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    首次登录强制修改密码
+
+    - **old_password**: 当前密码
+    - **new_password**: 新密码
+    - 用户首次登录后必须调用此接口，否则后续操作受限
+    """
+    settings = get_settings()
+
+    # 获取用户
+    user = _user_store.get_user(current_user.username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+
+    # 验证旧密码
+    if not _user_store._password_hasher.verify_password(password_data.old_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="旧密码错误"
+        )
+
+    # 验证新密码强度
+    from modules.foundation.auth_manager.auth import PasswordHasher
+    is_valid, msg = PasswordHasher.validate_password_strength(password_data.new_password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=msg
+        )
+
+    # 更新密码
+    new_hash = _user_store._password_hasher.hash_password(password_data.new_password)
+    _user_store.update_user_password(current_user.user_id, new_hash)
+
+    # 标记用户已不需要首次改密
+    with _user_store._db_manager.session_scope() as session:
+        from modules.foundation.db_models.system import SystemUser
+        db_user = session.query(SystemUser).filter_by(id=current_user.user_id).first()
+        if db_user:
+            db_user.must_change_password = "0"
+            session.commit()
+
+    return {"message": "密码修改成功，请使用新密码重新登录"}
+
+
 # ============== LDAP SSO 登录 ==============
 
 class LDAPSSORequest(BaseModel):

@@ -245,6 +245,7 @@ class SystemUser(Base):
     department_id = Column(Integer, nullable=True, index=True)
     status = Column(String(32), default="active")  # active/inactive/locked/pending
     roles = Column(Text)  # JSON 数组存储角色列表
+    must_change_password = Column(String(1), default="1")  # 首次登录必须改密: 1=是, 0=否
     last_login = Column(DateTime)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
