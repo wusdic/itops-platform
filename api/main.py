@@ -94,10 +94,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
     # 启动告警升级定时任务
     import asyncio as _asyncio_alt
+    _bg_tasks: list = []
+
     try:
         from modules.business.monitoring.alerter import get_alert_trigger
         alert_trigger = get_alert_trigger()
-        _asyncio_alt.create_task(alert_trigger.start())
+        _bg_tasks.append(_asyncio_alt.create_task(alert_trigger.start()))
         logger.info("AlertTrigger escalation task started")
     except Exception as e:
         logger.warning(f"AlertTrigger initialization skipped: {e}")
@@ -106,7 +108,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     periodic_collect_task = None
     try:
         from modules.collection.device_manager import get_device_manager
-        
+
         manager = get_device_manager()
         # 从配置获取采集间隔，默认60秒
         interval = 60
@@ -116,11 +118,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             interval = loader.get_global_config('collect.default_interval') or 60
         except Exception:
             pass
-        
-        # 启动定时采集为后台任务
-        _asyncio_alt.create_task(
+
+        # 启动定时采集为后台任务，并捕获句柄以便优雅关闭
+        periodic_collect_task = _asyncio_alt.create_task(
             manager.start_periodic_collect(interval=interval)
         )
+        _bg_tasks.append(periodic_collect_task)
         logger.info(f"设备定时采集任务已启动 (间隔: {interval}秒)")
 
         # 注册自动化触发回调 - 每个设备采集完都会触发
@@ -130,7 +133,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         logger.info("自动化触发服务已注册到设备采集回调")
 
         # 启动自动化触发评估循环
-        _asyncio_alt.create_task(trigger_service.start())
+        _bg_tasks.append(_asyncio_alt.create_task(trigger_service.start()))
         logger.info("自动化触发服务已启动")
     except Exception as e:
         logger.warning(f"设备定时采集任务启动失败: {e}")
@@ -150,7 +153,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     except Exception as e:
         logger.warning(f"停止自动化触发服务失败: {e}")
 
-    # 停止定时采集任务
+    # 停止定时采集任务并取消所有后台任务
     if periodic_collect_task:
         try:
             from modules.collection.device_manager import get_device_manager
@@ -160,6 +163,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             logger.info("设备定时采集任务已停止")
         except Exception as e:
             logger.warning(f"停止设备定时采集任务失败: {e}")
+
+    # 取消所有捕获的后台任务
+    for t in _bg_tasks:
+        if not t.done():
+            t.cancel()
+    if _bg_tasks:
+        await _asyncio_alt.gather(*_bg_tasks, return_exceptions=True)
     
     try:
         from modules.foundation.db_models.base import close_db
@@ -356,6 +366,7 @@ def create_app() -> FastAPI:
 
     app.include_router(
         sharding_router,
+        prefix="/api/v1",
         tags=["分片管理"],
     )
 
@@ -410,32 +421,10 @@ def create_app() -> FastAPI:
         async def serve_index():
             return FileResponse(os.path.join(dist_path, "index.html"))
         
-        # SPA fallback路由 - 必须放在API路由之后，处理所有HTTP方法
+        # SPA fallback路由 - 仅处理 GET 请求的静态文件路由
         @app.get("/{path:path}")
-        async def serve_spa_get(path: str):
+        async def serve_spa(path: str):
             if path.startswith("api/"):
-                from fastapi.responses import JSONResponse
-                return JSONResponse(status_code=404, content={"detail": "Not Found"})
-            return FileResponse(os.path.join(dist_path, "index.html"))
-
-        @app.post("/{path:path}")
-        async def serve_spa_post(path: str):
-            if path.startswith("api/"):
-                from fastapi.responses import JSONResponse
-                return JSONResponse(status_code=404, content={"detail": "Not Found"})
-            return FileResponse(os.path.join(dist_path, "index.html"))
-
-        @app.put("/{path:path}")
-        async def serve_spa_put(path: str):
-            if path.startswith("api/"):
-                from fastapi.responses import JSONResponse
-                return JSONResponse(status_code=404, content={"detail": "Not Found"})
-            return FileResponse(os.path.join(dist_path, "index.html"))
-
-        @app.delete("/{path:path}")
-        async def serve_spa_delete(path: str):
-            if path.startswith("api/"):
-                from fastapi.responses import JSONResponse
                 return JSONResponse(status_code=404, content={"detail": "Not Found"})
             return FileResponse(os.path.join(dist_path, "index.html"))
         

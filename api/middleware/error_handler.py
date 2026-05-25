@@ -135,17 +135,10 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             f"Request ID: {request_id}\n"
             f"Traceback:\n{traceback.format_exc()}"
         )
-        
-        # 根据环境返回不同级别的错误信息
-        is_debug = request.app.debug if hasattr(request.app, "debug") else False
-        
+
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "error": "Internal Server Error",
-                "message": str(exc) if is_debug else "An unexpected error occurred",
-                "request_id": request_id,
-            } if is_debug else {
                 "error": "Internal Server Error",
                 "request_id": request_id,
             },
