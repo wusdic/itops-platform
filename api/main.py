@@ -36,6 +36,7 @@ from api.routes import (
     sharding_router,
     api_keys_router,
     log_service_router,
+    report_singular_alias_router,
 )
 from api.dependencies import get_settings
 from api.middleware.logging import LoggingMiddleware
@@ -399,6 +400,12 @@ def create_app() -> FastAPI:
         log_service_router,
         prefix="/api/v1/logs",
         tags=["日志服务"],
+    )
+
+    app.include_router(
+        report_singular_alias_router,
+        prefix="",
+        tags=["报表别名"],
     )
 
     # 前端静态文件服务 - 使用中间件方式避免路由冲突

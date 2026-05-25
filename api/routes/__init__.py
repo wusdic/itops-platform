@@ -26,6 +26,7 @@ from .deploy import router as deploy_router
 from .watermark import router as watermark_router
 from .api_keys import router as api_keys_router
 from .log_service import router as log_service_router
+from .report_singular_alias import router as report_singular_alias_router
 
 __all__ = [
     "monitoring_router",
@@ -50,4 +51,5 @@ __all__ = [
     "watermark_router",
     "api_keys_router",
     "log_service_router",
+    "report_singular_alias_router",
 ]
