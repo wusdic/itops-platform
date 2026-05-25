@@ -355,6 +355,12 @@ onUnmounted(() => {
   display: flex;
 }
 
+.main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .sider {
   background: #f8f9fa;
   transition: width 0.3s;
@@ -395,6 +401,8 @@ onUnmounted(() => {
 .content {
   background: #f0f2f5;
   padding: 0;
+  overflow: auto;
+  flex: 1;
 }
 
 .page {
