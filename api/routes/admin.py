@@ -1861,6 +1861,17 @@ async def get_menus(
     return {"items": tree, "total": len(tree)}
 
 
+# 别名路由 - 兼容复数路径约定
+@router.get("/menus", summary="获取菜单列表(复数别名)", include_in_schema=False)
+async def get_menus_alias(
+    status: Optional[str] = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """/menu 的复数别名"""
+    return await get_menus(status=status, current_user=current_user, db=db)
+
+
 @router.post("/menu", summary="创建菜单")
 async def create_menu(
     menu_data: MenuCreate,
@@ -1997,6 +2008,19 @@ async def init_dict_defaults(
     from modules.business.dict_service import DictService
     DictService.init_defaults(db)
     return {"code": 0, "message": "字典初始化完成"}
+
+
+# 别名路由 - 兼容复数路径约定
+@router.get("/dicts", summary="获取字典类型列表(复数别名)", include_in_schema=False)
+async def get_dict_types_alias(
+    keyword: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """/dict 的复数别名"""
+    return await get_dict_types(keyword=keyword, status=status, pagination=pagination, current_user=current_user, db=db)
 
 
 @router.get("/dict", summary="获取字典类型列表")

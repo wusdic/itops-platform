@@ -182,6 +182,19 @@ async def get_report_templates(
     }
 
 
+# 别名路由 - 兼容复数路径约定
+@router.get("/templates", summary="获取报表模板列表(复数别名)", include_in_schema=False)
+async def get_report_templates_alias(
+    report_type: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """/template 的复数别名"""
+    return await get_report_templates(report_type=report_type, keyword=keyword, pagination=pagination, current_user=current_user, db=db)
+
+
 @router.get("/template/{template_id}", summary="获取报表模板详情")
 async def get_report_template(
     template_id: int,
@@ -495,6 +508,21 @@ async def get_reports(
         "page": pagination.page,
         "page_size": pagination.page_size,
     }
+
+
+# 别名路由 - 兼容单数路径约定
+@router.get("", summary="获取报表列表(单数别名)", include_in_schema=False)
+async def get_reports_alias(
+    pagination: PaginationParams = Depends(PaginationParams),
+    report_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """/reports 的单数别名"""
+    return await get_reports(pagination=pagination, report_type=report_type, status=status, start_date=start_date, end_date=end_date, current_user=current_user, db=db)
 
 
 @router.get("/stats", summary="获取报表统计")
