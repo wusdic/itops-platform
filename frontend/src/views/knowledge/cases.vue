@@ -56,6 +56,65 @@
       />
     </el-card>
 
+    <!-- 添加案例对话框 -->
+    <el-dialog v-model="addDialogVisible" title="添加故障案例" width="700px" :close-on-click-modal="false">
+      <el-form :model="addForm" :rules="addFormRules" ref="addFormRef" label-position="top">
+        <el-form-item label="案例标题" prop="title">
+          <el-input v-model="addForm.title" placeholder="请输入案例标题" />
+        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="严重程度" prop="severity">
+              <el-select v-model="addForm.severity" placeholder="选择严重程度" style="width: 100%">
+                <el-option v-for="s in severityOptions" :key="s.value" :label="s.label" :value="s.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="处理状态" prop="status">
+              <el-select v-model="addForm.status" placeholder="选择处理状态" style="width: 100%">
+                <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="发生时间" prop="occurred_at">
+              <el-date-picker v-model="addForm.occurred_at" type="datetime" placeholder="选择发生时间" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="解决时间" prop="resolved_at">
+              <el-date-picker v-model="addForm.resolved_at" type="datetime" placeholder="选择解决时间" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="关键词" prop="keywords">
+          <el-input v-model="addForm.keywords" placeholder="请输入关键词，多个用逗号分隔" />
+        </el-form-item>
+        <el-form-item label="影响范围" prop="impact">
+          <el-input v-model="addForm.impact" placeholder="请输入影响范围" />
+        </el-form-item>
+        <el-form-item label="问题描述" prop="description">
+          <el-input v-model="addForm.description" type="textarea" :rows="4" placeholder="请详细描述问题现象" />
+        </el-form-item>
+        <el-form-item label="根因分析" prop="root_cause">
+          <el-input v-model="addForm.root_cause" type="textarea" :rows="3" placeholder="请分析根本原因" />
+        </el-form-item>
+        <el-form-item label="解决方案" prop="solution">
+          <el-input v-model="addForm.solution" type="textarea" :rows="3" placeholder="请描述解决方案" />
+        </el-form-item>
+        <el-form-item label="经验教训" prop="lessons_learned">
+          <el-input v-model="addForm.lessons_learned" type="textarea" :rows="2" placeholder="请总结经验教训" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitAdd" :loading="addLoading">提交</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 详情抽屉 -->
     <el-drawer v-model="detailDrawer" :size="640" direction="rtl">
       <template #title>
@@ -102,6 +161,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import knowledge from '@/api/knowledge'
 
 const message = ElMessage
 const loading = ref(false)
@@ -111,6 +171,31 @@ const filterSeverity = ref(null)
 const filterStatus = ref(null)
 const detailDrawer = ref(false)
 const currentCase = ref(null)
+
+// Add dialog
+const addDialogVisible = ref(false)
+const addLoading = ref(false)
+const addFormRef = ref(null)
+const addForm = reactive({
+  title: '',
+  severity: '',
+  status: '',
+  occurred_at: null,
+  resolved_at: null,
+  keywords: '',
+  impact: '',
+  description: '',
+  root_cause: '',
+  solution: '',
+  lessons_learned: ''
+})
+
+const addFormRules = {
+  title: [{ required: true, message: '请输入案例标题', trigger: 'blur' }],
+  severity: [{ required: true, message: '请选择严重程度', trigger: 'change' }],
+  status: [{ required: true, message: '请选择处理状态', trigger: 'change' }],
+  occurred_at: [{ required: true, message: '请选择发生时间', trigger: 'change' }]
+}
 
 const pagination = reactive({
   page: 1,
@@ -145,23 +230,66 @@ function showDetail(row) {
   detailDrawer.value = true
 }
 
+function resetAddForm() {
+  Object.assign(addForm, {
+    title: '',
+    severity: '',
+    status: '',
+    occurred_at: null,
+    resolved_at: null,
+    keywords: '',
+    impact: '',
+    description: '',
+    root_cause: '',
+    solution: '',
+    lessons_learned: ''
+  })
+  addFormRef.value?.clearValidate()
+}
+
+function handleAdd() {
+  resetAddForm()
+  addDialogVisible.value = true
+}
+
+async function submitAdd() {
+  try {
+    await addFormRef.value?.validate()
+  } catch { return }
+
+  addLoading.value = true
+  try {
+    const data = {
+      ...addForm,
+      occurred_at: addForm.occurred_at ? new Date(addForm.occurred_at).toISOString() : null,
+      resolved_at: addForm.resolved_at ? new Date(addForm.resolved_at).toISOString() : null
+    }
+    await knowledge.faultCase.create(data)
+    message.success('故障案例创建成功')
+    addDialogVisible.value = false
+    await loadData()
+  } catch (error) {
+    message.error(error.message || '创建失败')
+  } finally {
+    addLoading.value = false
+  }
+}
+
 onMounted(() => { loadData() })
 
 async function loadData() {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({ page: pagination.page, page_size: pagination.pageSize })
-    if (searchKeyword.value) params.append('keyword', searchKeyword.value)
-    if (filterSeverity.value) params.append('severity', filterSeverity.value)
-    if (filterStatus.value) params.append('status', filterStatus.value)
-    const res = await fetch(`/api/v1/knowledge/fault-case?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
-    list.value = data.items || []
+    const params = {
+      page: pagination.page,
+      page_size: pagination.pageSize
+    }
+    if (searchKeyword.value) params.keyword = searchKeyword.value
+    if (filterSeverity.value) params.severity = filterSeverity.value
+    if (filterStatus.value) params.status = filterStatus.value
+
+    const data = await knowledge.faultCase.getList(params)
+    list.value = data.items || data || []
     pagination.total = data.total || 0
   } catch (e) {
     message.error(`加载失败: ${e.message}`)
@@ -180,9 +308,5 @@ function handlePageSizeChange(pageSize) {
   pagination.pageSize = pageSize
   pagination.page = 1
   loadData()
-}
-
-function handleAdd() {
-  message.warning('故障案例创建功能需后端支持故障案例数据模型和 API')
 }
 </script>

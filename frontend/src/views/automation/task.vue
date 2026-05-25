@@ -2,57 +2,6 @@
   <div class="page-container">
     <el-card>
       <el-tabs type="border-card">
-        <el-tab-pane label="指标评估">
-          <el-form :model="form" label-placement="left" label-width="100" style="max-width: 600px; margin-top: 16px;">
-            <el-form-item label="设备" required>
-              <el-select v-model="form.device_id" placeholder="请选择设备" style="width: 100%" @change="loadMetrics">
-                <el-option
-                  v-for="d in deviceOptions"
-                  :key="d.value"
-                  :label="d.label"
-                  :value="d.value"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="指标" required>
-              <el-select v-model="form.metric_name" placeholder="请先选择设备" style="width: 100%" :disabled="!form.device_id">
-                <el-option
-                  v-for="m in metricOptions"
-                  :key="m.value"
-                  :label="m.label"
-                  :value="m.value"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="阈值(可选)">
-              <el-input v-model="form.threshold" placeholder="请输入阈值(可选)" />
-            </el-form-item>
-            <el-form-item>
-              <el-space>
-                <el-button type="primary" @click="handleEvaluate" :loading="evaluating">评估</el-button>
-                <el-button @click="resetForm">重置</el-button>
-              </el-space>
-            </el-form-item>
-          </el-form>
-
-          <!-- 评估结果 -->
-          <el-card v-if="evalResult" style="margin-top: 16px;">
-            <template #header>评估结果</template>
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="设备ID">{{ evalResult.device_id || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="指标名称">{{ evalResult.metric_name || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="当前值">{{ evalResult.current_value ?? '-' }}</el-descriptions-item>
-              <el-descriptions-item label="阈值">{{ evalResult.threshold ?? '-' }}</el-descriptions-item>
-              <el-descriptions-item label="状态">
-                <el-tag :type="getStatusType(evalResult.status)">{{ getStatusText(evalResult.status) }}</el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="执行ID">{{ evalResult.execution_id || '-' }}</el-descriptions-item>
-            </el-descriptions>
-            <el-divider />
-            <el-input v-model="evalResultDetail" type="textarea" :rows="8" readonly placeholder="暂无详细结果" />
-          </el-card>
-        </el-tab-pane>
-
         <el-tab-pane label="历史记录">
           <el-space style="margin-bottom: 12px">
             <el-button quaternary @click="loadHistory" :loading="historyLoading">
@@ -115,21 +64,14 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
+import { automation } from '@/api'
 
-const loading = ref(false)
-const evaluating = ref(false)
 const historyLoading = ref(false)
 const snapshotLoading = ref(false)
-const deviceOptions = ref([])
-const metricOptions = ref([])
-const evalResult = ref(null)
-const evalResultDetail = ref('')
 const historyList = ref([])
 const snapshotDialogVisible = ref(false)
 const snapshotDetail = ref('')
-const currentExecutionId = ref(null)
 
-const form = reactive({ device_id: null, metric_name: null, threshold: '' })
 const historyPagination = reactive({
   page: 1,
   pageSize: 10,
@@ -146,85 +88,12 @@ function getStatusText(status) {
   return map[status] || status || '-'
 }
 
-async function loadDevices() {
-  try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/assets/device?page=1&page_size=100', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    deviceOptions.value = (data.items || data.data?.items || []).map(d => ({ label: `${d.name} (${d.ip_address})`, value: d.id }))
-  } catch (e) {
-    ElMessage.error(`加载设备失败: ${e.message}`)
-    deviceOptions.value = []
-  }
-}
-
-async function loadMetrics(deviceId) {
-  if (!deviceId) {
-    metricOptions.value = []
-    return
-  }
-  try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/assets/device/${deviceId}/metrics`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    const metrics = data.metrics || data.items || data.data?.items || []
-    metricOptions.value = metrics.map(m => ({ label: m.name || m.metric_name, value: m.name || m.metric_name }))
-  } catch (_) {
-    metricOptions.value = [
-      { label: 'CPU使用率', value: 'cpu_usage' },
-      { label: '内存使用率', value: 'memory_usage' },
-      { label: '磁盘使用率', value: 'disk_usage' },
-      { label: '网络流量', value: 'network_traffic' }
-    ]
-  }
-}
-
-async function handleEvaluate() {
-  if (!form.device_id) { ElMessage.warning('请选择设备'); return }
-  if (!form.metric_name) { ElMessage.warning('请选择指标'); return }
-  evaluating.value = true
-  evalResult.value = null
-  evalResultDetail.value = ''
-  try {
-    const token = localStorage.getItem('token') || ''
-    const payload = { device_id: form.device_id, metric_name: form.metric_name }
-    if (form.threshold) payload.threshold = parseFloat(form.threshold)
-    const res = await fetch('/api/v1/automation/evaluate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    evalResult.value = data
-    evalResultDetail.value = JSON.stringify(data, null, 2)
-    ElMessage.success('评估完成')
-  } catch (e) {
-    evalResultDetail.value = `评估失败: ${e.message}`
-    ElMessage.error(`评估失败: ${e.message}`)
-  } finally {
-    evaluating.value = false
-  }
-}
-
 async function handleViewSnapshot(row) {
-  currentExecutionId.value = row.execution_id
   snapshotDialogVisible.value = true
   snapshotDetail.value = ''
   snapshotLoading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/automation/executions/${row.execution_id}/snapshot`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await automation.executions.getSnapshot(row.execution_id)
     snapshotDetail.value = JSON.stringify(data, null, 2)
   } catch (e) {
     snapshotDetail.value = `加载快照失败: ${e.message}`
@@ -237,16 +106,13 @@ async function handleViewSnapshot(row) {
 async function loadHistory() {
   historyLoading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({ page: historyPagination.page, page_size: historyPagination.pageSize })
-    const res = await fetch(`/api/v1/automation/rollback-history?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
+    const res = await automation.rollbackHistory.getList({
+      page: historyPagination.page,
+      page_size: historyPagination.pageSize
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
-    historyList.value = data.items || data.data?.items || []
-    historyPagination.total = data.total || data.data?.total || 0
+    if (!res || typeof res !== 'object') throw new Error('响应格式异常')
+    historyList.value = res.items || []
+    historyPagination.total = res.total || 0
   } catch (e) {
     ElMessage.error(`加载历史记录失败: ${e.message}`)
     historyList.value = []
@@ -261,17 +127,7 @@ function handlePageSizeChange(size) {
   loadHistory()
 }
 
-function resetForm() {
-  form.device_id = null
-  form.metric_name = null
-  form.threshold = ''
-  evalResult.value = null
-  evalResultDetail.value = ''
-  metricOptions.value = []
-}
-
 onMounted(() => {
-  loadDevices()
   loadHistory()
 })
 </script>

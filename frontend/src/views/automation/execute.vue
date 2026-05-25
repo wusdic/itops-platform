@@ -100,6 +100,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
+import { automation } from '@/api'
 
 const message = ElMessage
 const loading = ref(false)
@@ -151,18 +152,13 @@ function formatActions(actions) {
 async function loadData() {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({ page: pagination.page, page_size: pagination.pageSize })
-    if (filterStatus.value) params.append('status', filterStatus.value)
-    if (searchKeyword.value) params.append('search', searchKeyword.value)
-    const res = await fetch(`/api/v1/automation/rollback-history?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
-    rollbackList.value = data.items || data.data?.items || []
-    pagination.total = data.total || data.data?.total || 0
+    const params = { page: pagination.page, page_size: pagination.pageSize }
+    if (filterStatus.value) params.status = filterStatus.value
+    if (searchKeyword.value) params.search = searchKeyword.value
+    const res = await automation.rollbackHistory.getList(params)
+    if (!res || typeof res !== 'object') throw new Error('响应格式异常')
+    rollbackList.value = res.items || []
+    pagination.total = res.total || 0
   } catch (e) {
     message.error(`加载回滚历史失败: ${e.message}`)
     rollbackList.value = []
@@ -187,12 +183,7 @@ async function handleViewSnapshot(row) {
   snapshotDetail.value = ''
   snapshotLoading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/automation/executions/${executionId}/snapshot`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await automation.executions.getSnapshot(executionId)
     snapshotDetail.value = JSON.stringify(data, null, 2)
   } catch (e) {
     snapshotDetail.value = `加载快照失败: ${e.message}`

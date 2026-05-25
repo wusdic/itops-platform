@@ -89,23 +89,13 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import knowledge from '@/api/knowledge'
 
 const loading = ref(false)
 const formLoading = ref(false)
 const deleteLoading = ref(false)
 
-const categoryList = ref([
-  { id: 1, name: '系统运维', code: 'ops', parent_id: null, sort_order: 1, description: '系统运维相关文档', children: [
-    { id: 11, name: '服务器管理', code: 'server', parent_id: 1, sort_order: 11, description: '服务器日常管理' },
-    { id: 12, name: '网络配置', code: 'network', parent_id: 1, sort_order: 12, description: '网络设备配置' }
-  ]},
-  { id: 2, name: '故障处理', code: 'fault', parent_id: null, sort_order: 2, description: '故障处理流程和记录', children: [
-    { id: 21, name: '紧急故障', code: 'critical', parent_id: 2, sort_order: 21, description: 'P0/P1级故障' },
-    { id: 22, name: '一般故障', code: 'normal', parent_id: 2, sort_order: 22, description: 'P2/P3级故障' }
-  ]},
-  { id: 3, name: '安全规范', code: 'security', parent_id: null, sort_order: 3, description: '安全相关规范文档' },
-  { id: 4, name: '操作手册', code: 'manual', parent_id: null, sort_order: 4, description: '各类操作手册' }
-])
+const categoryList = ref([])
 
 const currentCategory = ref(null)
 const modalVisible = ref(false)
@@ -194,15 +184,18 @@ function getNextSortOrder(parentId) {
   return Math.max(...siblings.map(s => s.sort_order)) + 1
 }
 
-function findCategory(list, id) {
-  for (const item of list) {
-    if (item.id === id) return item
-    if (item.children) {
-      const found = findCategory(item.children, id)
-      if (found) return found
-    }
+async function loadCategories() {
+  loading.value = true
+  try {
+    const data = await knowledge.category.getList()
+    // API returns flat list, need to build tree
+    categoryList.value = data.items || data || []
+  } catch (e) {
+    ElMessage.error('加载分类失败')
+    categoryList.value = []
+  } finally {
+    loading.value = false
   }
-  return null
 }
 
 async function submitForm() {
@@ -212,44 +205,29 @@ async function submitForm() {
 
   formLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 300))
-
     if (isEditing.value) {
-      const category = findCategory(categoryList.value, currentCategory.value.id)
-      if (category) {
-        category.name = formData.name
-        category.description = formData.description
-        category.sort_order = formData.sort_order
-        category.parent_id = formData.parent_id
-      }
+      await knowledge.category.update(currentCategory.value.id, {
+        name: formData.name,
+        sort_order: formData.sort_order,
+        parent_id: formData.parent_id,
+        description: formData.description
+      })
       ElMessage.success('分类更新成功')
     } else {
-      const newCategory = {
-        id: Date.now(),
+      await knowledge.category.create({
         name: formData.name,
         code: formData.code,
         parent_id: formData.parent_id,
         sort_order: formData.sort_order,
-        description: formData.description,
-        children: []
-      }
-
-      if (formData.parent_id) {
-        const parent = findCategory(categoryList.value, formData.parent_id)
-        if (parent) {
-          if (!parent.children) parent.children = []
-          parent.children.push(newCategory)
-        }
-      } else {
-        categoryList.value.push(newCategory)
-      }
-
+        description: formData.description
+      })
       ElMessage.success('分类创建成功')
     }
 
     modalVisible.value = false
+    await loadCategories()
   } catch (error) {
-    ElMessage.error('操作失败')
+    ElMessage.error(error.message || '操作失败')
   } finally {
     formLoading.value = false
   }
@@ -258,34 +236,19 @@ async function submitForm() {
 async function confirmDelete() {
   deleteLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 300))
-
-    const deleteRecursive = (list, id) => {
-      const index = list.findIndex(item => item.id === id)
-      if (index !== -1) {
-        list.splice(index, 1)
-        return true
-      }
-      for (const item of list) {
-        if (item.children && deleteRecursive(item.children, id)) return true
-      }
-      return false
-    }
-
-    deleteRecursive(categoryList.value, currentCategory.value.id)
-    currentCategory.value = null
+    await knowledge.category.delete(currentCategory.value.id)
     ElMessage.success('删除成功')
     deleteModalVisible.value = false
+    await loadCategories()
   } catch (error) {
-    ElMessage.error('删除失败')
+    ElMessage.error(error.message || '删除失败')
   } finally {
     deleteLoading.value = false
   }
 }
 
 onMounted(() => {
-  loading.value = true
-  setTimeout(() => { loading.value = false }, 200)
+  loadCategories()
 })
 </script>
 

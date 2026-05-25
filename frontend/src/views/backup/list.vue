@@ -163,10 +163,11 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 150,
+    width: 220,
     render: ({ row }) => h(ElSpace, { size: 'small' }, () => [
       h(ElButton, { size: 'small', onClick: () => handleView(row) }, () => '详情'),
-      h(ElButton, { size: 'small', type: 'primary', onClick: () => handleRestore(row) }, () => '恢复')
+      h(ElButton, { size: 'small', type: 'primary', onClick: () => handleRestore(row) }, () => '恢复'),
+      h(ElButton, { size: 'small', type: 'success', onClick: () => handleDownload(row) }, () => '下载')
     ])
   }
 ]
@@ -266,6 +267,19 @@ const handleRestore = async (row) => {
       ElMessage.error(`恢复失败: ${e.message}`)
     }
   }
+}
+
+const handleDownload = (row) => {
+  const token = localStorage.getItem('token') || ''
+  const backupName = row.name || row.backup_name || `backup_${row.id}`
+  const url = `/api/v1/admin/backups/${row.id}/download`
+  const link = document.createElement('a')
+  link.href = url
+  link.download = backupName
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 onMounted(() => {

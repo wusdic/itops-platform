@@ -39,6 +39,24 @@ const routes = [
         meta: { title: '性能监控', parent: '监控中心' }
       },
       {
+        path: 'monitoring/dashboard',
+        name: 'MonitoringDashboard',
+        component: () => import('@/views/monitoring/dashboard.vue'),
+        meta: { title: '自定义仪表盘', parent: '监控中心' }
+      },
+      {
+        path: 'monitoring/maintenance',
+        name: 'MaintenanceWindows',
+        component: () => import('@/views/monitoring/maintenance.vue'),
+        meta: { title: '维护时段', parent: '监控中心' }
+      },
+      {
+        path: 'monitoring/triggers',
+        name: 'TriggerRules',
+        component: () => import('@/views/monitoring/triggers.vue'),
+        meta: { title: '触发规则', parent: '监控中心' }
+      },
+      {
         path: 'management/vendor-credentials',
         name: 'VendorCredentials',
         component: () => import('@/views/management/VendorCredentials.vue'),
@@ -50,6 +68,12 @@ const routes = [
         name: 'DiscoveryScan',
         component: () => import('@/views/discovery/scan.vue'),
         meta: { title: '设备扫描', parent: '监控中心' }
+      },
+      {
+        path: 'discovery/targets',
+        name: 'DiscoveryTargets',
+        component: () => import('@/views/discovery/targets.vue'),
+        meta: { title: '发现目标', parent: '监控中心' }
       },
       // 工单管理
       {
@@ -69,6 +93,12 @@ const routes = [
         name: 'WorkOrderMy',
         component: () => import('@/views/workorder/my.vue'),
         meta: { title: '我的工单', parent: '工单管理' }
+      },
+      {
+        path: 'workorder/detail/:id',
+        name: 'WorkOrderDetail',
+        component: () => import('@/views/workorder/detail.vue'),
+        meta: { title: '工单详情', parent: '工单管理' }
       },
       // 知识库
       {
@@ -124,7 +154,7 @@ const routes = [
       {
         path: 'automation/evaluate',
         name: 'AutomationEvaluate',
-        component: () => import('@/views/automation/task.vue'),
+        component: () => import('@/views/automation/evaluate.vue'),
         meta: { title: '指标评估', parent: '自动化' }
       },
       {
@@ -208,6 +238,38 @@ const routes = [
         component: () => import('@/views/system/adapters.vue'),
         meta: { title: '适配器管理', parent: '系统管理' }
       },
+      // 巡检管理
+      {
+        path: 'inspection/tasks',
+        name: 'InspectionTasks',
+        component: () => import('@/views/inspection/tasks.vue'),
+        meta: { title: '巡检任务', parent: '巡检管理' }
+      },
+      {
+        path: 'inspection/report/:taskId',
+        name: 'InspectionReport',
+        component: () => import('@/views/inspection/report.vue'),
+        meta: { title: '巡检报告', parent: '巡检管理' }
+      },
+      // 部署管理
+      {
+        path: 'deploy/versions',
+        name: 'DeployVersions',
+        component: () => import('@/views/deploy/versions.vue'),
+        meta: { title: '版本管理', parent: '部署管理' }
+      },
+      {
+        path: 'deploy/canary',
+        name: 'DeployCanary',
+        component: () => import('@/views/deploy/canary.vue'),
+        meta: { title: '金丝雀发布', parent: '部署管理' }
+      },
+      {
+        path: 'deploy/health',
+        name: 'DeployHealth',
+        component: () => import('@/views/deploy/health.vue'),
+        meta: { title: '部署健康', parent: '部署管理' }
+      },
       // 报表管理
       {
         path: 'report/list',
@@ -226,6 +288,34 @@ const routes = [
         name: 'ReportTemplate',
         component: () => import('@/views/report/template.vue'),
         meta: { title: '模板管理', parent: '报表管理' }
+      },
+      // 租户管理
+      {
+        path: 'tenants',
+        name: 'Tenants',
+        component: () => import('@/views/tenants/index.vue'),
+        meta: { title: '租户管理', parent: '系统管理' }
+      },
+      // API Key 管理
+      {
+        path: 'api-keys',
+        name: 'ApiKeys',
+        component: () => import('@/views/api-keys/index.vue'),
+        meta: { title: 'API Key 管理', parent: '系统管理' }
+      },
+      // 分片管理
+      {
+        path: 'sharding',
+        name: 'Sharding',
+        component: () => import('@/views/sharding/index.vue'),
+        meta: { title: '分片管理', parent: '系统管理' }
+      },
+      // 操作水印
+      {
+        path: 'watermark',
+        name: 'Watermark',
+        component: () => import('@/views/watermark/index.vue'),
+        meta: { title: '操作水印', parent: '系统管理' }
       }
     ]
   },

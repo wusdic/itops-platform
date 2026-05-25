@@ -1,5 +1,8 @@
 import request from './request'
 
+/**
+ * 设备管理 API
+ */
 export const devices = {
   getList: (params) => request.get('/assets/device', { params }),
   getById: (id) => request.get(`/assets/device/${id}`),
@@ -12,7 +15,7 @@ export const devices = {
   collectAll: () => request.post('/devices/collect/all'),
   getStats: () => request.get('/devices/stats'),
   batchOperate: (ids, action) => request.post('/assets/device/batch', { ids, action }),
-  // 批量导入相关 - 使用 /devices/import 路由
+  // 批量导入相关
   getImportTemplate: (format = 'xlsx') => request.get('/devices/import/template', { params: { format }, responseType: 'blob' }),
   validateImport: (rows) => request.post('/devices/import/validate', rows),
   importDevices: (file) => {
@@ -25,6 +28,9 @@ export const devices = {
   importDevicesSimple: (rows) => request.post('/devices/import/simple', rows)
 }
 
+/**
+ * 告警 API
+ */
 export const alerts = {
   getList: (params) => request.get('/monitoring/alerts', { params }),
   getById: (id) => request.get(`/monitoring/alerts/${id}`),
@@ -33,7 +39,6 @@ export const alerts = {
   delete: (id) => request.delete(`/monitoring/alerts/${id}`),
   acknowledge: (id, data) => request.put(`/monitoring/alerts/${id}/acknowledge`, data),
   resolve: (id, data) => request.put(`/monitoring/alerts/${id}/resolve`, data),
-  // 统一处理接口：action 为 'acknowledge' 或 'resolve'
   handle: (id, data = {}) => {
     const action = data.action || 'acknowledge'
     if (action === 'resolve') {
@@ -47,38 +52,66 @@ export const alerts = {
   getRule: (id) => request.get(`/monitoring/rules/${id}`)
 }
 
+/**
+ * 性能指标 API
+ */
 export const performance = {
   getMetrics: (params) => request.get('/monitoring/metrics', { params }),
   collect: (data) => request.post('/monitoring/metrics/collect', data),
   getHosts: () => request.get('/monitoring/metrics/hosts'),
   getAvailable: () => request.get('/monitoring/metrics/available'),
   query: (data) => request.post('/monitoring/metrics/query', data),
-  // 设备指标历史（从device_manager获取最新数据）
-  getDeviceMetricsHistory: (deviceName, metricType, hours = 24) => 
+  getDeviceMetricsHistory: (deviceName, metricType, hours = 24) =>
     request.get(`/devices/${deviceName}/metrics/history`, { params: { metric_type: metricType, hours } }),
-  getDeviceMetrics: (deviceName) => request.get(`/devices/${deviceName}/metrics`),
-  // 触发规则
-  getTriggerRules: (params) => request.get('/monitoring/trigger-rules', { params }),
-  createTriggerRule: (data) => request.post('/monitoring/trigger-rules', data),
-  getTriggerRule: (id) => request.get(`/monitoring/trigger-rules/${id}`),
-  updateTriggerRule: (id, data) => request.put(`/monitoring/trigger-rules/${id}`, data),
-  deleteTriggerRule: (id) => request.delete(`/monitoring/trigger-rules/${id}`),
-  testTriggerRule: (id) => request.post(`/monitoring/trigger-rules/${id}/test`),
-  getTriggerEvents: () => request.get('/monitoring/trigger-events'),
-  evaluateTrigger: (data) => request.post('/monitoring/trigger/evaluate', data),
-  // 仪表盘
-  getDashboards: () => request.get('/monitoring/dashboards'),
-  getDashboard: (id) => request.get(`/monitoring/dashboards/${id}`),
-  // 仪表盘统计
-  getDashboardStats: () => request.get('/monitoring/dashboard/stats'),
-  // 仪表盘布局（MON-032 自定义布局）
-  getDashboardLayout: (layoutId) => request.get('/monitoring/dashboard/layout', { params: layoutId ? { layout_id: layoutId } : {} }),
-  saveDashboardLayout: (data) => request.put('/monitoring/dashboard/layout', data),
-  listDashboardLayouts: () => request.get('/monitoring/dashboard/layouts'),
-  deleteDashboardLayout: (layoutId) => request.delete(`/monitoring/dashboard/layout/${layoutId}`),
-  // 采集项配置
-  getMetricConfigs: (params) => request.get('/monitoring/metric-configs', { params }),
-  getMetricConfig: (id) => request.get(`/monitoring/metric-configs/${id}`),
-  createMetricConfig: (data) => request.post('/monitoring/metric-configs', data),
-  updateMetricConfig: (id, data) => request.patch(`/monitoring/metric-configs/${id}`, data)
+  getDeviceMetrics: (deviceName) => request.get(`/devices/${deviceName}/metrics`)
+}
+
+/**
+ * 仪表盘 API
+ */
+export const dashboards = {
+  getList: (params) => request.get('/monitoring/dashboards', { params }),
+  getById: (id) => request.get(`/monitoring/dashboards/${id}`),
+  getLayout: (layoutId) => request.get('/monitoring/dashboard/layout', { params: layoutId ? { layout_id: layoutId } : {} }),
+  saveLayout: (data) => request.put('/monitoring/dashboard/layout', data),
+  listLayouts: () => request.get('/monitoring/dashboard/layouts'),
+  deleteLayout: (layoutId) => request.delete(`/monitoring/dashboard/layout/${layoutId}`),
+  getStats: () => request.get('/monitoring/dashboard/stats')
+}
+
+/**
+ * 维护窗口 API
+ */
+export const maintenanceWindows = {
+  getList: (params) => request.get('/monitoring/maintenance-windows', { params }),
+  getById: (id) => request.get(`/monitoring/maintenance-windows/${id}`),
+  create: (data) => request.post('/monitoring/maintenance-windows', data),
+  update: (id, data) => request.put(`/monitoring/maintenance-windows/${id}`, data),
+  delete: (id) => request.delete(`/monitoring/maintenance-windows/${id}`)
+}
+
+/**
+ * 触发规则 API
+ */
+export const triggerRules = {
+  getList: (params) => request.get('/monitoring/trigger-rules', { params }),
+  getById: (id) => request.get(`/monitoring/trigger-rules/${id}`),
+  create: (data) => request.post('/monitoring/trigger-rules', data),
+  update: (id, data) => request.put(`/monitoring/trigger-rules/${id}`, data),
+  delete: (id) => request.delete(`/monitoring/trigger-rules/${id}`),
+  test: (id) => request.post(`/monitoring/trigger-rules/${id}/test`),
+  getEvents: () => request.get('/monitoring/trigger-events'),
+  evaluate: (data) => request.post('/monitoring/trigger/evaluate', data)
+}
+
+/**
+ * 指标配置 API
+ */
+export const metricConfigs = {
+  getList: (params) => request.get('/monitoring/metric-configs', { params }),
+  getById: (id) => request.get(`/monitoring/metric-configs/${id}`),
+  create: (data) => request.post('/monitoring/metric-configs', data),
+  update: (id, data) => request.patch(`/monitoring/metric-configs/${id}`, data),
+  delete: (id) => request.delete(`/monitoring/metric-configs/${id}`),
+  toggle: (id, data) => request.put(`/monitoring/metric-configs/${id}/toggle`, data)
 }
