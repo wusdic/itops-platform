@@ -190,6 +190,25 @@
           <router-view />
         </div>
       </el-main>
+
+      <!-- 修改密码弹窗 -->
+      <el-dialog v-model="passwordDialogVisible" title="修改密码" width="400px" :close-on-click-modal="false">
+        <el-form :model="passwordForm" label-width="90px" label-position="left" @submit.prevent="handleChangePassword">
+          <el-form-item label="旧密码" required>
+            <el-input v-model="passwordForm.old_password" type="password" placeholder="请输入旧密码" show-password />
+          </el-form-item>
+          <el-form-item label="新密码" required>
+            <el-input v-model="passwordForm.new_password" type="password" placeholder="请输入新密码" show-password />
+          </el-form-item>
+          <el-form-item label="确认密码" required>
+            <el-input v-model="passwordForm.confirm_password" type="password" placeholder="请再次输入新密码" show-password />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="passwordDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="passwordLoading" @click="handleChangePassword">确认修改</el-button>
+        </template>
+      </el-dialog>
     </el-container>
   </el-container>
 </template>
@@ -202,7 +221,7 @@ import {
   Menu, Bell, Monitor, Odometer, Ticket, Reading,
   MagicStick, Lightning, Document, DataBoard, Setting
 } from '@element-plus/icons-vue'
-import { notification } from '@/api'
+import { notification, auth } from '@/api'
 import { CONFIG } from '@/config/constants'
 
 const router = useRouter()
@@ -211,6 +230,9 @@ const route = useRoute()
 const collapsed = ref(false)
 const isMobile = ref(false)
 const notificationCount = ref(0)
+const passwordDialogVisible = ref(false)
+const passwordLoading = ref(false)
+const passwordForm = ref({ old_password: "", new_password: "", confirm_password: "" })
 const activeKey = computed(() => route.path)
 
 const username = computed(() => {
@@ -252,15 +274,48 @@ async function onUserAction(key) {
       window.location.href = '/login'
     } catch {}
   } else if (key === 'password') {
-    ElMessage.info('修改密码功能开发中')
+    passwordForm.value = { old_password: '', new_password: '', confirm_password: '' }; passwordDialogVisible.value = true
   } else if (key === 'profile') {
     ElMessage.info('个人中心功能开发中')
   }
+
+
+const handleChangePassword = async () => {
+  if (!passwordForm.value.old_password) {
+    ElMessage.warning('请输入旧密码')
+    return
+  }
+  if (!passwordForm.value.new_password) {
+    ElMessage.warning('请输入新密码')
+    return
+  }
+  if (passwordForm.value.new_password !== passwordForm.value.confirm_password) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+  if (passwordForm.value.new_password.length < 8) {
+    ElMessage.warning('新密码长度不能少于8位')
+    return
+  }
+  passwordLoading.value = true
+  try {
+    await auth.changePassword({
+      old_password: passwordForm.value.old_password,
+      new_password: passwordForm.value.new_password
+    })
+    ElMessage.success('密码修改成功')
+    passwordDialogVisible.value = false
+  } catch (e) {
+    ElMessage.error(e.message || '密码修改失败')
+  } finally {
+    passwordLoading.value = false
+  }
+}
 }
 
 const fetchNotificationCount = async () => {
   try {
-    const res = await notification.getHistory({ page: 1, page_size: 1 })
+    const res = await notification.getMessages({ page: 1, page_size: 1 })
     notificationCount.value = res?.total || (Array.isArray(res) ? res.length : 0)
   } catch {}
 }

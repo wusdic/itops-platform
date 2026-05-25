@@ -132,12 +132,7 @@ const handleCopy = () => {
   }).catch(() => {
     ElMessage.error('复制失败')
   })
-}
-
-const handleSave = () => {
-  ElMessage.info('保存功能开发中')
-}
-</script>
+}</script>
 
 <style scoped>
 .ai-analyze-container {
