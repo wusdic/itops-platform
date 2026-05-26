@@ -18,7 +18,7 @@ from modules.foundation.db_models.device import Device
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["设备管理"], prefix="/api/v1/devices")
+router = APIRouter(tags=["设备管理"], prefix="")
 
 
 # ============== 敏感字段脱敏 ==============

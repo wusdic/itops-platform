@@ -336,7 +336,7 @@ def create_app() -> FastAPI:
 
     app.include_router(
         device_import_router,
-        prefix="/api/v1/devices",
+        prefix="/api/v1/devices-import",
         tags=["设备批量导入"],
     )
 

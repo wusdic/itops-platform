@@ -5,8 +5,8 @@ import request from './request'
  */
 const sharding = {
   getStats: (params) => request.get('/sharding/stats', { params }),
-  getRoutes: (params) => request.get('/sharding/routes', { params }),
-  createShard: (data) => request.post('/sharding/shards', data)
+  getRoutes: (logicalTable, params) => request.get(`/sharding/routes/${logicalTable}`, { params }),
+  createShard: (logicalTable, data) => request.post(`/sharding/routes/${logicalTable}/create`, data)
 }
 
 export default sharding
