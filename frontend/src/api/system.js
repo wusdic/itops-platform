@@ -6,7 +6,10 @@ export const auth = {
   getUserInfo: () => request.get('/auth/userinfo'),
   register: (data) => request.post('/auth/register', data),
   changePassword: (data) => request.put('/auth/password', data),
-  refreshToken: () => request.post('/auth/refresh')
+  refreshToken: () => request.post('/auth/refresh'),
+  // LDAP SSO
+  ldapLogin: (data) => request.post('/auth/ldap-login', data),
+  ldapStatus: () => request.get('/auth/ldap/status')
 }
 
 export const user = {

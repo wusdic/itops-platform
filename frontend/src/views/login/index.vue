@@ -24,6 +24,11 @@
             {{ loading ? '登录中...' : '登 录' }}
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button type="default" style="width: 100%" @click="handleSSOLogin">
+            企业微信 / SSO 登录
+          </el-button>
+        </el-form-item>
       </el-form>
     </el-card>
   </div>
@@ -51,33 +56,57 @@ const rules = {
 }
 
 const handleLogin = async () => {
-  try {
-    await formRef.value?.validate()
-  } catch {
-    return
+    try {
+      await formRef.value?.validate()
+    } catch {
+      return
+    }
+
+    loading.value = true
+    try {
+      const res = await auth.login({
+        username: form.username,
+        password: form.password
+      })
+
+      const token = res.access_token
+      localStorage.setItem('token', token)
+
+      const userInfo = res.user || {}
+      localStorage.setItem('user', JSON.stringify(userInfo))
+
+      ElMessage.success('登录成功')
+      router.push('/dashboard')
+    } catch (error) {
+      ElMessage.error(error.response?.data?.message || error.message || '登录失败')
+    } finally {
+      loading.value = false
+    }
   }
 
-  loading.value = true
-  try {
-    const res = await auth.login({
-      username: form.username,
-      password: form.password
-    })
-
-    const token = res.access_token
-    localStorage.setItem('token', token)
-
-    const userInfo = res.user || {}
-    localStorage.setItem('user', JSON.stringify(userInfo))
-
-    ElMessage.success('登录成功')
-    router.push('/dashboard')
-  } catch (error) {
-    ElMessage.error(error.response?.data?.message || error.message || '登录失败')
-  } finally {
-    loading.value = false
+  const handleSSOLogin = async () => {
+    loading.value = true
+    try {
+      const res = await auth.ldapLogin({
+        username: form.username,
+        password: form.password
+      })
+      if (res.success) {
+        const token = res.access_token
+        localStorage.setItem('token', token)
+        const userInfo = res.user || {}
+        localStorage.setItem('user', JSON.stringify(userInfo))
+        ElMessage.success('SSO登录成功')
+        router.push('/dashboard')
+      } else {
+        ElMessage.error(res.message || 'SSO登录失败')
+      }
+    } catch (error) {
+      ElMessage.error(error.response?.data?.message || error.message || 'SSO登录失败')
+    } finally {
+      loading.value = false
+    }
   }
-}
 </script>
 
 <style scoped>
