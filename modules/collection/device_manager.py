@@ -31,6 +31,10 @@ class DeviceStatus(str, Enum):
     COLLECTING = "collecting"  # 采集进行中，对应 DeviceStatus.UNKNOWN
 
 
+# 向后兼容别名（老代码引用 CollectionStatus）
+CollectionStatus = DeviceStatus
+
+
 @dataclass
 class DeviceMetrics:
     """设备指标数据"""

@@ -64,6 +64,12 @@ const routes = [
       },
       // 设备发现
       {
+        path: 'discovery',
+        name: 'DiscoveryIndex',
+        component: () => import('@/views/discovery/index.vue'),
+        meta: { title: '网络扫描配置', parent: '监控中心' }
+      },
+      {
         path: 'discovery/scan',
         name: 'DiscoveryScan',
         component: () => import('@/views/discovery/scan.vue'),
