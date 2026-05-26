@@ -5,11 +5,7 @@ API网关层主入口
 
 import os
 import logging
-import time
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
-
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -43,6 +39,8 @@ from api.middleware.logging import LoggingMiddleware
 from api.middleware.error_handler import ErrorHandlerMiddleware
 from api.middleware.performance import PerformanceMiddleware
 from api.middleware.request_id import RequestIDMiddleware
+from api.lifespan import lifespan
+from api.exception_handlers import register_exception_handlers
 
 # 配置日志
 logging.basicConfig(
@@ -50,154 +48,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator:
-    """
-    应用生命周期管理
-    启动时初始化服务，关闭时清理资源
-    """
-    logger.info("Starting ITOps Platform API Gateway...")
-    
-    # 初始化数据库
-    try:
-        from modules.foundation.db_models.base import init_db
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.warning(f"Database initialization skipped: {e}")
-    
-    # 初始化其他服务
-    try:
-        settings = get_settings()
-        logger.info(f"Environment: {settings.ENVIRONMENT}")
-    except Exception as e:
-        logger.warning(f"Settings initialization skipped: {e}")
-
-    # 初始化AI（LLM客户端）
-    try:
-        from api.start import init_ai
-        ai_result = init_ai({})
-        if ai_result:
-            logger.info("AI (LLM) initialized successfully")
-        else:
-            logger.warning("AI initialization returned None (disabled or failed)")
-    except Exception as e:
-        logger.warning(f"AI initialization skipped: {e}")
-
-    # 初始化配置热更新
-    try:
-        from api.start import init_config_hot_reload
-        init_config_hot_reload({})
-    except Exception as e:
-        logger.warning(f"Config hot reload initialization skipped: {e}")
-
-    # 启动告警升级定时任务
-    import asyncio as _asyncio_alt
-    _bg_tasks: list = []
-
-    try:
-        from modules.business.monitoring.alerter import get_alert_trigger
-        alert_trigger = get_alert_trigger()
-        _bg_tasks.append(_asyncio_alt.create_task(alert_trigger.start()))
-        logger.info("AlertTrigger escalation task started")
-    except Exception as e:
-        logger.warning(f"AlertTrigger initialization skipped: {e}")
-
-    # 启动设备定时采集任务
-    periodic_collect_task = None
-    try:
-        from modules.collection.device_manager import get_device_manager
-
-        manager = get_device_manager()
-        # 从配置获取采集间隔，默认60秒
-        interval = 60
-        try:
-            from modules.collection.config_loader import get_config_loader
-            loader = get_config_loader()
-            interval = loader.get_global_config('collect.default_interval') or 60
-        except Exception:
-            pass
-
-        # 启动定时采集为后台任务，并捕获句柄以便优雅关闭
-        periodic_collect_task = _asyncio_alt.create_task(
-            manager.start_periodic_collect(interval=interval)
-        )
-        _bg_tasks.append(periodic_collect_task)
-        logger.info(f"设备定时采集任务已启动 (间隔: {interval}秒)")
-
-        # 注册自动化触发回调 - 每个设备采集完都会触发
-        from modules.automation.auto_trigger_service import get_trigger_service
-        trigger_service = get_trigger_service()
-        manager.register_callback(trigger_service.on_device_metrics)
-        logger.info("自动化触发服务已注册到设备采集回调")
-
-        # 启动自动化触发评估循环
-        _bg_tasks.append(_asyncio_alt.create_task(trigger_service.start()))
-        logger.info("自动化触发服务已启动")
-    except Exception as e:
-        logger.warning(f"设备定时采集任务启动失败: {e}")
-
-    logger.info("ITOps Platform API Gateway started successfully")
-
-    yield
-
-    # 关闭时清理资源
-    logger.info("Shutting down ITOps Platform API Gateway...")
-
-    # 停止自动化触发服务
-    try:
-        trigger_service = get_trigger_service()
-        await trigger_service.stop()
-        logger.info("自动化触发服务已停止")
-    except Exception as e:
-        logger.warning(f"停止自动化触发服务失败: {e}")
-
-    # 停止定时采集任务并取消所有后台任务
-    if periodic_collect_task:
-        try:
-            from modules.collection.device_manager import get_device_manager
-            manager = get_device_manager()
-            manager.stop()
-            periodic_collect_task.cancel()
-            logger.info("设备定时采集任务已停止")
-        except Exception as e:
-            logger.warning(f"停止设备定时采集任务失败: {e}")
-
-    # 取消所有捕获的后台任务
-    for t in _bg_tasks:
-        if not t.done():
-            t.cancel()
-    if _bg_tasks:
-        await _asyncio_alt.gather(*_bg_tasks, return_exceptions=True)
-    
-    try:
-        from modules.foundation.db_models.base import close_db
-        close_db()
-    except Exception as e:
-        logger.warning(f"Database cleanup skipped: {e}")
-
-    # 停止配置热更新轮询
-    try:
-        from api.start import get_config_manager
-        cm = get_config_manager()
-        if cm:
-            cm.stop_watching()
-            logger.info("Config hot reload stopped")
-    except Exception as e:
-        logger.warning(f"Config hot reload cleanup skipped: {e}")
-
-    # 停止告警升级定时任务
-    try:
-        from modules.business.monitoring.alerter import get_alert_trigger
-        alert_trigger = get_alert_trigger()
-        await alert_trigger.stop()
-        logger.info("AlertTrigger stopped")
-    except Exception as e:
-        logger.warning(f"AlertTrigger cleanup skipped: {e}")
-
-    logger.info("ITOps Platform API Gateway stopped")
 
 
 def create_app() -> FastAPI:
@@ -437,34 +287,8 @@ def create_app() -> FastAPI:
         
         logger.info(f"Frontend static files enabled at /assets/ from: {dist_path}")
 
-    # 全局异常处理 - 必须在最后添加，覆盖所有其他处理器
-    from fastapi.exceptions import RequestValidationError
-    from starlette.exceptions import HTTPException as StarletteHTTPException
-
-    @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
-        return JSONResponse(status_code=422, content={"detail": exc.errors()})
-
-    @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception):
-        """全局异常处理器"""
-        import traceback
-        tb = traceback.format_exc()
-        print(f"EXCEPTION: {exc}\n{tb}", flush=True)
-        logger.exception(f"Unhandled exception: {exc}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": "Internal Server Error",
-                "message": str(exc),
-                "detail": None,  # 不在响应中返回 traceback，防止信息泄露
-                "path": str(request.url),
-            },
-        )
+    # 注册全局异常处理器（生产环境不返回 traceback）
+    register_exception_handlers(app)
 
     return app
 

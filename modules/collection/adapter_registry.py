@@ -31,17 +31,16 @@ class AdapterInfo:
 
 class AdapterRegistry:
     """
-    适配器注册表
-    
-    管理所有采集协议的适配器，提供统一的适配器发现和创建接口
-    
-    使用示例:
-    >>> registry = AdapterRegistry()
-    >>> @registry.register(protocol=ProtocolType.SNMP, name='snmp_v2c')
-    ... class MySNMPAdapter:
-    ...     pass
-    >>> adapter_info = registry.get_adapter('snmp_v2c')
-    >>> adapter = registry.create_adapter('snmp_v2c', config)
+    采集适配器注册表（低层协议适配器管理器）
+
+    职责：管理所有采集协议的适配器类，提供统一的适配器发现、注册和创建接口。
+    与具体的采集任务/设备无关，只负责"协议 → 适配器客户端"的映射。
+
+    与 CollectorFactory 的区别：
+      - AdapterRegistry  = 低层，按"协议"粒度管理适配器（协议名 → 适配器实例）
+      - CollectorFactory = 高层，按"设备"粒度创建采集任务（设备配置 → 采集器）
+
+    支持运行时动态注册新的适配器（@registry.register 装饰器模式）。
     """
     
     def __init__(self):

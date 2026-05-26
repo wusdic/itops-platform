@@ -17,17 +17,16 @@ logger = logging.getLogger(__name__)
 
 class CollectorFactory:
     """
-    采集适配器工厂
-    
-    根据设备配置自动选择合适的采集协议和客户端。
-    设备配置从配置文件加载，支持热更新。
-    
-    使用示例:
-    >>> factory = CollectorFactory()
-    >>> # 创建设备采集器
-    >>> collector = factory.create_collector(device_config)
-    >>> # 执行采集
-    >>> data = collector.collect()
+    采集适配器工厂（高层编排器）
+
+    职责：根据设备配置（包含协议+厂商+采集策略），选择合适的适配器组合，
+    创建设备级别的采集任务。与配置文件（YAML/DB）交互，不直接操作网络协议。
+
+    与 AdapterRegistry 的区别：
+      - CollectorFactory  = 高层，按"设备"粒度创建采集任务（设备配置 → 采集器）
+      - AdapterRegistry  = 低层，按"协议"粒度管理适配器（协议名 → 适配器实例）
+
+    设备配置从 config/devices/*.yaml 或数据库加载，支持热更新。
     """
     
     def __init__(self):

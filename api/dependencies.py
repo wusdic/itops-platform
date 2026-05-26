@@ -67,13 +67,35 @@ def get_settings() -> Settings:
     获取应用配置
     使用lru_cache缓存配置实例
     """
+    env = os.getenv("ENVIRONMENT", "development")
+    secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    db_password = os.getenv("ITOPS_DB_PASSWORD", "")
+    admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@123456")
+
+    # P2-4: 生产环境安全检查 — 不允许使用不安全的默认值启动
+    if env == "production":
+        unsafe_secrets = []
+        if secret_key == "your-secret-key-change-in-production":
+            unsafe_secrets.append("SECRET_KEY")
+        if db_password == "" or db_password == "root":
+            unsafe_secrets.append("ITOPS_DB_PASSWORD")
+        if admin_password == "Admin@123456":
+            unsafe_secrets.append("DEFAULT_ADMIN_PASSWORD")
+        if unsafe_secrets:
+            raise RuntimeError(
+                f"生产环境不允许使用不安全默认值启动，请设置环境变量: {', '.join(unsafe_secrets)}"
+            )
+        # 生产环境强制关闭 DEBUG
+        if os.getenv("DEBUG", "").lower() != "false":
+            logging.warning("生产环境建议设置 DEBUG=false")
+
     return Settings(
-        ENVIRONMENT=os.getenv("ENVIRONMENT", "development"),
+        ENVIRONMENT=env,
         DEBUG=os.getenv("DEBUG", "true").lower() == "true",
-        SECRET_KEY=os.getenv("SECRET_KEY", "your-secret-key-change-in-production"),
+        SECRET_KEY=secret_key,
         REDIS_HOST=os.getenv("REDIS_HOST", "localhost"),
         REDIS_PORT=int(os.getenv("REDIS_PORT", "6379")),
-        DEFAULT_ADMIN_PASSWORD=os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin@123456"),
+        DEFAULT_ADMIN_PASSWORD=admin_password,
         DEFAULT_OPERATOR_PASSWORD=os.getenv("DEFAULT_OPERATOR_PASSWORD", "Operator@123456"),
     )
 
