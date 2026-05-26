@@ -1497,7 +1497,7 @@ async def convert_alert_to_workorder(
     将告警转换为工单。
     从告警中提取设备信息、告警级别、描述作为工单初始内容。
     """
-    from modules.foundation.db_models.monitoring import Alert, AlertLevel, AlertStatus
+    from modules.foundation.db_models.alert import Alert, AlertLevel, AlertStatus
 
     alert = db.query(Alert).filter(Alert.id == request.alert_id).first()
     if not alert:

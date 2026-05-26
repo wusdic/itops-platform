@@ -1569,7 +1569,7 @@ async def get_remediation(
     engine = get_remediation_engine()
     
     # 从data库getalertinformation
-    from modules.foundation.db_models.monitoring import Alert
+    from modules.foundation.db_models.alert import Alert
     alert = db.query(Alert).filter(Alert.id == alert_id).first()
     
     if not alert:
@@ -1661,7 +1661,7 @@ async def unified_analyze(
     target_id: 对应对象的 ID
     analysis_type: root_cause / risk / optimization / log_explain
     """
-    from modules.foundation.db_models.monitoring import Alert
+    from modules.foundation.db_models.alert import Alert
     from modules.foundation.db_models.workorder import WorkOrder
 
     result = {
