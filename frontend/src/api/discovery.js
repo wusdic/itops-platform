@@ -29,7 +29,7 @@ const discovery = {
 
   // ========== 导入 ==========
   import: {
-    importHosts: (data) => request.post('/discovery/import/hosts', data)
+    importHosts: (data) => request.post('/discovery/devices/import', data)
   }
 }
 

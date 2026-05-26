@@ -15,17 +15,17 @@ export const devices = {
   collectAll: () => request.post('/devices/collect/all'),
   getStats: () => request.get('/devices/stats'),
   batchOperate: (ids, action) => request.post('/assets/device/batch', { ids, action }),
-  // 批量导入相关
-  getImportTemplate: (format = 'xlsx') => request.get('/devices/import/template', { params: { format }, responseType: 'blob' }),
-  validateImport: (rows) => request.post('/devices/import/validate', rows),
+  // 批量导入相关（使用 /devices/ 路由，无 /import 中间目录）
+  getImportTemplate: (format = 'xlsx') => request.get('/devices/template', { params: { format }, responseType: 'blob' }),
+  validateImport: (rows) => request.post('/devices/validate', rows),
   importDevices: (file) => {
     const formData = new FormData()
     formData.append('file', file)
-    return request.post('/devices/import', formData, {
+    return request.post('/devices', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  importDevicesSimple: (rows) => request.post('/devices/import/simple', rows)
+  importDevicesSimple: (rows) => request.post('/devices/simple', rows)
 }
 
 /**

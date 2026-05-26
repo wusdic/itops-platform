@@ -26,15 +26,15 @@ export const assets = {
   deleteConfig: (id) => request.delete(`/assets/config/${id}`),
   syncConfig: (deviceId) => request.post(`/assets/config/sync/${deviceId}`),
 
-  // 设备导入导出 - 使用 /devices/import 路由
-  getImportTemplate: (format = 'xlsx') => request.get('/devices/import/template', { params: { format }, responseType: 'blob' }),
-  validateImport: (rows) => request.post('/devices/import/validate', rows),
+  // 设备导入导出 - 使用 /devices/ 路由（无 /import 中间目录）
+  getImportTemplate: (format = 'xlsx') => request.get('/devices/template', { params: { format }, responseType: 'blob' }),
+  validateImport: (rows) => request.post('/devices/validate', rows),
   importDevices: (file) => {
     const formData = new FormData()
     formData.append('file', file)
-    return request.post('/devices/import', formData, {
+    return request.post('/devices', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  importDevicesSimple: (rows) => request.post('/devices/import/simple', rows)
+  importDevicesSimple: (rows) => request.post('/devices/simple', rows)
 }
