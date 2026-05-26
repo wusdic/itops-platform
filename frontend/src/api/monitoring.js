@@ -49,7 +49,11 @@ export const alerts = {
   getAuditLogs: (id) => request.get(`/monitoring/alerts/${id}/audit-logs`),
   createAuditLog: (id, data) => request.post(`/monitoring/alerts/${id}/audit-logs`, data),
   getRules: () => request.get('/monitoring/rules'),
-  getRule: (id) => request.get(`/monitoring/rules/${id}`)
+  getRule: (id) => request.get(`/monitoring/rules/${id}`),
+  // 告警统计（新增）
+  getStatistics: () => request.get('/monitoring/alerts/statistics'),
+  // 告警转工单（新增）
+  convertToWorkorder: (alertId, data) => request.post('/workorders/convert-to-workorder', { alert_id: alertId, ...data }),
 }
 
 /**
@@ -63,7 +67,11 @@ export const performance = {
   query: (data) => request.post('/monitoring/metrics/query', data),
   getDeviceMetricsHistory: (deviceName, metricType, hours = 24) =>
     request.get(`/devices/${deviceName}/metrics/history`, { params: { metric_type: metricType, hours } }),
-  getDeviceMetrics: (deviceName) => request.get(`/devices/${deviceName}/metrics`)
+  getDeviceMetrics: (deviceName) => request.get(`/devices/${deviceName}/metrics`),
+  // 指标历史查询（新增）
+  getMetricsHistory: (params) => request.get('/monitoring/metrics/history', { params }),
+  // TopN 指标（新增）
+  getMetricsTop: (metricType, limit = 10) => request.get(`/monitoring/metrics/top/${metricType}`, { params: { limit } }),
 }
 
 /**

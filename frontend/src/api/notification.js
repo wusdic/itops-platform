@@ -10,8 +10,8 @@ export const notification = {
   testChannel: (id) => request.post(`/notifications/test/${id}`),
 
   // 通知历史
-  getHistory: (params) => request.get('/notifications/history', { params }),
-  deleteHistory: (id) => request.delete(`/notifications/history/${id}`),
+  getHistory: (params) => request.get('/notifications/messages', { params }),
+  deleteHistory: (id) => request.delete(`/notifications/messages/${id}`),
 
   // 通知类型
   getTypes: () => request.get('/notifications/types'),

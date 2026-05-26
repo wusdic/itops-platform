@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 import json
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Path
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
@@ -409,6 +409,120 @@ async def promql_query(
             {"timestamp": m.timestamp.isoformat(), "value": m.value, "host": m.device_name}
             for m in metrics
         ]
+    }
+
+
+@router.get("/metrics/history", summary="查询指标历史")
+async def get_metrics_history(
+    device_id: Optional[int] = Query(None, description="设备ID"),
+    metric: Optional[str] = Query(None, description="指标名称"),
+    start: Optional[datetime] = Query(None, description="开始时间"),
+    end: Optional[datetime] = Query(None, description="结束时间"),
+    step: Optional[str] = Query("1m", description="时间步长"),
+    limit: Optional[int] = Query(100, ge=1, le=1000, description="最大返回点数"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    查询设备指标历史数据。
+    device_id + metric 组合查询，start/end 限定时间范围。
+    """
+    query_db = db.query(PerformanceMetric)
+
+    if device_id:
+        query_db = query_db.filter(PerformanceMetric.device_id == device_id)
+    if metric:
+        query_db = query_db.filter(PerformanceMetric.metric_name == metric)
+    if start:
+        query_db = query_db.filter(PerformanceMetric.timestamp >= start)
+    else:
+        query_db = query_db.filter(PerformanceMetric.timestamp >= datetime.now() - timedelta(hours=24))
+    if end:
+        query_db = query_db.filter(PerformanceMetric.timestamp <= end)
+
+    metrics = query_db.order_by(PerformanceMetric.timestamp.desc()).limit(limit).all()
+    return {
+        "status": "success",
+        "metric": metric or "all",
+        "device_id": device_id,
+        "count": len(metrics),
+        "points": [
+            {"timestamp": m.timestamp.isoformat(), "value": m.value, "host": m.device_name}
+            for m in metrics
+        ],
+    }
+
+
+@router.get("/metrics/top/{metric_type}", summary="获取TopN指标")
+async def get_metric_top(
+    metric_type: str = Path(..., description="指标类型: cpu, memory, disk, network, load"),
+    limit: int = Query(10, ge=1, le=100, description="返回前N条"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    获取指标 TopN 排行，支持 CPU/内存/磁盘/网络/负载。
+    返回当前最新值最高的前 N 台设备。
+    """
+    TYPE_TO_NAME = {
+        'cpu': 'cpu_usage',
+        'memory': 'memory_usage',
+        'disk': 'disk_usage',
+        'network': 'network_in',
+        'load': 'load_1m',
+    }
+    metric_name = TYPE_TO_NAME.get(metric_type.lower(), metric_type)
+
+    # 获取每台设备的最新指标值
+    from sqlalchemy import func, and_
+    subquery = (
+        db.query(
+            PerformanceMetric.device_id,
+            PerformanceMetric.device_name,
+            PerformanceMetric.device_ip,
+            func.max(PerformanceMetric.timestamp).label("max_ts")
+        )
+        .filter(PerformanceMetric.metric_name == metric_name)
+        .group_by(PerformanceMetric.device_id, PerformanceMetric.device_name, PerformanceMetric.device_ip)
+        .subquery()
+    )
+
+    results = (
+        db.query(
+            PerformanceMetric.device_id,
+            PerformanceMetric.device_name,
+            PerformanceMetric.device_ip,
+            PerformanceMetric.value,
+            PerformanceMetric.timestamp
+        )
+        .join(
+            subquery,
+            and_(
+                PerformanceMetric.device_id == subquery.c.device_id,
+                PerformanceMetric.metric_name == metric_name,
+                PerformanceMetric.timestamp == subquery.c.max_ts
+            )
+        )
+        .order_by(PerformanceMetric.value.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "status": "success",
+        "metric_type": metric_type,
+        "metric_name": metric_name,
+        "count": len(results),
+        "items": [
+            {
+                "device_id": r.device_id,
+                "device_name": r.device_name,
+                "device_ip": r.device_ip,
+                "value": r.value,
+                "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+            }
+            for r in results
+        ],
     }
 
 

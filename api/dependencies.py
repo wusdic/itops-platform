@@ -307,7 +307,7 @@ class PaginationParams:
 
 def get_pagination_params(
     page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    page_size: int = Query(20, ge=1, le=200, description="每页数量"),
 ) -> PaginationParams:
     """获取分页参数"""
     return PaginationParams(page=page, page_size=page_size)

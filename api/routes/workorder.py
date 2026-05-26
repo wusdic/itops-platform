@@ -1475,3 +1475,76 @@ async def cancel_workorder(
         raise HTTPException(status_code=404, detail="工单不存在")
     
     return {"status": "success", "message": "工单已取消"}
+
+
+# ============== 告警转工单接口 =============
+
+class AlertToWorkOrderRequest(BaseModel):
+    """告警转工单请求"""
+    alert_id: int = Field(..., description="关联的告警ID")
+    title: Optional[str] = Field(None, description="工单标题，不填则自动生成")
+    priority: Optional[str] = Field("P3", description="优先级: P1, P2, P3, P4")
+    order_type: Optional[str] = Field("fault", description="工单类型: fault, change, inspection")
+
+
+@router.post("/convert-to-workorder", summary="告警转工单")
+async def convert_alert_to_workorder(
+    request: AlertToWorkOrderRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    将告警转换为工单。
+    从告警中提取设备信息、告警级别、描述作为工单初始内容。
+    """
+    from modules.foundation.db_models.monitoring import Alert, AlertLevel, AlertStatus
+
+    alert = db.query(Alert).filter(Alert.id == request.alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail=f"告警 {request.alert_id} 不存在")
+
+    # 自动生成标题
+    title = request.title or f"[告警转工单] {alert.name or '未知告警'} (ID:{alert.id})"
+
+    # 根据告警级别映射优先级
+    priority_map = {"critical": "P1", "high": "P1", "medium": "P2", "low": "P3", "info": "P4"}
+    alert_level_str = str(alert.level.value) if hasattr(alert.level, 'value') else str(alert.level or 'medium')
+    priority = request.priority or priority_map.get(alert_level_str.lower(), "P3")
+
+    # 构建工单描述
+    description = (
+        f"## 来源告警信息\n"
+        f"- 告警ID: {alert.id}\n"
+        f"- 告警名称: {alert.name or '未知'}\n"
+        f"- 告警级别: {alert_level_str}\n"
+        f"- 告警状态: {alert.status or '未知'}\n"
+        f"- 告警时间: {alert.created_at or '未知'}\n"
+        f"- 设备名称: {getattr(alert, 'device_name', '未知') or '未知'}\n"
+        f"- 设备IP: {getattr(alert, 'device_ip', '未知') or '未知'}\n"
+        f"\n## 告警详情\n{alert.message or '无详细描述'}\n"
+    )
+
+    wo_create = WorkOrderCreate(
+        order_type=request.order_type or "fault",
+        title=title,
+        description=description,
+        priority=priority,
+        device_name=getattr(alert, 'device_name', None),
+        device_ip=getattr(alert, 'device_ip', None),
+    )
+
+    wo = _build_workorder_core(db).create(wo_create, current_user.username)
+
+    # 将告警状态更新为已转工单
+    try:
+        alert.status = AlertStatus.ACKNOWLEDGED
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return {
+        "status": "success",
+        "message": "已从告警创建工单",
+        "workorder_id": wo.id,
+        "alert_id": alert.id,
+    }

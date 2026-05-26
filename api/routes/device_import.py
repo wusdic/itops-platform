@@ -22,7 +22,7 @@ from api.dependencies import get_current_user, CurrentUser
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["设备批量导入"], prefix="/api/v1/devices/import")
+router = APIRouter(tags=["设备批量导入"], prefix="")
 
 
 # ============== 请求/响应模型 ==============

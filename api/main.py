@@ -324,19 +324,19 @@ def create_app() -> FastAPI:
 
     app.include_router(
         device_router,
-        prefix="",
+        prefix="/api/v1/devices",
         tags=["设备管理"],
     )
 
     app.include_router(
         device_metrics_router,
-        prefix="",
+        prefix="/api/v1",
         tags=["采集精细化开关"],
     )
 
     app.include_router(
         device_import_router,
-        prefix="",
+        prefix="/api/v1/devices",
         tags=["设备批量导入"],
     )
 
@@ -461,7 +461,7 @@ def create_app() -> FastAPI:
             content={
                 "error": "Internal Server Error",
                 "message": str(exc),
-                "detail": tb,
+                "detail": None,  # 不在响应中返回 traceback，防止信息泄露
                 "path": str(request.url),
             },
         )

@@ -862,6 +862,32 @@ async def get_unread_count(
     return {"unread_count": count}
 
 
+@router.get("/messages/{message_id}", summary="获取单条消息详情")
+async def get_message(
+    message_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取单条站内消息详情"""
+    service = NotificationMessageService(db)
+    message = service.get_message(message_id, current_user.user_id)
+
+    if not message:
+        raise HTTPException(status_code=404, detail="消息不存在")
+
+    return {
+        "id": message.id,
+        "user_id": message.user_id,
+        "title": message.title,
+        "content": message.content,
+        "msg_type": message.msg_type,
+        "is_read": message.is_read,
+        "priority": message.priority,
+        "related_object": message.related_object,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+    }
+
+
 @router.put("/messages/{message_id}/read", summary="标记消息为已读")
 async def mark_message_read(
     message_id: int,

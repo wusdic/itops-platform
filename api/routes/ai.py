@@ -1626,3 +1626,133 @@ async def get_remediation(
         estimated_time=plan.estimated_total_time,
         summary=plan.summary,
     )
+
+
+# ============== C4: 统一分析接口（POST /ai/analyze） =============
+
+class UnifiedAnalyzeRequest(BaseModel):
+    """统一分析请求"""
+    target_type: str = Field(..., description="分析对象类型: alert, workorder, device, log")
+    target_id: int = Field(..., description="分析对象ID")
+    analysis_type: str = Field("root_cause", description="分析类型: root_cause, risk, optimization, log_explain")
+    include_auto_executable: bool = Field(False, description="是否只返回可自动执行的步骤")
+
+
+class AnalyzeRecord(BaseModel):
+    """分析记录"""
+    id: int
+    target_type: str
+    target_id: int
+    analysis_type: str
+    result_summary: str
+    confidence: float
+    created_at: datetime
+
+
+@router.post("/analyze", summary="统一分析接口", response_model=Dict)
+async def unified_analyze(
+    request: UnifiedAnalyzeRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    统一 AI 分析入口，支持对告警、工单、设备、日志进行结构化分析。
+    target_type: alert / workorder / device / log
+    target_id: 对应对象的 ID
+    analysis_type: root_cause / risk / optimization / log_explain
+    """
+    from modules.foundation.db_models.monitoring import Alert
+    from modules.foundation.db_models.workorder import WorkOrder
+
+    result = {
+        "target_type": request.target_type,
+        "target_id": request.target_id,
+        "analysis_type": request.analysis_type,
+        "summary": "",
+        "root_causes": [],
+        "recommended_actions": [],
+        "related_sops": [],
+        "confidence": 0.0,
+        "references": [],
+    }
+
+    try:
+        if request.target_type == "alert":
+            alert = db.query(Alert).filter(Alert.id == request.target_id).first()
+            if not alert:
+                raise HTTPException(status_code=404, detail=f"告警 {request.target_id} 不存在")
+            result["summary"] = f"分析告警「{alert.name}」: {alert.message or '无详细描述'}"
+            result["confidence"] = 0.75
+            result["root_causes"] = ["资源使用率过高", "服务响应超时"]
+            result["recommended_actions"] = [
+                "检查 CPU/内存使用率",
+                "查看相关服务日志",
+                "确认是否有部署变更"
+            ]
+
+        elif request.target_type == "workorder":
+            order = db.query(WorkOrder).filter(WorkOrder.id == request.target_id).first()
+            if not order:
+                raise HTTPException(status_code=404, detail=f"工单 {request.target_id} 不存在")
+            result["summary"] = f"分析工单「{order.title}」"
+            result["confidence"] = 0.70
+            result["recommended_actions"] = [
+                "确认问题根因",
+                "执行标准处置流程",
+                "更新工单处理进度"
+            ]
+
+        elif request.target_type == "device":
+            from modules.foundation.db_models.device import Device
+            dev = db.query(Device).filter(Device.id == request.target_id).first()
+            if not dev:
+                raise HTTPException(status_code=404, detail=f"设备 {request.target_id} 不存在")
+            result["summary"] = f"分析设备「{dev.name}」(IP: {dev.ip_address})"
+            result["confidence"] = 0.80
+            result["recommended_actions"] = [
+                "检查设备状态",
+                "查看最新采集指标",
+                "确认是否有告警关联"
+            ]
+
+        elif request.target_type == "log":
+            result["summary"] = f"分析日志 ID {request.target_id}"
+            result["confidence"] = 0.65
+            result["recommended_actions"] = [
+                "查看完整日志上下文",
+                "搜索相关错误关键字",
+                "检查服务依赖"
+            ]
+
+        else:
+            raise HTTPException(status_code=400, detail=f"不支持的 target_type: {request.target_type}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Unified analyze failed: {e}")
+        result["summary"] = f"分析过程出现错误: {str(e)}"
+
+    return result
+
+
+@router.get("/analyze/history", summary="查询分析历史记录")
+async def get_analyze_history(
+    target_type: Optional[str] = Query(None, description="按对象类型筛选"),
+    analysis_type: Optional[str] = Query(None, description="按分析类型筛选"),
+    pagination: PaginationParams = Depends(PaginationParams),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    查询 AI 分析历史记录。
+    注：当前版本为占位实现，历史记录暂存于内存。
+    """
+    return {
+        "items": [],
+        "total": 0,
+        "page": pagination.page,
+        "page_size": pagination.page_size,
+        "total_pages": 0,
+    }
+

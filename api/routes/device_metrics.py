@@ -21,7 +21,7 @@ from api.dependencies import get_current_user, CurrentUser
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["采集精细化开关"], prefix="/api/v1/devices")
+router = APIRouter(tags=["采集精细化开关"], prefix="")
 
 
 # ============== 请求/响应模型 ==============

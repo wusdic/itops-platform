@@ -45,7 +45,10 @@ export const ai = {
   interpretReport: (data) => request.post('/ai/interpret/report', data),
   analyzeLogs: (data) => request.post('/ai/analyze/logs', data),
   qa: (data) => request.post('/ai/qa', data),
-  getStats: () => request.get('/ai/stats')
+  getStats: () => request.get('/ai/stats'),
+  // 统一分析接口（新增）
+  analyze: (data) => request.post('/ai/analyze', data),
+  getAnalyzeHistory: (params) => request.get('/ai/analyze/history', { params }),
 }
 
 // 备份（新 BackupManager API）
