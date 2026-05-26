@@ -1,3 +1,65 @@
+## 2026-05-26 第五次更新 — 新增6个API接口 + Alert import路径修复
+
+### 修改概述
+
+新增 6 个后端接口（ai.py、monitoring.py、workorder.py、notification.py）+ 前端配对接口，修复 3 处 import 路径错误，所有接口已通过 curl 验证。
+
+### 新增后端接口
+
+#### N-5: POST /api/v1/ai/analyze（统一分析入口）
+- **文件**: `api/routes/ai.py`（line ~1482）
+- **功能**: 支持 target_type=alert/workorder/device/log，analysis_type=root_cause/risk/optimization/log_explain
+- **验证**: POST /api/v1/ai/analyze → code=✅（告警不存在正常返回，非500）
+
+#### N-6: GET /api/v1/ai/analyze/history（分析历史）
+- **文件**: `api/routes/ai.py`（line ~1550）
+- **验证**: GET /api/v1/ai/analyze/history → code=✅，返回 items=[], total=0
+
+#### N-7: GET /api/v1/notifications/messages/{message_id}（单条消息）
+- **文件**: `api/routes/notification.py`（line ~865）
+- **验证**: GET /api/v1/notifications/messages/999 → "消息不存在"（404，正常）
+
+#### N-8: GET /api/v1/monitoring/metrics/history（指标历史）
+- **文件**: `api/routes/monitoring.py`（line ~435）
+- **验证**: GET /api/v1/monitoring/metrics/history?device_id=1 → code=✅
+
+#### N-9: GET /api/v1/monitoring/metrics/top/{type}（TopN指标）
+- **文件**: `api/routes/monitoring.py`（line ~470）
+- **验证**: GET /api/v1/monitoring/metrics/top/cpu → code=✅
+
+#### N-10: POST /api/v1/workorders/convert-to-workorder（告警转工单）
+- **文件**: `api/routes/workorder.py`（line ~1492）
+- **验证**: POST /api/v1/workorders/convert-to-workorder → "告警999不存在"（404，正常）
+
+### 修复项
+
+#### N-1: notification.js API路径修正
+- `frontend/src/api/notification.js`: `/notifications/history` → `/notifications/messages`（3处）
+
+#### N-2: dependencies.py page_size上限
+- `api/dependencies.py`: `page_size le=100` → `le=200`
+
+#### N-3: main.py生产环境不返回traceback
+- `api/main.py`: `detail=tb` → `detail=None`，防止敏感信息泄露
+
+#### N-4: 路由prefix混乱
+- `api/routes/device_metrics.py`: 移除内部 `prefix="/api/v1/devices"`
+- `api/routes/device_import.py`: 移除内部 `prefix="/api/v1/devices/import"`
+- `api/main.py`: device_metrics_router → `prefix="/api/v1"`，device_import_router → `prefix="/api/v1/devices"`
+
+#### N-11: 前端接口函数补全
+- `frontend/src/api/monitoring.js`: 新增 `getStatistics`/`getMetricsHistory`/`getMetricsTop`
+- `frontend/src/api/index.js`: 新增 `analyze`/`getAnalyzeHistory`
+
+#### Alert import路径修复
+- `api/routes/ai.py`: `from modules.foundation.db_models.monitoring` → `from modules.foundation.db_models.alert`
+- `api/routes/workorder.py`: 同上
+
+### Git提交
+
+- commit a70d067: fix: 新增统一分析接口、告警转工单、指标TopN/历史等6个后端接口
+- commit 42633a7: fix: 修复 Alert import 路径（alert.py vs monitoring.py）
+
 # ITOps Platform 代码修改记录
 
 ## 2026-05-26 第四次更新 — 前后端 API 路径对齐 + layout CSS 修复
