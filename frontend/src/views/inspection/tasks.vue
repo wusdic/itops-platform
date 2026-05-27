@@ -44,7 +44,7 @@
 
     <!-- 新建/编辑任务 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
-      <el-form :model="form" label-position="left" label-width="100">
+      <el-form :model="form" label-position="top" label-width="100">
         <el-form-item label="任务名称" required>
           <el-input v-model.trim="form.name" placeholder="请输入任务名称" />
         </el-form-item>

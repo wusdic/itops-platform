@@ -67,13 +67,7 @@
         </el-table-column>
         <el-table-column label="状态" width="220">
           <template #default="{ row }">
-            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
-              <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
-              <el-tooltip :content="(statusTransitionMap[row.status]?.length ? `可流转至：${statusTransitionMap[row.status].map(s => statusLabels[s]).join(' / ')}` : '无下一步流转')" placement="top">
-                <el-icon size="14" style="margin-left:6px;color:#909399;cursor:help"><QuestionFilled /></el-icon>
-              </el-tooltip>
-              <el-tag v-for="s in (statusTransitionMap[row.status] || [])" :key="s" :type="statusType(s)" size="small" round style="margin-left:4px">{{ statusLabels[s] }}</el-tag>
-            </div>
+            <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="创建人" prop="creator" width="120" />
@@ -81,7 +75,7 @@
           <template #default="{ row }">{{ row.assignee || '-' }}</template>
         </el-table-column>
         <el-table-column label="创建时间" prop="created_at" width="170">
-          <template #default="{ row }">{{ row.created_at ? row.created_at.slice(0, 16) : '-' }}</template>
+          <template #default="{ row }">{{ row.created_at ? row.created_at.replace('T', ' ').slice(0, 16) : '-' }}</template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
@@ -169,7 +163,7 @@
       <el-alert v-if="statusTransitionHint" type="info" :show-icon="false" style="margin-bottom:16px">
         {{ statusTransitionHint }}
       </el-alert>
-      <el-form label-position="left" label-width="80">
+      <el-form label-position="top" label-width="80">
         <el-form-item label="工单号">
           <span class="form-value">{{ editForm.order_no }}</span>
         </el-form-item>
@@ -273,7 +267,7 @@ const workorderStats = ref({ pending: 0, processing: 0, resolved: 0, closed: 0 }
 
 async function loadStats() {
   try {
-    const res = await workorderApi.getStatistics()
+    const res = await workorderApi.getStats()
     workorderStats.value = {
       pending: res.pending || 0,
       processing: res.processing || 0,

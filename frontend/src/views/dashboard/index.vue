@@ -346,8 +346,8 @@ const loadDashboard = async () => {
     // Step 1: Load layout from API (MON-032)
     try {
       const layoutRes = await monitorApi.getDashboardLayout()
-      if (layoutRes && layoutRes.data) {
-        const layout = layoutRes.data
+      if (layoutRes && layoutRes.items) {
+        const layout = layoutRes
         currentLayout.value = layout
         layoutId.value = layout.layout_id
         allItems.value = (layout.items || []).map(item => ({

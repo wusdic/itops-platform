@@ -9,7 +9,7 @@
     <el-row :gutter="16" class="main-grid">
       <!-- 左侧：厂商列表 -->
       <el-col :span="6" class="vendor-list-panel">
-        <el-card size="small">
+        <el-card>
           <template #header>
             <div class="card-header">
               <span>🏢 厂商列表</span>
@@ -150,7 +150,7 @@
           <!-- 编辑模式 -->
           <div v-if="editMode" class="edit-form">
             <el-divider>编辑模式</el-divider>
-            <el-form :model="editForm" label-position="left" label-width="100">
+            <el-form :model="editForm" label-position="top" label-width="100">
               <el-form-item label="厂商名称">
                 <el-input v-model.trim="editForm.name" />
               </el-form-item>
@@ -199,7 +199,7 @@
           <template #header>
             <span>➕ 新增厂商</span>
           </template>
-          <el-form :model="addForm" label-position="left" label-width="120">
+          <el-form :model="addForm" label-position="top" label-width="120">
             <el-form-item label="厂商名称" required>
               <el-input v-model.trim="addForm.name" placeholder="例如：Cisco Systems" />
             </el-form-item>

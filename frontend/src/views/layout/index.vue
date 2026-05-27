@@ -193,7 +193,7 @@
 
       <!-- 修改密码弹窗 -->
       <el-dialog v-model="passwordDialogVisible" title="修改密码" width="400px" :close-on-click-modal="false">
-        <el-form :model="passwordForm" label-width="90px" label-position="left" @submit.prevent="handleChangePassword">
+        <el-form :model="passwordForm" label-width="90px" label-position="top" @submit.prevent="handleChangePassword">
           <el-form-item label="旧密码" required>
             <el-input v-model="passwordForm.old_password" type="password" placeholder="请输入旧密码" show-password />
           </el-form-item>

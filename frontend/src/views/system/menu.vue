@@ -51,7 +51,7 @@
           <el-button size="small" link @click="drawerVisible = false">取消</el-button>
         </div>
       </template>
-      <el-form :model="form" label-position="left" label-width="80" require-asterisk-position="right">
+      <el-form :model="form" label-position="top" label-width="80" require-asterisk-position="right">
         <el-form-item label="菜单名称" required>
           <el-input v-model.trim="form.label" placeholder="请输入菜单名称" />
         </el-form-item>

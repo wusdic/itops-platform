@@ -64,7 +64,7 @@
             </span>
           </template>
           <div class="scan-panel">
-            <el-form label-position="left" label-width="100px">
+            <el-form label-position="top" label-width="100px">
               <el-form-item label="目标网段">
                 <el-space wrap>
                   <el-input v-model.trim="quickForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
@@ -137,7 +137,7 @@
             </span>
           </template>
           <div class="scan-panel">
-            <el-form label-position="left" label-width="100px">
+            <el-form label-position="top" label-width="100px">
               <el-form-item label="目标网段">
                 <el-space wrap>
                   <el-input v-model.trim="ipForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
@@ -218,7 +218,7 @@
             </span>
           </template>
           <div class="scan-panel">
-            <el-form label-position="left" label-width="100px">
+            <el-form label-position="top" label-width="100px">
               <el-form-item label="目标网段">
                 <el-space wrap>
                   <el-input v-model.trim="arpForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
@@ -278,7 +278,7 @@
             </span>
           </template>
           <div class="scan-panel">
-            <el-form label-position="left" label-width="100px">
+            <el-form label-position="top" label-width="100px">
               <el-form-item label="目标地址">
                 <el-space wrap>
                   <el-input v-model.trim="snmpForm.target" placeholder="例如: 192.168.1.1" style="width: 220px" />
@@ -384,7 +384,7 @@
 
     <!-- 添加/编辑扫描任务对话框 -->
     <el-dialog v-model="showAddDialog" :title="editingConfig ? '编辑扫描任务' : '新建扫描任务'" width="500px" destroy-on-close>
-      <el-form label-position="left" label-width="100px">
+      <el-form label-position="top" label-width="100px">
         <el-form-item label="任务名称">
           <el-input v-model.trim="editForm.name" placeholder="例如: 生产网段扫描" />
         </el-form-item>

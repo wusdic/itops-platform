@@ -31,7 +31,7 @@
       </el-space>
 
       <!-- 配置面板 -->
-      <el-card v-if="showConfig" size="small" title="日志记录配置" class="config-card">
+      <el-card v-if="showConfig" title="日志记录配置" class="config-card">
         <el-alert type="info" :show-icon="true" style="margin-bottom: 12px">
           开启的日志才会被记录。默认配置已按推荐设置，适当减少日志量。
         </el-alert>

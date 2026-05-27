@@ -19,7 +19,7 @@
           </template>
           <!-- IP 扫描面板 -->
           <div class="scan-panel">
-            <el-form label-position="left" label-width="120px">
+            <el-form label-position="top" label-width="120px">
               <el-form-item label="目标网段">
                 <el-space wrap>
                   <el-input v-model.trim="ipForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 260px" />
@@ -101,7 +101,7 @@
           </template>
           <!-- SNMP 扫描面板 -->
           <div class="scan-panel">
-            <el-form label-position="left" label-width="120px">
+            <el-form label-position="top" label-width="120px">
               <el-form-item label="目标地址">
                 <el-space wrap>
                   <el-input v-model.trim="snmpForm.target" placeholder="例如: 192.168.1.1" style="width: 220px" />
@@ -173,7 +173,7 @@
           </template>
           <!-- ARP 扫描面板 -->
           <div class="scan-panel">
-            <el-form label-position="left" label-width="120px">
+            <el-form label-position="top" label-width="120px">
               <el-form-item label="目标网段">
                 <el-space wrap>
                   <el-input v-model.trim="arpForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 260px" />

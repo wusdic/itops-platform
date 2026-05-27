@@ -50,7 +50,7 @@
     </el-card>
 
     <el-drawer v-model="drawerVisible" :title="editingChannel && editingChannel.id ? '编辑渠道' : '添加渠道'" size="500px">
-      <el-form :model="form" label-position="left" label-width="100">
+      <el-form :model="form" label-position="top" label-width="100">
         <el-form-item label="渠道名称">
           <el-input v-model.trim="form.name" placeholder="如：邮件通知" />
         </el-form-item>

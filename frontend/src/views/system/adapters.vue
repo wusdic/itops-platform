@@ -64,7 +64,7 @@
 
     <!-- 新建/编辑适配器弹窗 -->
     <el-dialog v-model="showAddModal" :title="editingId ? '编辑适配器' : '新建适配器'" width="600px">
-      <el-form label-position="left" label-width="120">
+      <el-form label-position="top" label-width="120">
         <el-form-item label="协议类型">
           <el-select
             v-model="form.protocol_type"

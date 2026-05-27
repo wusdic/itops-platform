@@ -42,7 +42,7 @@
 
     <!-- 创建/编辑角色 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" label-position="left">
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" label-position="top">
         <el-form-item label="角色名称" prop="name">
           <el-input v-model.trim="form.name" placeholder="请输入角色名称" />
         </el-form-item>

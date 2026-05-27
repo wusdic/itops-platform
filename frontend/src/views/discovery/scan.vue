@@ -1,10 +1,10 @@
 <template>
   <div class="scan-container">
     <el-space direction="vertical" :size="20" style="width: 100%">
-      <el-card title="网段扫描配置" size="large">
+      <el-card title="网段扫描配置">
         <el-space direction="vertical" :size="16" style="width: 100%">
           <!-- 网段输入 -->
-          <el-form label-position="left" label-width="120px">
+          <el-form label-position="top" label-width="120px">
             <el-form-item label="扫描网段">
               <el-space>
                 <el-input v-model.trim="cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
@@ -34,7 +34,7 @@
           </el-card>
 
           <!-- 已保存的扫描任务 -->
-          <el-card title="已配置网段" size="small">
+          <el-card title="已配置网段">
             <template #header>
               <div class="card-header">
                 <span>已配置网段</span>
@@ -110,7 +110,7 @@
       </el-card>
 
       <!-- 扫描历史 -->
-      <el-card title="扫描历史" size="small">
+      <el-card title="扫描历史">
         <el-table
           :data="scanHistory"
           :pagination="getHistoryPagination()"
@@ -124,7 +124,7 @@
 
     <!-- 添加/编辑网段对话框 -->
     <el-dialog v-model="showAddDialog" :title="editingNetwork ? '编辑扫描网段' : '添加扫描网段'" width="500px">
-      <el-form label-position="left" label-width="100px">
+      <el-form label-position="top" label-width="100px">
         <el-form-item label="网段">
           <el-input v-model.trim="editForm.cidr" placeholder="192.168.1.0/24" />
         </el-form-item>

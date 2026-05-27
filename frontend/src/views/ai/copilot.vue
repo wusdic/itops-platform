@@ -111,7 +111,7 @@
 
     <!-- 新建/编辑分类弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="480px" :close-on-click-modal="false">
-      <el-form :model="form" label-position="left" label-width="90">
+      <el-form :model="form" label-position="top" label-width="90">
         <el-form-item label="分类名称" required>
           <el-input v-model.trim="form.name" placeholder="如：服务器故障、数据库运维" />
         </el-form-item>

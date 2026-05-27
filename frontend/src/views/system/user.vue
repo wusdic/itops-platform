@@ -44,7 +44,7 @@
 
     <!-- 新建/编辑用户 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
-      <el-form :model="form" label-position="left" label-width="100">
+      <el-form :model="form" label-position="top" label-width="100">
         <el-form-item label="用户名" required>
           <el-input v-model="form.username" placeholder="请输入用户名" :disabled="!!form.id" />
         </el-form-item>

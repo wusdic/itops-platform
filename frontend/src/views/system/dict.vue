@@ -57,7 +57,7 @@
 
     <!-- 创建/编辑字典 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" label-position="left">
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" label-position="top">
         <el-form-item label="字典名称" prop="name">
           <el-input v-model.trim="form.name" placeholder="请输入字典名称" />
         </el-form-item>
@@ -110,7 +110,7 @@
 
     <!-- 字典项编辑弹窗 -->
     <el-dialog v-model="itemDialogVisible" :title="currentEditingItem.id ? '编辑字典项' : '添加字典项'" width="400px">
-      <el-form :model="currentEditingItem" label-width="80px" label-position="left">
+      <el-form :model="currentEditingItem" label-width="80px" label-position="top">
         <el-form-item label="标签" required>
           <el-input v-model.trim="currentEditingItem.label" placeholder="请输入显示标签" />
         </el-form-item>

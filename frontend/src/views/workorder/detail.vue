@@ -226,7 +226,7 @@
 
     <!-- 分配弹窗 -->
     <el-dialog v-model="assignDialogVisible" title="分配工单" width="480px" destroy-on-close>
-      <el-form label-position="left" label-width="80px">
+      <el-form label-position="top" label-width="80px">
         <el-form-item label="工单号">
           <span class="form-value">{{ workorderData.order_no }}</span>
         </el-form-item>
@@ -247,7 +247,7 @@
 
     <!-- 审批弹窗 -->
     <el-dialog v-model="approveDialogVisible" title="审批工单" width="480px" destroy-on-close>
-      <el-form label-position="left" label-width="80px">
+      <el-form label-position="top" label-width="80px">
         <el-form-item label="审批结果">
           <el-radio-group v-model="approveForm.approved">
             <el-radio :label="true">批准</el-radio>
@@ -268,7 +268,7 @@
 
     <!-- 解决弹窗 -->
     <el-dialog v-model="resolveDialogVisible" title="解决工单" width="480px" destroy-on-close>
-      <el-form label-position="left" label-width="80px">
+      <el-form label-position="top" label-width="80px">
         <el-form-item label="解决方案">
           <el-input v-model.trim="resolveForm.solution" type="textarea" :rows="4" placeholder="请描述解决方案" />
         </el-form-item>
