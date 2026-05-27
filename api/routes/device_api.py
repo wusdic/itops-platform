@@ -35,9 +35,24 @@ SAFE_CREDENTIAL_KEYS = frozenset({
 })
 
 
+def _to_api_device_type(val) -> str:
+    """将数据库设备类型值映射为前端友好的设备类型字符串"""
+    if not val:
+        return 'other'
+    v = str(val).lower()
+    if v.startswith('server'):
+        return 'server'
+    if v.startswith('network'):
+        return 'network'
+    if v.startswith('storage'):
+        return 'storage'
+    if v.startswith('security'):
+        return 'security'
+    return v
+
+
 def _mask_credentials(credentials: dict) -> dict:
-    """
-    脱敏敏感 credential 字段
+    """脱敏敏感 credential 字段
     已在 SAFE_CREDENTIAL_KEYS 中的字段直接返回
     其余字段隐藏具体值，显示为 "******"
     """
@@ -191,9 +206,10 @@ async def list_devices(
                 final_status = db_status
 
             items.append({
+                "id": dev.id,
                 "name": dev.name,
-                "ip": dev.ip_address,
-                "type": str(dev.device_type) if dev.device_type else "other",
+                "ip_address": dev.ip_address,
+                "type": _to_api_device_type(dev.device_type),
                 "os": dev.os_type,
                 "os_version": dev.os_version,
                 "vendor": dev.vendor,
