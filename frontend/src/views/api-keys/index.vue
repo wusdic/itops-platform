@@ -17,7 +17,7 @@
       <template #header>
         <div class="card-header">
           <span>API Key 列表</span>
-          <el-input v-model="searchKeyword" placeholder="搜索名称" clearable style="width: 200px" @input="handleSearch">
+          <el-input v-model.trim="searchKeyword" placeholder="搜索名称" clearable style="width: 200px" @input="handleSearch">
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
         </div>
@@ -55,15 +55,16 @@
         </el-table-column>
       </el-table>
     </el-card>
+    <el-empty v-if="!loading && filteredKeys.length === 0" description="暂无数据" />
 
     <!-- Create/Edit Dialog -->
     <el-dialog v-model="showFormDialog" :title="isEdit ? '编辑 API Key' : '创建 API Key'" width="500px">
       <el-form :model="form" label-width="100px" ref="formRef">
         <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入名称" />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
         </el-form-item>
         <el-form-item label="过期时间" prop="expires_at">
           <el-date-picker v-model="form.expires_at" type="datetime" placeholder="不设置则永不过期" style="width: 100%" />

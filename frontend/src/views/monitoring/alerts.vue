@@ -85,6 +85,7 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && alerts.length === 0" description="暂无数据" />
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="page"

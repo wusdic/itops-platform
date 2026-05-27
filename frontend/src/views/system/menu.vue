@@ -53,13 +53,13 @@
       </template>
       <el-form :model="form" label-position="left" label-width="80" require-asterisk-position="right">
         <el-form-item label="菜单名称" required>
-          <el-input v-model="form.label" placeholder="请输入菜单名称" />
+          <el-input v-model.trim="form.label" placeholder="请输入菜单名称" />
         </el-form-item>
         <el-form-item label="菜单编码" required>
           <el-input v-model="form.key" placeholder="请输入菜单编码，如: system:user" :disabled="isEdit" />
         </el-form-item>
         <el-form-item label="菜单路径">
-          <el-input v-model="form.path" placeholder="请输入菜单路径，如: /system/user" />
+          <el-input v-model.trim="form.path" placeholder="请输入菜单路径，如: /system/user" />
         </el-form-item>
         <el-form-item label="图标">
           <el-select v-model="form.iconName" placeholder="选择图标" clearable filterable style="width: 100%">
@@ -72,7 +72,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="form.sort" :min="0" :max="9999" style="width: 100%" />
+          <el-input-number v-model.trim="form.sort" :min="0" :max="9999" style="width: 100%" />
         </el-form-item>
         <el-form-item label="类型">
           <el-radio-group v-model="form.type">

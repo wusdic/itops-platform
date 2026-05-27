@@ -684,7 +684,7 @@ class DashboardLayoutService:
         if existing:
             return existing
         
-        # 创建默认布局
+        # 创建默认布局（4个统计卡片 + 图表 + 表格）
         default_layout = DashboardLayoutData(
             layout_id=f"default_{uuid.uuid4().hex[:12]}",
             user_id=user_id,
@@ -710,11 +710,66 @@ class DashboardLayoutService:
                     item_id=f"item_{uuid.uuid4().hex[:8]}",
                     widget=LayoutWidget(
                         widget_id=f"widget_{uuid.uuid4().hex[:8]}",
-                        widget_type="alert_count",
+                        widget_type="stat_card",
+                        title="在线设备",
+                        metric_names=["online_count"],
+                    ),
+                    position=LayoutPosition(x=3, y=0, width=3, height=2),
+                    visibility=True,
+                ),
+                LayoutItem(
+                    item_id=f"item_{uuid.uuid4().hex[:8]}",
+                    widget=LayoutWidget(
+                        widget_id=f"widget_{uuid.uuid4().hex[:8]}",
+                        widget_type="stat_card",
                         title="告警数量",
                         metric_names=["alert_count"],
                     ),
-                    position=LayoutPosition(x=3, y=0, width=3, height=2),
+                    position=LayoutPosition(x=6, y=0, width=3, height=2),
+                    visibility=True,
+                ),
+                LayoutItem(
+                    item_id=f"item_{uuid.uuid4().hex[:8]}",
+                    widget=LayoutWidget(
+                        widget_id=f"widget_{uuid.uuid4().hex[:8]}",
+                        widget_type="stat_card",
+                        title="待办工单",
+                        metric_names=["pending_orders"],
+                    ),
+                    position=LayoutPosition(x=9, y=0, width=3, height=2),
+                    visibility=True,
+                ),
+                LayoutItem(
+                    item_id=f"item_{uuid.uuid4().hex[:8]}",
+                    widget=LayoutWidget(
+                        widget_id=f"widget_{uuid.uuid4().hex[:8]}",
+                        widget_type="health_status",
+                        title="系统健康状态",
+                        metric_names=["cpu", "memory", "disk"],
+                    ),
+                    position=LayoutPosition(x=0, y=2, width=12, height=2),
+                    visibility=True,
+                ),
+                LayoutItem(
+                    item_id=f"item_{uuid.uuid4().hex[:8]}",
+                    widget=LayoutWidget(
+                        widget_id=f"widget_{uuid.uuid4().hex[:8]}",
+                        widget_type="recent_alerts_table",
+                        title="最近告警",
+                        metric_names=[],
+                    ),
+                    position=LayoutPosition(x=0, y=4, width=6, height=3),
+                    visibility=True,
+                ),
+                LayoutItem(
+                    item_id=f"item_{uuid.uuid4().hex[:8]}",
+                    widget=LayoutWidget(
+                        widget_id=f"widget_{uuid.uuid4().hex[:8]}",
+                        widget_type="pending_workorders_table",
+                        title="待处理工单",
+                        metric_names=[],
+                    ),
+                    position=LayoutPosition(x=6, y=4, width=6, height=3),
                     visibility=True,
                 ),
             ],

@@ -103,21 +103,22 @@
         </el-table-column>
       </el-table>
     </el-card>
+    <el-empty v-if="!loading && routes.length === 0" description="暂无数据" />
 
     <!-- Create Shard Dialog -->
     <el-dialog v-model="showCreateDialog" title="创建分片" width="500px">
       <el-form :model="form" label-width="100px" ref="formRef">
         <el-form-item label="分片名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入分片名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入分片名称" />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
         </el-form-item>
         <el-form-item label="容量(G)" prop="capacity">
-          <el-input-number v-model="form.capacity" :min="1" :max="1000" />
+          <el-input-number v-model.trim="form.capacity" :min="1" :max="1000" />
         </el-form-item>
         <el-form-item label="节点数" prop="nodes">
-          <el-input-number v-model="form.nodes" :min="1" :max="10" />
+          <el-input-number v-model.trim="form.nodes" :min="1" :max="10" />
         </el-form-item>
       </el-form>
       <template #footer>

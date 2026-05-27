@@ -12,7 +12,7 @@
       </template>
 
       <el-space style="margin-bottom: 12px" align="center">
-        <el-input v-model="searchKeyword" placeholder="搜索任务名称" clearable style="width: 200px" @input="handleSearchInput">
+        <el-input v-model.trim="searchKeyword" placeholder="搜索任务名称" clearable style="width: 200px" @input="handleSearchInput">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-select v-model="filterStatus" placeholder="任务状态" clearable style="width: 120px" @change="debouncedSearch">
@@ -26,6 +26,8 @@
       <el-table :data="taskList" :loading="loading" :row-key="row => row.id" style="width: 100%">
         <el-table-column v-for="col in columns" :key="col.key" v-bind="col" />
       </el-table>
+
+      <el-empty v-if="!loading && taskList.length === 0" description="暂无数据" />
 
       <div class="pagination-wrapper">
         <el-pagination
@@ -44,7 +46,7 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
       <el-form :model="form" label-position="left" label-width="100">
         <el-form-item label="任务名称" required>
-          <el-input v-model="form.name" placeholder="请输入任务名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入任务名称" />
         </el-form-item>
         <el-form-item label="巡检类型">
           <el-select v-model="form.type" placeholder="请选择巡检类型" style="width: 100%">
@@ -65,10 +67,10 @@
           <el-date-picker v-model="form.scheduled_at" type="datetime" placeholder="选择执行时间" style="width: 100%" />
         </el-form-item>
         <el-form-item label="超时时间">
-          <el-input-number v-model="form.timeout" :min="1" :max="1440" placeholder="分钟" style="width: 100%" />
+          <el-input-number v-model.trim="form.timeout" :min="1" :max="1440" placeholder="分钟" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入备注" />
+          <el-input v-model.trim="form.remark" type="textarea" :rows="3" placeholder="请输入备注" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -83,7 +85,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, h } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElPopconfirm } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { CONFIG } from '@/config/constants'
 import { useRouter } from 'vue-router'
@@ -169,7 +171,10 @@ const columns = [
       ]
       if (row.status === 'pending') {
         buttons.push(h(ElButton, { size: 'small', text: true, type: 'warning', onClick: () => handleEdit(row) }, () => '编辑'))
-        buttons.push(h(ElButton, { size: 'small', text: true, type: 'danger', onClick: () => handleDelete(row) }, () => '删除'))
+        buttons.push(h(ElPopconfirm, {
+          title: '确定删除此巡检任务？',
+          onConfirm: () => handleDelete(row)
+        }, () => h(ElButton, { size: 'small', text: true, type: 'danger' }, () => '删除')))
       }
       return h(ElSpace, { size: 12 }, () => buttons)
     }

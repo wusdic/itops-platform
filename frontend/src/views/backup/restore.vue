@@ -18,7 +18,7 @@
       </el-tabs>
 
       <el-input
-        v-model="searchKeyword"
+        v-model.trim="searchKeyword"
         placeholder="搜索备份名称"
         clearable
         style="width: 200px; margin-bottom: 12px"
@@ -67,6 +67,7 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && filteredList.length === 0" description="暂无数据" />
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="pagination.page"

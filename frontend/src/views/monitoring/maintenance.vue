@@ -52,6 +52,7 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="page"
@@ -69,7 +70,7 @@
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑维护时段' : '创建维护时段'" width="600px">
       <el-form :model="form" :rules="formRules" ref="formRef" label-width="100px">
         <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入维护时段名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入维护时段名称" />
         </el-form-item>
         <el-form-item label="设备" prop="device_id">
           <el-select v-model="form.device_id" placeholder="选择设备" filterable style="width: 100%">
@@ -83,7 +84,7 @@
           <el-date-picker v-model="form.end_time" type="datetime" placeholder="选择结束时间" style="width: 100%" />
         </el-form-item>
         <el-form-item label="维护原因" prop="reason">
-          <el-input v-model="form.reason" type="textarea" :rows="3" placeholder="请输入维护原因" />
+          <el-input v-model.trim="form.reason" type="textarea" :rows="3" placeholder="请输入维护原因" />
         </el-form-item>
       </el-form>
       <template #footer>

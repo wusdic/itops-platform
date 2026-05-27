@@ -67,7 +67,7 @@
             <el-form label-position="left" label-width="100px">
               <el-form-item label="目标网段">
                 <el-space wrap>
-                  <el-input v-model="quickForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
+                  <el-input v-model.trim="quickForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
                   <el-button type="primary" @click="startQuickScan" :loading="quickScanning" :disabled="!quickForm.cidr">
                     <el-icon v-if="!quickScanning"><Search /></el-icon>
                     开始扫描
@@ -140,7 +140,7 @@
             <el-form label-position="left" label-width="100px">
               <el-form-item label="目标网段">
                 <el-space wrap>
-                  <el-input v-model="ipForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
+                  <el-input v-model.trim="ipForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
                   <el-button type="primary" @click="startIpScan" :loading="ipScanning" :disabled="!ipForm.cidr">
                     <el-icon v-if="!ipScanning"><Search /></el-icon>
                     开始扫描
@@ -221,7 +221,7 @@
             <el-form label-position="left" label-width="100px">
               <el-form-item label="目标网段">
                 <el-space wrap>
-                  <el-input v-model="arpForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
+                  <el-input v-model.trim="arpForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
                   <el-button type="primary" @click="startArpScan" :loading="arpScanning" :disabled="!arpForm.cidr">
                     <el-icon v-if="!arpScanning"><Search /></el-icon>
                     开始扫描
@@ -281,13 +281,13 @@
             <el-form label-position="left" label-width="100px">
               <el-form-item label="目标地址">
                 <el-space wrap>
-                  <el-input v-model="snmpForm.target" placeholder="例如: 192.168.1.1" style="width: 220px" />
+                  <el-input v-model.trim="snmpForm.target" placeholder="例如: 192.168.1.1" style="width: 220px" />
                   <el-select v-model="snmpForm.version" placeholder="SNMP版本" style="width: 120px">
                     <el-option label="v1" value="v1" />
                     <el-option label="v2c" value="v2c" />
                     <el-option label="v3" value="v3" />
                   </el-select>
-                  <el-input v-model="snmpForm.community" placeholder="Community" style="width: 160px" />
+                  <el-input v-model.trim="snmpForm.community" placeholder="Community" style="width: 160px" />
                 </el-space>
               </el-form-item>
               <el-form-item label="扫描选项">
@@ -379,16 +379,17 @@
           </template>
         </el-table-column>
       </el-table>
+    <el-empty v-if="!loading && networkList.length === 0" description="暂无数据" />
     </el-card>
 
     <!-- 添加/编辑扫描任务对话框 -->
     <el-dialog v-model="showAddDialog" :title="editingConfig ? '编辑扫描任务' : '新建扫描任务'" width="500px" destroy-on-close>
       <el-form label-position="left" label-width="100px">
         <el-form-item label="任务名称">
-          <el-input v-model="editForm.name" placeholder="例如: 生产网段扫描" />
+          <el-input v-model.trim="editForm.name" placeholder="例如: 生产网段扫描" />
         </el-form-item>
         <el-form-item label="目标网段">
-          <el-input v-model="editForm.cidr" placeholder="192.168.1.0/24" />
+          <el-input v-model.trim="editForm.cidr" placeholder="192.168.1.0/24" />
         </el-form-item>
         <el-form-item label="扫描类型">
           <el-select v-model="editForm.scan_type" style="width: 100%">
@@ -404,7 +405,7 @@
           </el-space>
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="editForm.description" type="textarea" :rows="2" placeholder="可选描述" />
+          <el-input v-model.trim="editForm.description" type="textarea" :rows="2" placeholder="可选描述" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -439,7 +440,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, Lightning, Connection, Monitor, DataAnalysis } from '@element-plus/icons-vue'
 import { discovery } from '@/api'
 
@@ -1009,6 +1010,7 @@ async function saveConfig() {
 }
 
 async function deleteConfig(row) {
+  await ElMessageBox.confirm(`确定删除该网络配置吗？`, '删除确认', { type: 'warning' })
   try {
     const token = localStorage.getItem('token')
     const res = await fetch(`/api/v1/discovery/networks/${row.id}`, {

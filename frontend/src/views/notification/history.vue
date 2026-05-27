@@ -57,6 +57,7 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && messageList.length === 0" description="暂无数据" />
     </el-card>
 
     <el-dialog v-model="detailModalVisible" title="消息详情" width="500px" destroy-on-close>
@@ -70,7 +71,7 @@
         <el-descriptions-item label="状态">
           <el-tag :type="currentMessage.read ? 'success' : 'warning'">{{ currentMessage.read ? '已读' : '未读' }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="时间">{{ currentMessage.created_at }}</el-descriptions-item>
+        <el-descriptions-item label="时间">{{ formatDate(currentMessage.created_at, 'YYYY-MM-DD HH:mm') }}</el-descriptions-item>
       </el-descriptions>
       <template #footer>
         <el-space justify="end">
@@ -86,6 +87,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Check } from '@element-plus/icons-vue'
+import { formatDate } from '@/utils/date'
 
 const loading = ref(false)
 const list = ref([])

@@ -26,6 +26,7 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && roleList.length === 0" description="暂无数据" />
       <div class="pagination">
         <el-pagination
           v-model:current-page="pagination.page"
@@ -43,13 +44,13 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" label-position="left">
         <el-form-item label="角色名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入角色名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入角色名称" />
         </el-form-item>
         <el-form-item label="角色编码" prop="code">
           <el-input v-model="form.code" placeholder="请输入角色编码" :disabled="isEdit" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
         </el-form-item>
       </el-form>
       <template #footer>

@@ -7,7 +7,7 @@
           <el-form label-position="left" label-width="120px">
             <el-form-item label="扫描网段">
               <el-space>
-                <el-input v-model="cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
+                <el-input v-model.trim="cidr" placeholder="例如: 192.168.1.0/24" style="width: 280px" />
                 <el-button type="primary" @click="startScan" :loading="scanning" :disabled="!cidr">
                   <el-icon v-if="!scanning"><Search /></el-icon>
                   开始扫描
@@ -126,10 +126,10 @@
     <el-dialog v-model="showAddDialog" :title="editingNetwork ? '编辑扫描网段' : '添加扫描网段'" width="500px">
       <el-form label-position="left" label-width="100px">
         <el-form-item label="网段">
-          <el-input v-model="editForm.cidr" placeholder="192.168.1.0/24" />
+          <el-input v-model.trim="editForm.cidr" placeholder="192.168.1.0/24" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="editForm.description" placeholder="可选描述" />
+          <el-input v-model.trim="editForm.description" placeholder="可选描述" />
         </el-form-item>
         <el-form-item label="自动扫描">
           <el-space>
@@ -508,6 +508,7 @@ async function saveNetwork() {
 }
 
 async function deleteNetwork(id) {
+  await ElMessageBox.confirm(`确定删除该网段吗？`, '删除确认', { type: 'warning' });
   const token = localStorage.getItem('token')
   try {
     const res = await fetch(`/api/v1/discovery/networks/${id}`, {

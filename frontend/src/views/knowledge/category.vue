@@ -42,7 +42,7 @@
     <el-dialog v-model="modalVisible" :title="isEditing ? '编辑分类' : '新建分类'" width="500px">
       <el-form :model="formData" label-position="top" :rules="formRules" ref="formRef">
         <el-form-item label="分类名称" prop="name">
-          <el-input v-model="formData.name" placeholder="请输入分类名称" />
+          <el-input v-model.trim="formData.name" placeholder="请输入分类名称" />
         </el-form-item>
         <el-form-item label="分类编码" prop="code">
           <el-input v-model="formData.code" placeholder="请输入分类编码（英文/数字）" :disabled="isEditing" />
@@ -59,10 +59,10 @@
           </el-select>
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="formData.sort_order" :min="0" :max="9999" style="width: 100%" />
+          <el-input-number v-model.trim="formData.sort_order" :min="0" :max="9999" style="width: 100%" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="formData.description" type="textarea" placeholder="请输入备注信息" :rows="3" />
+          <el-input v-model.trim="formData.description" type="textarea" placeholder="请输入备注信息" :rows="3" />
         </el-form-item>
       </el-form>
       <template #footer>

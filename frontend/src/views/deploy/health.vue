@@ -160,6 +160,7 @@
           <template #default="{ row }">{{ row.duration || '-' }}</template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && deployments.length === 0" description="暂无数据" />
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="historyPage"

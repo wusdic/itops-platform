@@ -12,7 +12,7 @@
       </template>
 
       <el-space style="margin-bottom: 12px">
-        <el-input v-model="searchKeyword" placeholder="搜索执行ID或规则名称" clearable style="width: 240px" @change="loadData">
+        <el-input v-model.trim="searchKeyword" placeholder="搜索执行ID或规则名称" clearable style="width: 240px" @change="loadData">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-select v-model="filterStatus" :options="statusOptions" placeholder="回滚状态" clearable style="width: 140px" @change="loadData" />

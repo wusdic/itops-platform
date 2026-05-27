@@ -28,10 +28,11 @@
         <el-table-column label="操作" width="120">
           <template #default="props">
             <el-button link type="primary" size="small" @click="handleEdit(props.row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(props.row.id)">删除</el-button>
+            <el-button link type="danger" size="small" @click="async () => { await ElMessageBox.confirm('确定删除该记录吗？', '删除确认', { type: 'warning' }); handleDelete(props.row.id); }">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && channelList.length === 0" description="暂无数据" />
     </el-card>
 
     <el-card style="margin-top: 16px">
@@ -51,7 +52,7 @@
     <el-drawer v-model="drawerVisible" :title="editingChannel && editingChannel.id ? '编辑渠道' : '添加渠道'" size="500px">
       <el-form :model="form" label-position="left" label-width="100">
         <el-form-item label="渠道名称">
-          <el-input v-model="form.name" placeholder="如：邮件通知" />
+          <el-input v-model.trim="form.name" placeholder="如：邮件通知" />
         </el-form-item>
         <el-form-item label="渠道类型">
           <el-select v-model="form.type" placeholder="选择类型" style="width: 100%">
@@ -63,7 +64,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="配置JSON">
-          <el-input v-model="form.config" type="textarea" :rows="6" placeholder='{"webhook": "https://..."}' />
+          <el-input v-model.trim="form.config" type="textarea" :rows="6" placeholder='{"webhook": "https://..."}' />
         </el-form-item>
         <el-form-item label="启用状态">
           <el-switch v-model="form.enabled" />

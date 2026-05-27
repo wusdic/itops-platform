@@ -126,13 +126,13 @@
             <el-card title="报表详情" class="details-card">
               <el-form-item label="报表名称" required>
                 <el-input
-                  v-model="formData.name"
+                  v-model.trim="formData.name"
                   placeholder="输入报表名称"
                 />
               </el-form-item>
               <el-form-item label="描述">
                 <el-input
-                  v-model="formData.description"
+                  v-model.trim="formData.description"
                   type="textarea"
                   placeholder="报表描述（可选）"
                   :rows="2"
@@ -193,11 +193,11 @@
     >
       <el-form :model="saveTemplateForm" label-placement="top">
         <el-form-item label="模板名称" required>
-          <el-input v-model="saveTemplateForm.name" placeholder="输入模板名称" />
+          <el-input v-model.trim="saveTemplateForm.name" placeholder="输入模板名称" />
         </el-form-item>
         <el-form-item label="描述">
           <el-input
-            v-model="saveTemplateForm.description"
+            v-model.trim="saveTemplateForm.description"
             type="textarea"
             placeholder="模板描述（可选）"
             :rows="2"

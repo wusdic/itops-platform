@@ -3,7 +3,7 @@
     <el-card title="创建工单" shadow="never">
       <el-form ref="formRef" :model="form" :rules="rules" label-position="left" label-width="120" style="max-width: 800px">
         <el-form-item label="工单标题" prop="title">
-          <el-input v-model="form.title" placeholder="请输入工单标题" maxlength="100" show-word-limit />
+          <el-input v-model.trim="form.title" placeholder="请输入工单标题" maxlength="100" show-word-limit />
         </el-form-item>
 
         <el-form-item label="优先级" prop="priority">
@@ -19,7 +19,7 @@
         </el-form-item>
 
         <el-form-item label="工单描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="6" placeholder="请详细描述工单内容" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="6" placeholder="请详细描述工单内容" />
         </el-form-item>
 
         <el-form-item>

@@ -110,7 +110,7 @@
     <el-dialog v-model="showCreateDialog" title="创建金丝雀发布" width="600px">
       <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="120px">
         <el-form-item label="应用名称" prop="app_name">
-          <el-input v-model="createForm.app_name" placeholder="请输入应用名称" />
+          <el-input v-model.trim="createForm.app_name" placeholder="请输入应用名称" />
         </el-form-item>
         <el-form-item label="稳定版本" prop="stable_version">
           <el-select v-model="createForm.stable_version" placeholder="选择稳定版本" style="width: 100%">
@@ -118,13 +118,13 @@
           </el-select>
         </el-form-item>
         <el-form-item label="金丝雀版本" prop="canary_version">
-          <el-input v-model="createForm.canary_version" placeholder="如 2.1.0" />
+          <el-input v-model.trim="createForm.canary_version" placeholder="如 2.1.0" />
         </el-form-item>
         <el-form-item label="初始权重" prop="weight">
           <el-slider v-model="createForm.weight" :min="5" :max="50" :step="5" show-input />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="createForm.description" type="textarea" :rows="3" placeholder="发布描述" />
+          <el-input v-model.trim="createForm.description" type="textarea" :rows="3" placeholder="发布描述" />
         </el-form-item>
       </el-form>
       <template #footer>

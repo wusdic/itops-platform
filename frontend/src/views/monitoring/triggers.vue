@@ -16,7 +16,7 @@
     <!-- Filter Bar -->
     <div class="filter-bar">
       <el-input
-        v-model="searchKeyword"
+        v-model.trim="searchKeyword"
         placeholder="搜索规则名称"
         clearable
         style="width: 240px"
@@ -69,6 +69,7 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && triggers.length === 0" description="暂无数据" />
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="page"
@@ -86,7 +87,7 @@
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑规则' : '创建规则'" width="640px">
       <el-form :model="form" :rules="formRules" ref="formRef" label-width="100px">
         <el-form-item label="规则名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入规则名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入规则名称" />
         </el-form-item>
         <el-form-item label="监控指标" prop="metric">
           <el-select v-model="form.metric" placeholder="选择指标" style="width: 100%">
@@ -106,7 +107,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="阈值" prop="threshold">
-          <el-input-number v-model="form.threshold" :min="0" :max="100" style="width: 100%" />
+          <el-input-number v-model.trim="form.threshold" :min="0" :max="100" style="width: 100%" />
         </el-form-item>
         <el-form-item label="严重级别" prop="severity">
           <el-select v-model="form.severity" placeholder="选择级别" style="width: 100%">
@@ -125,7 +126,7 @@
           </el-checkbox-group>
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="规则描述" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="2" placeholder="规则描述" />
         </el-form-item>
       </el-form>
       <template #footer>

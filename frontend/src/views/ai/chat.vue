@@ -14,7 +14,7 @@
               新建会话
             </el-button>
             <el-input
-              v-model="searchText"
+              v-model.trim="searchText"
               placeholder="搜索会话..."
               size="small"
               style="margin-top: 8px"
@@ -119,7 +119,7 @@
           <!-- 输入框 -->
           <div class="chat-input">
             <el-input
-              v-model="inputText"
+              v-model.trim="inputText"
               type="textarea"
               placeholder="输入你的问题，按 Enter 发送（Shift+Enter 换行）"
               :autosize="{ minRows: 1, maxRows: 6 }"
@@ -398,7 +398,7 @@ async function sendMessage() {
                 await nextTick()
                 scrollToBottom()
               }
-            } catch (_) {}
+            } catch (_) { ElMessage.error("操作失败"); }
           }
         }
       }

@@ -98,6 +98,7 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="page"
@@ -123,13 +124,13 @@
           </el-select>
         </el-form-item>
         <el-form-item label="资源类型" required>
-          <el-input v-model="generateForm.resource_type" placeholder="如: server, database" />
+          <el-input v-model.trim="generateForm.resource_type" placeholder="如: server, database" />
         </el-form-item>
         <el-form-item label="资源ID" required>
-          <el-input v-model="generateForm.resource_id" placeholder="请输入资源ID" />
+          <el-input v-model.trim="generateForm.resource_id" placeholder="请输入资源ID" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="generateForm.description" type="textarea" :rows="2" placeholder="可选备注" />
+          <el-input v-model.trim="generateForm.description" type="textarea" :rows="2" placeholder="可选备注" />
         </el-form-item>
       </el-form>
       <div v-if="generatedWatermark" class="generated-result">
@@ -147,7 +148,7 @@
     <el-dialog v-model="showVerifyDialog" title="验证水印" width="500px">
       <el-form :model="verifyForm" label-width="100px">
         <el-form-item label="水印字符串" required>
-          <el-input v-model="verifyForm.watermark" type="textarea" :rows="3" placeholder="请输入水印字符串" />
+          <el-input v-model.trim="verifyForm.watermark" type="textarea" :rows="3" placeholder="请输入水印字符串" />
         </el-form-item>
       </el-form>
       <div v-if="verifyResult !== null" class="verify-result" :class="verifyResult ? 'valid' : 'invalid'">

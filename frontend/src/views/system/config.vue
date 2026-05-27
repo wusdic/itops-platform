@@ -31,7 +31,7 @@
             </span>
             <span v-else>
               <el-select v-if="isTimezoneKey(row.key)" v-model="row.editValue" :options="TIMEZONE_OPTIONS" style="width: 260px" />
-              <el-input v-else v-model="row.editValue" style="width: 200px" />
+              <el-input v-else v-model.trim="row.editValue" style="width: 200px" />
             </span>
           </template>
         </el-table-column>
@@ -57,6 +57,7 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && configList.length === 0" description="暂无数据" />
     </el-card>
   </div>
 </template>

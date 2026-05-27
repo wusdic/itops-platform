@@ -12,7 +12,7 @@
       </template>
 
       <el-space style="margin-bottom: 12px" align="center">
-        <el-input v-model="searchKeyword" placeholder="搜索用户名/姓名" clearable style="width: 200px" @input="handleSearchInput">
+        <el-input v-model.trim="searchKeyword" placeholder="搜索用户名/姓名" clearable style="width: 200px" @input="handleSearchInput">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-select v-model="filterStatus" :options="statusOptions" placeholder="用户状态" clearable style="width: 120px" @change="debouncedSearch" />
@@ -26,6 +26,8 @@
       >
         <el-table-column v-for="col in columns" :key="col.key" v-bind="col" />
       </el-table>
+
+      <el-empty v-if="!loading && userList.length === 0" description="暂无数据" />
 
       <div class="pagination-wrapper">
         <el-pagination
@@ -55,13 +57,13 @@
           />
         </el-form-item>
         <el-form-item label="姓名">
-          <el-input v-model="form.full_name" placeholder="请输入姓名" />
+          <el-input v-model.trim="form.full_name" placeholder="请输入姓名" />
         </el-form-item>
         <el-form-item label="邮箱">
-          <el-input v-model="form.email" placeholder="请输入邮箱" />
+          <el-input v-model.trim="form.email" placeholder="请输入邮箱" />
         </el-form-item>
         <el-form-item label="手机号">
-          <el-input v-model="form.phone" placeholder="请输入手机号" />
+          <el-input v-model.trim="form.phone" placeholder="请输入手机号" />
         </el-form-item>
         <el-form-item label="角色">
           <el-select v-model="form.role" :options="roleOptions" placeholder="请选择角色" style="width: 100%" />
@@ -79,7 +81,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, h } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { CONFIG } from '@/config/constants'
 
@@ -232,6 +234,7 @@ async function handleResetPwd(row) {
 
 async function handleDelete(row) {
   try {
+    await ElMessageBox.confirm(`确定删除用户"${row.username}"吗？`, '删除确认', { type: 'warning' })
     const token = localStorage.getItem('token') || ''
     const res = await fetch(`/api/v1/admin/users/${row.id}`, {
       method: 'DELETE',
@@ -241,7 +244,7 @@ async function handleDelete(row) {
     ElMessage.success('删除成功')
     loadData()
   } catch (e) {
-    ElMessage.error(`删除失败: ${e.message}`)
+    if (e !== 'cancel') ElMessage.error(`删除失败: ${e.message}`)
   }
 }
 

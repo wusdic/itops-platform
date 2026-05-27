@@ -56,6 +56,7 @@
             >
               <el-table-column v-for="col in protocolColumns" :key="col.key" v-bind="col" />
             </el-table>
+          <el-empty v-if="!loading && deviceProtocols.length === 0" description="暂无数据" />
           </el-space>
         </el-card>
       </el-tab-pane>
@@ -74,32 +75,32 @@
           />
         </el-form-item>
         <el-form-item label="模板名称">
-          <el-input v-model="form.name" placeholder="如: MySQL标准模板" />
+          <el-input v-model.trim="form.name" placeholder="如: MySQL标准模板" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" placeholder="模板描述" />
+          <el-input v-model.trim="form.description" type="textarea" placeholder="模板描述" />
         </el-form-item>
 
         <el-divider>默认配置</el-divider>
 
         <template v-if="form.protocol_type === 'snmp'">
           <el-form-item label="端口">
-            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+            <el-input-number v-model.trim="form.default_config.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="SNMP版本">
             <el-select v-model="form.default_config.version" :options="snmpVersionOptions" style="width:100%" />
           </el-form-item>
           <el-form-item label="Community">
-            <el-input v-model="form.default_config.community" placeholder="public" />
+            <el-input v-model.trim="form.default_config.community" placeholder="public" />
           </el-form-item>
         </template>
 
         <template v-if="form.protocol_type === 'ssh'">
           <el-form-item label="端口">
-            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+            <el-input-number v-model.trim="form.default_config.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="用户名">
-            <el-input v-model="form.default_config.username" placeholder="root" />
+            <el-input v-model.trim="form.default_config.username" placeholder="root" />
           </el-form-item>
           <el-form-item label="密码">
             <el-input v-model="form.default_config.password" type="password" placeholder="留空使用密钥" show-password />
@@ -108,10 +109,10 @@
 
         <template v-if="form.protocol_type === 'http' || form.protocol_type === 'zabbix' || form.protocol_type === 'prometheus' || form.protocol_type === 'redfish'">
           <el-form-item label="端口">
-            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+            <el-input-number v-model.trim="form.default_config.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="用户名">
-            <el-input v-model="form.default_config.username" placeholder="admin" />
+            <el-input v-model.trim="form.default_config.username" placeholder="admin" />
           </el-form-item>
           <el-form-item label="密码">
             <el-input v-model="form.default_config.password" type="password" placeholder="密码" show-password />
@@ -120,10 +121,10 @@
 
         <template v-if="form.protocol_type === 'mysql' || form.protocol_type === 'postgres'">
           <el-form-item label="端口">
-            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+            <el-input-number v-model.trim="form.default_config.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="用户名">
-            <el-input v-model="form.default_config.username" placeholder="root" />
+            <el-input v-model.trim="form.default_config.username" placeholder="root" />
           </el-form-item>
           <el-form-item label="密码">
             <el-input v-model="form.default_config.password" type="password" show-password />
@@ -132,7 +133,7 @@
 
         <template v-if="form.protocol_type === 'redis'">
           <el-form-item label="端口">
-            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+            <el-input-number v-model.trim="form.default_config.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="密码">
             <el-input v-model="form.default_config.password" type="password" placeholder="无密码则留空" show-password />
@@ -141,10 +142,10 @@
 
         <template v-if="form.protocol_type === 'rabbitmq'">
           <el-form-item label="端口">
-            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+            <el-input-number v-model.trim="form.default_config.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="用户名">
-            <el-input v-model="form.default_config.username" placeholder="guest" />
+            <el-input v-model.trim="form.default_config.username" placeholder="guest" />
           </el-form-item>
           <el-form-item label="密码">
             <el-input v-model="form.default_config.password" type="password" placeholder="guest" show-password />
@@ -153,10 +154,10 @@
 
         <template v-if="form.protocol_type === 'vmware'">
           <el-form-item label="端口">
-            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+            <el-input-number v-model.trim="form.default_config.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="用户名">
-            <el-input v-model="form.default_config.user" placeholder="administrator@vsphere.local" />
+            <el-input v-model.trim="form.default_config.user" placeholder="administrator@vsphere.local" />
           </el-form-item>
           <el-form-item label="密码">
             <el-input v-model="form.default_config.password" type="password" show-password />
@@ -165,10 +166,10 @@
 
         <template v-if="form.protocol_type === 'browser'">
           <el-form-item label="端口">
-            <el-input-number v-model="form.default_config.port" :min="1" :max="65535" />
+            <el-input-number v-model.trim="form.default_config.port" :min="1" :max="65535" />
           </el-form-item>
           <el-form-item label="用户名">
-            <el-input v-model="form.default_config.username" placeholder="admin" />
+            <el-input v-model.trim="form.default_config.username" placeholder="admin" />
           </el-form-item>
           <el-form-item label="密码">
             <el-input v-model="form.default_config.password" type="password" show-password />
@@ -176,7 +177,7 @@
         </template>
 
         <el-form-item label="超时(秒)">
-          <el-input-number v-model="form.default_config.timeout" :min="5" :max="300" />
+          <el-input-number v-model.trim="form.default_config.timeout" :min="5" :max="300" />
         </el-form-item>
 
         <el-form-item label="启用">

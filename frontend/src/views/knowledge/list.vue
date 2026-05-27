@@ -21,7 +21,7 @@
     <el-card class="mb-4">
       <el-space align="center">
         <el-input
-          v-model="searchKeyword"
+          v-model.trim="searchKeyword"
           placeholder="搜索标题"
           clearable
           style="width: 200px"
@@ -114,6 +114,8 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && list.length === 0" description="暂无数据" />
+
       <el-pagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.pageSize"
@@ -143,8 +145,8 @@
             style="margin-right: 4px"
           >{{ tag }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ currentSOP.created_at }}</el-descriptions-item>
-        <el-descriptions-item label="更新时间">{{ currentSOP.updated_at }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{ formatDate(currentSOP.created_at, 'YYYY-MM-DD HH:mm') }}</el-descriptions-item>
+        <el-descriptions-item label="更新时间">{{ formatDate(currentSOP.updated_at, 'YYYY-MM-DD HH:mm') }}</el-descriptions-item>
       </el-descriptions>
       <template #footer>
         <el-button @click="detailModalVisible = false">关闭</el-button>
@@ -159,7 +161,7 @@
     >
       <el-form :model="formData" label-position="top">
         <el-form-item label="标题" required>
-          <el-input v-model="formData.title" placeholder="请输入文档标题" />
+          <el-input v-model.trim="formData.title" placeholder="请输入文档标题" />
         </el-form-item>
         <el-form-item label="分类" required>
           <el-select v-model="formData.category_id" placeholder="请选择分类" style="width: 100%">
@@ -172,10 +174,10 @@
           </el-select>
         </el-form-item>
         <el-form-item label="内容">
-          <el-input v-model="formData.content" type="textarea" placeholder="请输入文档内容" :rows="6" />
+          <el-input v-model.trim="formData.content" type="textarea" placeholder="请输入文档内容" :rows="6" />
         </el-form-item>
         <el-form-item label="标签（逗号分隔）">
-          <el-input v-model="formData.tags_input" placeholder="例如: 运维, 系统, 监控" />
+          <el-input v-model.trim="formData.tags_input" placeholder="例如: 运维, 系统, 监控" />
         </el-form-item>
         <el-form-item label="状态" required>
           <el-select v-model="formData.status" placeholder="请选择状态" style="width: 100%">
@@ -198,6 +200,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
+import { formatDate } from '@/utils/date'
 
 const loading = ref(false)
 const list = ref([])
@@ -269,7 +272,7 @@ const loadCategories = async () => {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     categoryOptions.value = (data.items || []).map(c => ({ label: c.name, value: c.id }))
-  } catch (_) {}
+  } catch (_) { ElMessage.error("操作失败"); }
 }
 
 const openCreateModal = () => {

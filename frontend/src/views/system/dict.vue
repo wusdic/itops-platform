@@ -12,7 +12,7 @@
 
       <div class="filter-bar">
         <el-input
-          v-model="searchKeyword"
+          v-model.trim="searchKeyword"
           placeholder="搜索字典名称/编码"
           style="width: 200px"
           clearable
@@ -40,6 +40,7 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && dictList.length === 0" description="暂无数据" />
 
       <div class="pagination">
         <el-pagination
@@ -58,13 +59,13 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
       <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" label-position="left">
         <el-form-item label="字典名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入字典名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入字典名称" />
         </el-form-item>
         <el-form-item label="字典编码" prop="code">
-          <el-input v-model="form.code" placeholder="请输入字典编码" />
+          <el-input v-model.trim="form.code" placeholder="请输入字典编码" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="form.status" placeholder="请选择状态" style="width: 100%">
@@ -101,6 +102,7 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && dictItems.length === 0" description="暂无字典项" />
       <template #footer>
         <el-button type="primary" size="small" @click="handleAddItem">添加字典项</el-button>
       </template>
@@ -110,13 +112,13 @@
     <el-dialog v-model="itemDialogVisible" :title="currentEditingItem.id ? '编辑字典项' : '添加字典项'" width="400px">
       <el-form :model="currentEditingItem" label-width="80px" label-position="left">
         <el-form-item label="标签" required>
-          <el-input v-model="currentEditingItem.label" placeholder="请输入显示标签" />
+          <el-input v-model.trim="currentEditingItem.label" placeholder="请输入显示标签" />
         </el-form-item>
         <el-form-item label="值" required>
-          <el-input v-model="currentEditingItem.value" placeholder="请输入字典值" />
+          <el-input v-model.trim="currentEditingItem.value" placeholder="请输入字典值" />
         </el-form-item>
         <el-form-item label="排序">
-          <el-input-number v-model="currentEditingItem.sort_order" :min="0" controls-position="right" style="width: 100%" />
+          <el-input-number v-model.trim="currentEditingItem.sort_order" :min="0" controls-position="right" style="width: 100%" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="currentEditingItem.status" style="width: 100%">

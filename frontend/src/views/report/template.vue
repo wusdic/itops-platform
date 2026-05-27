@@ -80,7 +80,7 @@
       >
         <el-form-item label="模板名称" prop="name">
           <el-input
-            v-model="formData.name"
+            v-model.trim="formData.name"
             placeholder="请输入模板名称"
           />
         </el-form-item>
@@ -96,7 +96,7 @@
 
         <el-form-item label="描述" prop="description">
           <el-input
-            v-model="formData.description"
+            v-model.trim="formData.description"
             type="textarea"
             placeholder="请输入模板描述"
             :rows="3"
@@ -105,7 +105,7 @@
 
         <el-form-item label="模板内容" prop="content">
           <el-input
-            v-model="formData.content"
+            v-model.trim="formData.content"
             type="textarea"
             placeholder="请输入HTML模板内容，占位符如 {{device_name}}, {{metric_value}}"
             :rows="8"
@@ -144,7 +144,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Document, Edit, Delete } from '@element-plus/icons-vue'
 
 const message = ElMessage
@@ -331,7 +331,8 @@ function handleDelete(template) {
   deleteModal.show = true
 }
 
-function handleConfirmDelete() {
+async function handleConfirmDelete() {
+  await ElMessageBox.confirm('确定删除该模板吗？此操作不可恢复。', '删除确认', { type: 'warning' })
   if (deleteModal.templateId) {
     deleteTemplate(deleteModal.templateId)
   }

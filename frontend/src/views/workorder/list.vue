@@ -34,7 +34,7 @@
     <!-- 筛选工具栏 -->
     <el-card shadow="never" style="margin-bottom:12px">
       <el-space :wrap="true" :size="12" align="center">
-        <el-input v-model="searchKeyword" placeholder="搜索工单标题" clearable style="width:200px" @keyup.enter="loadData" />
+        <el-input v-model.trim="searchKeyword" placeholder="搜索工单标题" clearable style="width:200px" @keyup.enter="loadData" />
         <el-select v-model="filterStatus" placeholder="工单状态" clearable :options="statusOptions" style="width:140px" @change="loadData" />
         <el-select v-model="filterPriority" placeholder="优先级" clearable :options="priorityOptions" style="width:140px" @change="loadData" />
         <el-select v-model="filterDevice" placeholder="关联设备" clearable :options="deviceList" filterable style="width:180px" @change="loadData" />
@@ -94,6 +94,7 @@
         </el-table-column>
       </el-table>
     </el-card>
+    <el-empty v-if="!loading && workorderList.length === 0" description="暂无数据" />
 
     <!-- 查看工单详情弹窗 -->
     <el-dialog v-model="viewModalVisible" title="工单详情" width="600px" destroy-on-close>
@@ -179,10 +180,10 @@
           <el-select v-model="editForm.status" :options="statusTransitionOptions" placeholder="请选择新状态" style="width:100%" />
         </el-form-item>
         <el-form-item label="处理人">
-          <el-input v-model="editForm.assignee" placeholder="请输入处理人" />
+          <el-input v-model.trim="editForm.assignee" placeholder="请输入处理人" />
         </el-form-item>
         <el-form-item label="处理备注">
-          <el-input v-model="editForm.handling_notes" type="textarea" :rows="4" placeholder="请输入处理备注" />
+          <el-input v-model.trim="editForm.handling_notes" type="textarea" :rows="4" placeholder="请输入处理备注" />
         </el-form-item>
       </el-form>
       <template #footer>

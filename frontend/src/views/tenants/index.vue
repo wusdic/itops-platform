@@ -17,7 +17,7 @@
       <template #header>
         <div class="card-header">
           <span>租户列表</span>
-          <el-input v-model="searchKeyword" placeholder="搜索租户名称" clearable style="width: 200px" @input="handleSearch">
+          <el-input v-model.trim="searchKeyword" placeholder="搜索租户名称" clearable style="width: 200px" @input="handleSearch">
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
         </div>
@@ -57,10 +57,10 @@
     <el-dialog v-model="showFormDialog" :title="isEdit ? '编辑租户' : '创建租户'" width="500px">
       <el-form :model="form" label-width="80px" ref="formRef">
         <el-form-item label="租户名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入租户名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入租户名称" />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="3" placeholder="请输入描述" />
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-radio-group v-model="form.status">
@@ -91,6 +91,7 @@
             </template>
           </el-table-column>
         </el-table>
+        <el-empty v-if="!loading && tenantUsers.length === 0" description="暂无数据" />
         <div class="assign-footer">
           <el-select v-model="selectedUserId" placeholder="选择用户" clearable style="width: 200px">
             <el-option v-for="u in availableUsers" :key="u.id" :label="u.username" :value="u.id" />
@@ -104,13 +105,13 @@
     <el-dialog v-model="showQuotaDialog" title="配额管理" width="400px">
       <el-form :model="quotaForm" label-width="100px">
         <el-form-item label="API调用配额">
-          <el-input-number v-model="quotaForm.api_quota" :min="0" :max="1000000" />
+          <el-input-number v-model.trim="quotaForm.api_quota" :min="0" :max="1000000" />
         </el-form-item>
         <el-form-item label="存储配额(G)">
-          <el-input-number v-model="quotaForm.storage_quota" :min="0" :max="1000" />
+          <el-input-number v-model.trim="quotaForm.storage_quota" :min="0" :max="1000" />
         </el-form-item>
         <el-form-item label="用户数上限">
-          <el-input-number v-model="quotaForm.user_quota" :min="1" :max="1000" />
+          <el-input-number v-model.trim="quotaForm.user_quota" :min="1" :max="1000" />
         </el-form-item>
       </el-form>
       <template #footer>

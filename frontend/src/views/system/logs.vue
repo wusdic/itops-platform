@@ -115,7 +115,7 @@
               @change="loadGroups"
             />
             <el-input
-              v-model="filterKeyword"
+              v-model.trim="filterKeyword"
               placeholder="搜索关键词"
               clearable
               size="small"
@@ -169,6 +169,8 @@
           </el-table-column>
           <el-table-column label="代表性日志" prop="sample_log" show-overflow-tooltip />
         </el-table>
+        <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
+
       </template>
 
       <!-- 归集明细列表（二级视图） -->
@@ -201,7 +203,9 @@
             <el-table-column v-else-if="col.key === 'duration_ms'" :label="col.title" :width="col.width" :prop="col.key">
               <template #default="{ row }">{{ row.duration_ms != null ? `${row.duration_ms}ms` : '-' }}</template>
             </el-table-column>
-            <el-table-column v-else :label="col.title" :prop="col.key" :width="col.width" show-overflow-tooltip />
+            <el-table-column v-else :label="col.title" :prop="col.key" :w
+        <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
+idth="col.width" show-overflow-tooltip />
           </template>
         </el-table>
       </template>

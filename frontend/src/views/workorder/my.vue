@@ -12,7 +12,7 @@
       </template>
 
       <el-space style="margin-bottom: 12px">
-        <el-input v-model="searchKeyword" placeholder="搜索工单标题" clearable style="width: 200px" @input="loadData">
+        <el-input v-model.trim="searchKeyword" placeholder="搜索工单标题" clearable style="width: 200px" @input="loadData">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-select v-model="filterStatus" :options="statusOptions" placeholder="工单状态" clearable style="width: 120px" @change="loadData" />
@@ -40,6 +40,7 @@
           </template>
         </el-table-column>
       </el-table>
+    <el-empty v-if="!loading && workorderList.length === 0" description="暂无数据" />
     </el-card>
 
     <!-- 工单详情 -->

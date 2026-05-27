@@ -34,6 +34,8 @@
               </template>
             </el-table-column>
           </el-table>
+        <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
+
           <el-pagination
             v-model:current-page="historyPagination.page"
             v-model:page-size="historyPagination.pageSize"

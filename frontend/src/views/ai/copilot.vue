@@ -8,7 +8,7 @@
             <el-icon><Plus /></el-icon>
             新建分类
           </el-button>
-          <el-input v-model="searchText" placeholder="搜索分类" size="small" clearable style="margin-top: 8px">
+          <el-input v-model.trim="searchText" placeholder="搜索分类" size="small" clearable style="margin-top: 8px">
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
         </div>
@@ -78,7 +78,7 @@
           <!-- 输入框 -->
           <div class="chat-input">
             <el-input
-              v-model="inputText"
+              v-model.trim="inputText"
               type="textarea"
               placeholder="基于当前分类的知识库提问，按 Enter 发送"
               :autosize="{ minRows: 1, maxRows: 4 }"
@@ -113,13 +113,13 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="480px" :close-on-click-modal="false">
       <el-form :model="form" label-position="left" label-width="90">
         <el-form-item label="分类名称" required>
-          <el-input v-model="form.name" placeholder="如：服务器故障、数据库运维" />
+          <el-input v-model.trim="form.name" placeholder="如：服务器故障、数据库运维" />
         </el-form-item>
         <el-form-item label="分类编码" required>
           <el-input v-model="form.code" placeholder="如：server_fault, db_ops" :disabled="!!form.id" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="描述该知识分类的用途" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="2" placeholder="描述该知识分类的用途" />
         </el-form-item>
       </el-form>
       <template #footer>

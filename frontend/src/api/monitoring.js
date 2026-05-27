@@ -72,6 +72,9 @@ export const performance = {
   getMetricsHistory: (params) => request.get('/monitoring/metrics/history', { params }),
   // TopN 指标（新增）
   getMetricsTop: (metricType, limit = 10) => request.get(`/monitoring/metrics/top/${metricType}`, { params: { limit } }),
+  // 仪表盘布局（供 dashboard/index.vue 调用）
+  getDashboardLayout: (layoutId) => request.get('/monitoring/dashboard/layout', { params: layoutId ? { layout_id: layoutId } : {} }),
+  saveDashboardLayout: (data) => request.put('/monitoring/dashboard/layout', data),
 }
 
 /**
@@ -81,12 +84,12 @@ export const dashboards = {
   getList: (params) => request.get('/monitoring/dashboards', { params }),
   getById: (id) => request.get(`/monitoring/dashboards/${id}`),
   getLayout: (layoutId) => request.get('/monitoring/dashboard/layout', { params: layoutId ? { layout_id: layoutId } : {} }),
+  getDashboardLayout: (layoutId) => request.get('/monitoring/dashboard/layout', { params: layoutId ? { layout_id: layoutId } : {} }),
   saveLayout: (data) => request.put('/monitoring/dashboard/layout', data),
   listLayouts: () => request.get('/monitoring/dashboard/layouts'),
   deleteLayout: (layoutId) => request.delete(`/monitoring/dashboard/layout/${layoutId}`),
   getStats: () => request.get('/monitoring/dashboard/stats')
 }
-
 /**
  * 维护窗口 API
  */

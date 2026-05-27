@@ -10,7 +10,7 @@
 
       <el-form ref="formRef" :model="form" :rules="rules" size="large" @keyup.enter="handleLogin">
         <el-form-item prop="username">
-          <el-input v-model="form.username" placeholder="请输入用户名" clearable>
+          <el-input v-model.trim="form.username" placeholder="请输入用户名" clearable>
             <template #prefix><el-icon><User /></el-icon></template>
           </el-input>
         </el-form-item>

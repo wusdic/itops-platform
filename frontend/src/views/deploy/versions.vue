@@ -15,7 +15,7 @@
     <!-- Filter Bar -->
     <div class="filter-bar">
       <el-space :size="12" align="center">
-        <el-input v-model="searchKeyword" placeholder="搜索版本/应用" clearable style="width: 200px" @clear="loadVersions" @keyup.enter="loadVersions">
+        <el-input v-model.trim="searchKeyword" placeholder="搜索版本/应用" clearable style="width: 200px" @clear="loadVersions" @keyup.enter="loadVersions">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-select v-model="filterStatus" placeholder="状态" clearable style="width: 130px" @change="loadVersions">
@@ -70,6 +70,8 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && versions.length === 0" description="暂无数据" />
+
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="page"
@@ -87,10 +89,10 @@
     <el-dialog v-model="showCreateDialog" title="注册新版本" width="600px">
       <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="100px">
         <el-form-item label="应用名称" prop="app_name">
-          <el-input v-model="createForm.app_name" placeholder="请输入应用名称" />
+          <el-input v-model.trim="createForm.app_name" placeholder="请输入应用名称" />
         </el-form-item>
         <el-form-item label="版本号" prop="version">
-          <el-input v-model="createForm.version" placeholder="如 1.0.0" />
+          <el-input v-model.trim="createForm.version" placeholder="如 1.0.0" />
         </el-form-item>
         <el-form-item label="环境" prop="environment">
           <el-select v-model="createForm.environment" style="width: 100%">
@@ -100,10 +102,10 @@
           </el-select>
         </el-form-item>
         <el-form-item label="镜像" prop="image">
-          <el-input v-model="createForm.image" placeholder="registry/app:v1.0.0" />
+          <el-input v-model.trim="createForm.image" placeholder="registry/app:v1.0.0" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="createForm.description" type="textarea" :rows="3" placeholder="版本描述信息" />
+          <el-input v-model.trim="createForm.description" type="textarea" :rows="3" placeholder="版本描述信息" />
         </el-form-item>
       </el-form>
       <template #footer>

@@ -137,6 +137,8 @@
           </template>
         </el-table-column>
       </el-table>
+        <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
+
 
       <el-pagination
         v-model:current-page="pagination.page"
@@ -190,7 +192,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document, CircleCheck, CircleClose, RefreshRight, Refresh, Search, View, Download, Delete
 } from '@element-plus/icons-vue'
@@ -428,7 +430,8 @@ function handleDelete(row) {
   deleteModal.show = true
 }
 
-function handleConfirmDelete() {
+async function handleConfirmDelete() {
+  await ElMessageBox.confirm('确定删除该报表吗？此操作不可恢复。', '删除确认', { type: 'warning' })
   if (deleteModal.reportId) {
     deleteReport(deleteModal.reportId)
   }

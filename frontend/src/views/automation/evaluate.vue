@@ -25,7 +25,7 @@
               </el-select>
             </el-form-item>
             <el-form-item label="阈值(可选)">
-              <el-input v-model="form.threshold" placeholder="请输入阈值(可选)" />
+              <el-input v-model.trim="form.threshold" placeholder="请输入阈值(可选)" />
             </el-form-item>
             <el-form-item>
               <el-space>
@@ -85,6 +85,8 @@
               </template>
             </el-table-column>
           </el-table>
+        <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
+
           <el-pagination
             v-model:current-page="historyPagination.page"
             v-model:page-size="historyPagination.pageSize"

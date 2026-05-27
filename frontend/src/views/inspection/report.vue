@@ -63,6 +63,7 @@
         <el-table-column prop="checked_at" label="检查时间" width="180" />
       </el-table>
 
+      <el-empty v-if="!loading && resultList.length === 0" description="暂无数据" />
       <div class="pagination-wrapper">
         <el-pagination
           v-model:current-page="pagination.page"

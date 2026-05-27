@@ -76,6 +76,7 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && hosts.length === 0" description="暂无数据" />
     </el-card>
   </div>
 </template>

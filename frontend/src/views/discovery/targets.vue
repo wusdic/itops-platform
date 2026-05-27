@@ -22,7 +22,7 @@
             <el-form label-position="left" label-width="120px">
               <el-form-item label="目标网段">
                 <el-space wrap>
-                  <el-input v-model="ipForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 260px" />
+                  <el-input v-model.trim="ipForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 260px" />
                   <el-button type="primary" @click="startIpScan" :loading="ipScanning" :disabled="!ipForm.cidr">
                     <el-icon v-if="!ipScanning"><Search /></el-icon>
                     开始扫描
@@ -47,7 +47,7 @@
             </el-card>
 
             <!-- IP 扫描结果 -->
-            <div v-if="ipResults.length > 0" class="results-section">
+            <div class="results-section">
               <div class="results-header">
                 <span class="results-title">扫描结果</span>
                 <el-space>
@@ -87,6 +87,7 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <el-empty v-if="!ipScanning && ipResults.length === 0" description="暂无扫描结果，请先输入网段开始扫描" />
             </div>
           </div>
         </el-tab-pane>
@@ -103,13 +104,13 @@
             <el-form label-position="left" label-width="120px">
               <el-form-item label="目标地址">
                 <el-space wrap>
-                  <el-input v-model="snmpForm.target" placeholder="例如: 192.168.1.1" style="width: 220px" />
+                  <el-input v-model.trim="snmpForm.target" placeholder="例如: 192.168.1.1" style="width: 220px" />
                   <el-select v-model="snmpForm.version" placeholder="SNMP版本" style="width:140px">
                     <el-option label="v1" value="v1" />
                     <el-option label="v2c" value="v2c" />
                     <el-option label="v3" value="v3" />
                   </el-select>
-                  <el-input v-model="snmpForm.community" placeholder="Community" style="width:160px" />
+                  <el-input v-model.trim="snmpForm.community" placeholder="Community" style="width:160px" />
                 </el-space>
               </el-form-item>
               <el-form-item label="扫描选项">
@@ -134,7 +135,7 @@
             </el-card>
 
             <!-- SNMP 设备列表 -->
-            <div v-if="snmpDevices.length > 0" class="results-section">
+            <div class="results-section">
               <div class="results-header">
                 <span class="results-title">SNMP 设备列表</span>
                 <span class="result-count">共 {{ snmpDevices.length }} 台设备</span>
@@ -158,6 +159,7 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <el-empty v-if="!snmpScanning && snmpDevices.length === 0" description="暂无SNMP设备，请先输入目标地址开始扫描" />
             </div>
           </div>
         </el-tab-pane>
@@ -174,7 +176,7 @@
             <el-form label-position="left" label-width="120px">
               <el-form-item label="目标网段">
                 <el-space wrap>
-                  <el-input v-model="arpForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 260px" />
+                  <el-input v-model.trim="arpForm.cidr" placeholder="例如: 192.168.1.0/24" style="width: 260px" />
                   <el-button type="primary" @click="startArpScan" :loading="arpScanning" :disabled="!arpForm.cidr">
                     <el-icon v-if="!arpScanning"><Search /></el-icon>
                     开始扫描
@@ -191,7 +193,7 @@
             </el-card>
 
             <!-- ARP 扫描结果 -->
-            <div v-if="arpResults.length > 0" class="results-section">
+            <div class="results-section">
               <div class="results-header">
                 <span class="results-title">ARP 扫描结果</span>
                 <span class="result-count">发现 {{ arpResults.length }} 条记录</span>
@@ -217,6 +219,7 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <el-empty v-if="!arpScanning && arpResults.length === 0" description="暂无ARP扫描结果，请先输入网段开始扫描" />
             </div>
           </div>
         </el-tab-pane>
@@ -254,6 +257,7 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-empty v-if="!loading && scanHistory.length === 0" description="暂无扫描历史" />
     </el-card>
 
     <!-- SNMP 设备详情弹窗 -->

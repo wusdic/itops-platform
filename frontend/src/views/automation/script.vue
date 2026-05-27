@@ -12,7 +12,7 @@
       </template>
 
       <el-space style="margin-bottom: 12px">
-        <el-input v-model="searchKeyword" placeholder="搜索规则名称" clearable style="width: 200px" @change="loadData">
+        <el-input v-model.trim="searchKeyword" placeholder="搜索规则名称" clearable style="width: 200px" @change="loadData">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-select v-model="filterType" :options="typeOptions" placeholder="规则类型" clearable style="width: 140px" @change="loadData" />
@@ -51,6 +51,8 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && ruleList.length === 0" description="暂无数据" />
+
       <el-pagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.pageSize"
@@ -67,7 +69,7 @@
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="700px">
       <el-form :model="form" label-placement="left" label-width="100">
         <el-form-item label="规则名称" required>
-          <el-input v-model="form.name" placeholder="请输入规则名称" />
+          <el-input v-model.trim="form.name" placeholder="请输入规则名称" />
         </el-form-item>
         <el-form-item label="规则类型">
           <el-select v-model="form.type" :options="typeOptions" placeholder="请选择" style="width: 100%" />
@@ -76,13 +78,13 @@
           <el-switch v-model="form.enabled" />
         </el-form-item>
         <el-form-item label="条件配置">
-          <el-input v-model="form.conditions" type="textarea" :rows="4" placeholder="请输入触发条件 (JSON格式)" />
+          <el-input v-model.trim="form.conditions" type="textarea" :rows="4" placeholder="请输入触发条件 (JSON格式)" />
         </el-form-item>
         <el-form-item label="动作配置">
-          <el-input v-model="form.actions" type="textarea" :rows="4" placeholder="请输入执行动作 (JSON格式)" />
+          <el-input v-model.trim="form.actions" type="textarea" :rows="4" placeholder="请输入执行动作 (JSON格式)" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="请输入描述" />
+          <el-input v-model.trim="form.description" type="textarea" :rows="2" placeholder="请输入描述" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -110,7 +112,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 
 const message = ElMessage
@@ -187,6 +189,7 @@ function handleEdit(row) {
 }
 
 async function handleDelete(row) {
+  await ElMessageBox.confirm(`确定删除触发规则「${row.name}」吗？`, '删除确认', { type: 'warning' })
   try {
     const token = localStorage.getItem('token') || ''
     const res = await fetch(`/api/v1/automation/trigger-rules/${row.id}`, {

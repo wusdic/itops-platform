@@ -13,7 +13,7 @@
 
       <!-- 搜索筛选 -->
       <el-space style="margin-bottom: 16px">
-        <el-input v-model="searchKeyword" placeholder="搜索标题/关键词" clearable style="width: 200px" @keyup.enter="loadData" />
+        <el-input v-model.trim="searchKeyword" placeholder="搜索标题/关键词" clearable style="width: 200px" @keyup.enter="loadData" />
         <el-select v-model="filterSeverity" :options="severityOptions" placeholder="严重程度" clearable style="width: 140px" @change="loadData" />
         <el-select v-model="filterStatus" :options="statusOptions" placeholder="处理状态" clearable style="width: 140px" @change="loadData" />
       </el-space>
@@ -44,6 +44,8 @@
         </el-table-column>
       </el-table>
 
+      <el-empty v-if="!loading && list.length === 0" description="暂无数据" />
+
       <el-pagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.pageSize"
@@ -60,7 +62,7 @@
     <el-dialog v-model="addDialogVisible" title="添加故障案例" width="700px" :close-on-click-modal="false">
       <el-form :model="addForm" :rules="addFormRules" ref="addFormRef" label-position="top">
         <el-form-item label="案例标题" prop="title">
-          <el-input v-model="addForm.title" placeholder="请输入案例标题" />
+          <el-input v-model.trim="addForm.title" placeholder="请输入案例标题" />
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
@@ -91,22 +93,22 @@
           </el-col>
         </el-row>
         <el-form-item label="关键词" prop="keywords">
-          <el-input v-model="addForm.keywords" placeholder="请输入关键词，多个用逗号分隔" />
+          <el-input v-model.trim="addForm.keywords" placeholder="请输入关键词，多个用逗号分隔" />
         </el-form-item>
         <el-form-item label="影响范围" prop="impact">
-          <el-input v-model="addForm.impact" placeholder="请输入影响范围" />
+          <el-input v-model.trim="addForm.impact" placeholder="请输入影响范围" />
         </el-form-item>
         <el-form-item label="问题描述" prop="description">
-          <el-input v-model="addForm.description" type="textarea" :rows="4" placeholder="请详细描述问题现象" />
+          <el-input v-model.trim="addForm.description" type="textarea" :rows="4" placeholder="请详细描述问题现象" />
         </el-form-item>
         <el-form-item label="根因分析" prop="root_cause">
-          <el-input v-model="addForm.root_cause" type="textarea" :rows="3" placeholder="请分析根本原因" />
+          <el-input v-model.trim="addForm.root_cause" type="textarea" :rows="3" placeholder="请分析根本原因" />
         </el-form-item>
         <el-form-item label="解决方案" prop="solution">
-          <el-input v-model="addForm.solution" type="textarea" :rows="3" placeholder="请描述解决方案" />
+          <el-input v-model.trim="addForm.solution" type="textarea" :rows="3" placeholder="请描述解决方案" />
         </el-form-item>
         <el-form-item label="经验教训" prop="lessons_learned">
-          <el-input v-model="addForm.lessons_learned" type="textarea" :rows="2" placeholder="请总结经验教训" />
+          <el-input v-model.trim="addForm.lessons_learned" type="textarea" :rows="2" placeholder="请总结经验教训" />
         </el-form-item>
       </el-form>
       <template #footer>

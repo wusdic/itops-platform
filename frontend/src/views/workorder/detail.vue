@@ -195,7 +195,7 @@
 
         <!-- 添加流程节点 -->
         <div class="flow-actions" v-if="canAddFlow">
-          <el-input v-model="flowComment" placeholder="添加处理备注" style="width: 300px" />
+          <el-input v-model.trim="flowComment" placeholder="添加处理备注" style="width: 300px" />
           <el-button type="primary" size="small" @click="addFlowNode">添加流程记录</el-button>
         </div>
       </el-card>
@@ -231,10 +231,10 @@
           <span class="form-value">{{ workorderData.order_no }}</span>
         </el-form-item>
         <el-form-item label="处理人" required>
-          <el-input v-model="assignForm.assignee" placeholder="请输入处理人姓名" />
+          <el-input v-model.trim="assignForm.assignee" placeholder="请输入处理人姓名" />
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="assignForm.comment" type="textarea" :rows="3" placeholder="请输入分配备注" />
+          <el-input v-model.trim="assignForm.comment" type="textarea" :rows="3" placeholder="请输入分配备注" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -255,7 +255,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="审批意见">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="4" placeholder="请输入审批意见" />
+          <el-input v-model.trim="approveForm.comment" type="textarea" :rows="4" placeholder="请输入审批意见" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -270,10 +270,10 @@
     <el-dialog v-model="resolveDialogVisible" title="解决工单" width="480px" destroy-on-close>
       <el-form label-position="left" label-width="80px">
         <el-form-item label="解决方案">
-          <el-input v-model="resolveForm.solution" type="textarea" :rows="4" placeholder="请描述解决方案" />
+          <el-input v-model.trim="resolveForm.solution" type="textarea" :rows="4" placeholder="请描述解决方案" />
         </el-form-item>
         <el-form-item label="处理备注">
-          <el-input v-model="resolveForm.handling_notes" type="textarea" :rows="3" placeholder="请输入处理备注" />
+          <el-input v-model.trim="resolveForm.handling_notes" type="textarea" :rows="3" placeholder="请输入处理备注" />
         </el-form-item>
       </el-form>
       <template #footer>

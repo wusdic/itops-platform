@@ -24,7 +24,7 @@
 
         <el-form-item label="分析内容">
           <el-input
-            v-model="content"
+            v-model.trim="content"
             type="textarea"
             placeholder="输入日志、错误信息或系统状态描述..."
             :rows="6"

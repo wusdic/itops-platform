@@ -19,7 +19,7 @@
 
           <!-- 搜索框 -->
           <el-input
-            v-model="searchText"
+            v-model.trim="searchText"
             placeholder="搜索厂商..."
             clearable
             size="small"
@@ -152,19 +152,19 @@
             <el-divider>编辑模式</el-divider>
             <el-form :model="editForm" label-position="left" label-width="100">
               <el-form-item label="厂商名称">
-                <el-input v-model="editForm.name" />
+                <el-input v-model.trim="editForm.name" />
               </el-form-item>
               <el-form-item label="简称">
-                <el-input v-model="editForm.short_name" />
+                <el-input v-model.trim="editForm.short_name" />
               </el-form-item>
               <el-form-item label="分类">
                 <el-select v-model="editForm.category" :options="categoryOptions" />
               </el-form-item>
               <el-form-item label="官网">
-                <el-input v-model="editForm.homepage" />
+                <el-input v-model.trim="editForm.homepage" />
               </el-form-item>
               <el-form-item label="描述">
-                <el-input v-model="editForm.description" type="textarea" />
+                <el-input v-model.trim="editForm.description" type="textarea" />
               </el-form-item>
               <el-form-item label="建议协议">
                 <el-select v-model="editForm.suggested_protocols" multiple filterable allow-create default-first-option placeholder="输入或选择协议" style="width: 100%">
@@ -201,19 +201,19 @@
           </template>
           <el-form :model="addForm" label-position="left" label-width="120">
             <el-form-item label="厂商名称" required>
-              <el-input v-model="addForm.name" placeholder="例如：Cisco Systems" />
+              <el-input v-model.trim="addForm.name" placeholder="例如：Cisco Systems" />
             </el-form-item>
             <el-form-item label="简称" required>
-              <el-input v-model="addForm.short_name" placeholder="例如：Cisco" />
+              <el-input v-model.trim="addForm.short_name" placeholder="例如：Cisco" />
             </el-form-item>
             <el-form-item label="分类" required>
               <el-select v-model="addForm.category" :options="categoryOptions" placeholder="选择分类" style="width: 100%" />
             </el-form-item>
             <el-form-item label="官网">
-              <el-input v-model="addForm.homepage" placeholder="https://..." />
+              <el-input v-model.trim="addForm.homepage" placeholder="https://..." />
             </el-form-item>
             <el-form-item label="描述">
-              <el-input v-model="addForm.description" type="textarea" />
+              <el-input v-model.trim="addForm.description" type="textarea" />
             </el-form-item>
             <el-form-item label="建议协议">
               <el-select v-model="addForm.suggested_protocols" multiple filterable allow-create default-first-option placeholder="输入或选择协议" style="width: 100%">
