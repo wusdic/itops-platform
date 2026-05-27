@@ -209,7 +209,7 @@ const alertStats = reactive({ critical: 0, warning: 0, info: 0 })
 const deviceStats = reactive({ online: 0, offline: 0, warning: 0 })
 
 // System health
-const systemHealth = ref(null)
+const systemHealth = ref({ cpu: 0, memory: 0, disk: 0 })
 
 // Tables data
 const recentAlerts = ref([])
@@ -411,13 +411,15 @@ const loadDashboard = async () => {
     // Process system health
     if (healthRes.status === 'fulfilled' && healthRes.value) {
       const data = healthRes.value
-      if (data.cpu !== undefined) {
-        systemHealth.value = { cpu: data.cpu, memory: data.memory, disk: data.disk }
-      } else if (data.metrics) {
-        systemHealth.value = {
-          cpu: data.metrics.cpu || 0,
-          memory: data.metrics.memory || 0,
-          disk: data.metrics.disk || 0
+      if (data && typeof data === 'object') {
+        if (data.cpu !== undefined) {
+          systemHealth.value = { cpu: data.cpu || 0, memory: data.memory || 0, disk: data.disk || 0 }
+        } else if (data.metrics) {
+          systemHealth.value = {
+            cpu: data.metrics.cpu || 0,
+            memory: data.metrics.memory || 0,
+            disk: data.metrics.disk || 0
+          }
         }
       }
     }
