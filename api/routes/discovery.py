@@ -1114,6 +1114,26 @@ async def create_network(net: NetworkCreate, network_id: Optional[int] = None):
         }
 
 
+@router.get("/networks/{network_id}", summary="获取扫描网段详情")
+async def get_network(network_id: int, current_user: CurrentUser = Depends(get_current_user)):
+    """获取指定网段的详细信息"""
+    with _db_manager.session_scope() as db:
+        record = db.query(NetworkScanConfig).filter(NetworkScanConfig.id == network_id).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="网段不存在")
+        return {
+            "id": record.id,
+            "name": record.name,
+            "cidr": record.cidr,
+            "description": record.description,
+            "scan_interval": record.scan_interval,
+            "enabled": bool(record.enabled),
+            "auto_scan": bool(record.auto_scan),
+            "status": record.status,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+        }
+
+
 @router.put("/networks/{network_id}", summary="更新扫描网段")
 async def update_network(network_id: int, net: NetworkUpdate):
     """更新指定网段的配置"""

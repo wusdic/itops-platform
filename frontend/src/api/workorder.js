@@ -14,7 +14,7 @@ export const workorder = {
   // 工单操作
   assign: (id, data) => request.post(`/workorders/${id}/assign`, data),
   approve: (id, data) => request.post(`/workorders/${id}/approve`, data),
-  resolve: (id, data) => request.put(`/workorders/${id}/resolve`, data),
+  resolve: (id, data) => request.post(`/workorders/${id}/resolve`, data),
   close: (id, data) => request.post(`/workorders/${id}/close`, data),
   cancel: (id, data) => request.post(`/workorders/${id}/cancel`, data),
 

@@ -15,17 +15,17 @@ export const devices = {
   collectAll: () => request.post('/devices/collect/all'),
   getStats: () => request.get('/devices/stats'),
   batchOperate: (ids, action) => request.post('/assets/device/batch', { ids, action }),
-  // 批量导入相关（使用 /devices/ 路由，无 /import 中间目录）
-  getImportTemplate: (format = 'xlsx') => request.get('/devices-import/template', { params: { format }, responseType: 'blob' }),
-  validateImport: (rows) => request.post('/devices-import/validate', rows),
+  // 批量导入相关（backend实际路径: /api/v1/template, /api/v1/validate, /api/v1/simple）
+  getImportTemplate: (format = 'xlsx') => request.get('/template', { params: { format }, responseType: 'blob' }),
+  validateImport: (rows) => request.post('/validate', rows),
   importDevices: (file) => {
     const formData = new FormData()
     formData.append('file', file)
-    return request.post('/devices-import', formData, {
+    return request.post('/', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-  importDevicesSimple: (rows) => request.post('/devices-import/simple', rows)
+  importDevicesSimple: (rows) => request.post('/simple', rows)
 }
 
 /**
@@ -121,5 +121,5 @@ export const metricConfigs = {
   create: (data) => request.post('/monitoring/metric-configs', data),
   update: (id, data) => request.patch(`/monitoring/metric-configs/${id}`, data),
   delete: (id) => request.delete(`/monitoring/metric-configs/${id}`),
-  toggle: (id, data) => request.put(`/monitoring/metric-configs/${id}/toggle`, data)
+  toggle: (id, data) => request.patch(`/monitoring/metric-configs/${id}/toggle`, data)
 }

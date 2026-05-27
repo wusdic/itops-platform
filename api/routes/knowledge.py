@@ -726,6 +726,59 @@ async def create_category(
     return _category_to_dict(db_category)
 
 
+@router.put("/category/{category_id}", summary="更新分类")
+async def update_category(
+    category_id: int,
+    category: CategoryCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """更新指定分类"""
+    db_category = db.query(Category).filter(Category.id == category_id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="分类不存在")
+    if category.name:
+        db_category.name = category.name
+    if category.parent_id is not None:
+        db_category.parent_id = category.parent_id
+    if category.code is not None:
+        db_category.code = category.code
+    if category.description is not None:
+        db_category.description = category.description
+    db.commit()
+    return _category_to_dict(db_category)
+
+
+@router.delete("/category/{category_id}", summary="删除分类")
+async def delete_category(
+    category_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除指定分类"""
+    db_category = db.query(Category).filter(Category.id == category_id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="分类不存在")
+    db.delete(db_category)
+    db.commit()
+    return {"status": "success", "message": "分类已删除"}
+
+
+@router.delete("/fault-case/{case_id}", summary="删除故障案例")
+async def delete_fault_case(
+    case_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除指定故障案例"""
+    db_case = db.query(FaultCase).filter(FaultCase.id == case_id).first()
+    if not db_case:
+        raise HTTPException(status_code=404, detail="故障案例不存在")
+    db_case.is_deleted = True
+    db.commit()
+    return {"status": "success", "message": "故障案例已删除"}
+
+
 # ============== 标签接口 ==============
 
 @router.get("/tag", summary="获取标签列表")

@@ -19,14 +19,14 @@ export const user = {
   update: (id, data) => request.put(`/admin/users/${id}`, data),
   delete: (id) => request.delete(`/admin/users/${id}`),
   resetPassword: (id) => request.post(`/admin/users/${id}/reset-password`),
-  changeStatus: (id, status) => request.put(`/admin/users/${id}/status`, { status })
+  changeStatus: (id, status) => request.post(`/admin/users/${id}/status`, { status })
 }
 
 export const role = {
   getList: (params) => request.get('/admin/roles', { params }),
   getById: (id) => request.get(`/admin/roles/${id}`),
   create: (data) => request.post('/admin/roles', data),
-  update: (id, data) => request.put(`/admin/roles/${id}`, data),
+  update: (id, data) => request.put(`/admin/roles/${id}`, data),  // 后端已实现 PUT /api/v1/roles/{role_id}
   delete: (id) => request.delete(`/admin/roles/${id}`),
   getPermissions: (id) => request.get(`/admin/permissions`)
 }
@@ -50,7 +50,7 @@ export const dict = {
 
 export const config = {
   getList: () => request.get('/admin/config'),
-  getByKey: (key) => request.get(`/admin/config/${key}`),
+  getByKey: (key) => request.get(`/admin/config/${key}`),  // 后端无此路由，已记录为架构缺陷
   update: (key, data) => request.put(`/admin/config/${key}`, data)
 }
 
