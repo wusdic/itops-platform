@@ -9,7 +9,8 @@ from .workorder import router as workorder_router
 from .knowledge import router as knowledge_router
 from .report import router as report_router
 from .inspection import router as inspection_router
-from .asset import router as asset_router
+from .asset import router as asset_router  # 旧版路由（兼容）
+from app.domains.asset.router import router as asset_domain_router  # 新版资产中心
 from .ai import router as ai_router
 from .admin import router as admin_router
 from .system import router as system_router
@@ -36,6 +37,7 @@ __all__ = [
     "report_router",
     "inspection_router",
     "asset_router",
+    "asset_domain_router",
     "ai_router",
     "admin_router",
     "system_router",

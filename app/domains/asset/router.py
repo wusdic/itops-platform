@@ -1,413 +1,278 @@
 """
 资产领域 - API 路由
 
-统一设备管理 API，包含设备 CRUD、分组管理、标签管理、业务系统关联。
+统一资产管理 API，包含资产 CRUD、IP 管理、分组、标签、关系。
 遵循统一响应格式 + ErrorCode + get_db_session() 规范。
+文档依据: docs/01-architecture/AUTONOMOUS_ITOPS_TARGET_ARCHITECTURE.md §8.1
 """
 
-from fastapi import APIRouter, Request, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
-from app.common import (
-    success_response,
-    error_response,
-    paginated_response,
-    get_http_status,
-    ErrorCode,
-)
-from app.common.context import get_trace_id
+from app.common import success_response, error_response, paginated_response, ErrorCode, get_http_status
+from app.common.context import get_trace_id, get_user_id
 from app.common.database import get_db_session
 
-router = APIRouter(prefix="/api/v1/assets", tags=["资产管理"])
+from app.domains.asset.schemas import (
+    CreateAssetRequest, UpdateAssetRequest,
+    CreateIPAddressRequest, CreateRelationRequest,
+    CreateGroupRequest, CreateTagRequest,
+    CreateBusinessSystemRequest,
+)
+from app.domains.asset.service import AssetService, AssetGroupService, AssetTagService, BusinessSystemService
+
+router = APIRouter(prefix="", tags=["资产管理"])
 
 
-# ============== 设备接口 ==============
+# ============== 资产 CRUD ==============
 
-@router.get("/", summary="获取设备列表")
+@router.get("/", summary="获取资产列表")
 async def list_assets(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
-    name: str = Query(None, description="设备名称过滤"),
-    device_type: str = Query(None, description="设备类型过滤"),
-    status: str = Query(None, description="设备状态过滤"),
+    name: str = Query(None, description="资产名称过滤"),
+    asset_type: str = Query(None, description="资产类型过滤"),
+    sub_type: str = Query(None, description="子类型过滤"),
+    status: str = Query(None, description="状态过滤"),
     vendor: str = Query(None, description="厂商过滤"),
     idc: str = Query(None, description="机房过滤"),
     tag: str = Query(None, description="标签过滤"),
-    group_id: int = Query(None, description="设备组ID过滤"),
+    group_id: int = Query(None, description="资产组ID过滤"),
     business_id: int = Query(None, description="业务系统ID过滤"),
 ):
     """获取资产列表，支持分页和多种过滤条件"""
     with get_db_session() as db:
-        from app.domains.asset.service import AssetService
         svc = AssetService(db)
         items, total = svc.list_assets(
-            page=page,
-            page_size=page_size,
-            name=name,
-            device_type=device_type,
-            status=status,
-            vendor=vendor,
-            idc=idc,
-            tag=tag,
-            group_id=group_id,
-            business_id=business_id,
+            page=page, page_size=page_size,
+            name=name, asset_type=asset_type, sub_type=sub_type,
+            status=status, vendor=vendor, idc=idc,
+            tag=tag, group_id=group_id, business_id=business_id,
         )
         return paginated_response(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
+            items=items, total=total,
+            page=page, page_size=page_size,
             trace_id=get_trace_id(),
         )
 
 
-@router.get("/stats", summary="获取设备统计")
+@router.get("/stats", summary="获取资产统计")
 async def get_asset_stats():
-    """获取设备统计信息"""
+    """获取资产统计信息"""
     with get_db_session() as db:
-        from app.domains.asset.service import AssetService
         svc = AssetService(db)
         stats = svc.get_stats()
         return success_response(data=stats, trace_id=get_trace_id())
 
 
-@router.get("/{asset_id}", summary="获取设备详情")
+@router.get("/{asset_id}", summary="获取资产详情")
 async def get_asset(asset_id: int):
-    """获取单个资产详情"""
+    """获取单个资产详情（包含IP列表）"""
     with get_db_session() as db:
-        from app.domains.asset.service import AssetService
         svc = AssetService(db)
         asset = svc.get_asset(asset_id)
         if not asset:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Asset not found",
-            )
+            raise HTTPException(status_code=404, detail="Asset not found")
         return success_response(data=asset, trace_id=get_trace_id())
 
 
-@router.get("/name/{name}", summary="通过名称获取设备")
-async def get_asset_by_name(name: str):
-    """通过名称获取资产"""
+@router.post("/", summary="创建资产", status_code=status.HTTP_201_CREATED)
+async def create_asset(req: CreateAssetRequest):
+    """创建新资产，自动生成业务ID（AST-XXXXXX）"""
     with get_db_session() as db:
-        from app.domains.asset.service import AssetService
         svc = AssetService(db)
-        asset = svc.get_asset_by_name(name)
-        if not asset:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Asset not found",
-            )
-        return success_response(data=asset, trace_id=get_trace_id())
+        try:
+            # 设置创建人
+            req.created_by = get_user_id()
+            asset = svc.create_asset(req)
+            return success_response(data=asset, trace_id=get_trace_id())
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/", summary="创建设备", status_code=status.HTTP_201_CREATED)
-async def create_asset(request: Request):
-    """创建设备"""
+@router.put("/{asset_id}", summary="更新资产")
+async def update_asset(asset_id: int, req: UpdateAssetRequest):
+    """更新资产信息"""
     with get_db_session() as db:
-        from app.domains.asset.service import AssetService
-        from app.domains.asset.schemas import CreateDeviceRequest
-        body = await request.json()
-        req = CreateDeviceRequest(**body)
-        svc = AssetService(db)
-        asset = svc.create_asset(req)
-        return success_response(data=asset, trace_id=get_trace_id(), message="Asset created")
-
-
-@router.put("/{asset_id}", summary="更新设备")
-async def update_asset(asset_id: int, request: Request):
-    """更新设备"""
-    with get_db_session() as db:
-        from app.domains.asset.service import AssetService
-        from app.domains.asset.schemas import UpdateDeviceRequest
-        body = await request.json()
-        req = UpdateDeviceRequest(**body)
         svc = AssetService(db)
         asset = svc.update_asset(asset_id, req)
         if not asset:
             raise HTTPException(status_code=404, detail="Asset not found")
-        return success_response(data=asset, trace_id=get_trace_id(), message="Asset updated")
+        return success_response(data=asset, trace_id=get_trace_id())
 
 
-@router.delete("/{asset_id}", summary="删除设备")
+@router.delete("/{asset_id}", summary="删除资产")
 async def delete_asset(asset_id: int):
-    """删除设备"""
+    """删除资产"""
     with get_db_session() as db:
-        from app.domains.asset.service import AssetService
         svc = AssetService(db)
         ok = svc.delete_asset(asset_id)
         if not ok:
             raise HTTPException(status_code=404, detail="Asset not found")
-        return success_response(message="Asset deleted", trace_id=get_trace_id())
+        return success_response(data={"deleted": True}, trace_id=get_trace_id())
 
 
-@router.patch("/{asset_id}/tags", summary="更新设备标签")
-async def update_asset_tags(asset_id: int, request: Request):
-    """更新设备标签"""
+# ============== IP 地址管理 ==============
+
+@router.post("/{asset_id}/ips", summary="添加资产IP", status_code=status.HTTP_201_CREATED)
+async def add_asset_ip(asset_id: int, req: CreateIPAddressRequest):
+    """为资产添加IP地址"""
     with get_db_session() as db:
-        from app.domains.asset.service import AssetService
-        from app.domains.asset.schemas import TagUpdateRequest
-        body = await request.json()
-        req = TagUpdateRequest(**body)
         svc = AssetService(db)
-        asset = svc.update_tags(asset_id, req.tags)
-        if not asset:
-            raise HTTPException(status_code=404, detail="Asset not found")
-        return success_response(data=asset, trace_id=get_trace_id(), message="Tags updated")
+        try:
+            ip_record = svc.add_ip(asset_id, req.model_dump())
+            return success_response(data=ip_record, trace_id=get_trace_id())
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
 
 
-# ============== 设备分组接口 ==============
+# ============== 资产关系 ==============
 
-@router.get("/groups/", summary="获取设备分组列表")
-async def list_device_groups(
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(50, ge=1, le=200, description="每页数量"),
-    name: str = Query(None, description="分组名称过滤"),
-    parent_id: int = Query(None, description="父分组ID"),
+@router.get("/{asset_id}/relations", summary="获取资产关系")
+async def get_asset_relations(
+    asset_id: int,
+    relation_type: str = Query(None, description="关系类型过滤"),
 ):
-    """获取设备分组列表"""
+    """获取资产的所有关联关系"""
     with get_db_session() as db:
-        from app.domains.asset.service import DeviceGroupService
-        svc = DeviceGroupService(db)
-        items, total = svc.list_groups(page=page, page_size=page_size, name=name, parent_id=parent_id)
+        svc = AssetService(db)
+        relations = svc.get_relations(asset_id, relation_type)
+        return success_response(data=relations, trace_id=get_trace_id())
+
+
+@router.post("/{asset_id}/relations", summary="添加资产关系", status_code=status.HTTP_201_CREATED)
+async def add_asset_relation(asset_id: int, req: CreateRelationRequest):
+    """添加资产之间的关系（网络拓扑、依赖关系等）"""
+    with get_db_session() as db:
+        svc = AssetService(db)
+        relation = svc.add_relation(
+            source_asset_id=asset_id,
+            target_asset_id=req.target_asset_id,
+            relation_type=req.relation_type,
+            relation_label=req.relation_label,
+            bidirectional=req.bidirectional,
+            metadata=req.metadata,
+        )
+        return success_response(data=relation, trace_id=get_trace_id())
+
+
+# ============== 资产分组 ==============
+
+@router.get("/groups/list", summary="获取资产分组列表")
+async def list_groups(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    name: str = Query(None),
+    parent_id: int = Query(None),
+    group_type: str = Query(None),
+):
+    """获取资产分组列表"""
+    with get_db_session() as db:
+        svc = AssetGroupService(db)
+        items, total = svc.list_groups(
+            page=page, page_size=page_size,
+            name=name, parent_id=parent_id, group_type=group_type,
+        )
         return paginated_response(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
+            items=items, total=total,
+            page=page, page_size=page_size,
             trace_id=get_trace_id(),
         )
 
 
-@router.get("/groups/{group_id}", summary="获取设备分组详情")
-async def get_device_group(group_id: int):
-    """获取设备分组详情"""
+@router.post("/groups", summary="创建资产分组", status_code=status.HTTP_201_CREATED)
+async def create_group(req: CreateGroupRequest):
+    """创建资产分组"""
     with get_db_session() as db:
-        from app.domains.asset.service import DeviceGroupService
-        svc = DeviceGroupService(db)
-        group = svc.get_group(group_id)
-        if not group:
-            raise HTTPException(status_code=404, detail="Device group not found")
+        svc = AssetGroupService(db)
+        group = svc.create_group(req)
         return success_response(data=group, trace_id=get_trace_id())
 
 
-@router.post("/groups/", summary="创建设备分组", status_code=status.HTTP_201_CREATED)
-async def create_device_group(request: Request):
-    """创建设备分组"""
+# ============== 资产标签 ==============
+
+@router.get("/tags/list", summary="获取资产标签列表")
+async def list_tags(category: str = Query(None)):
+    """获取所有资产标签（含使用计数）"""
     with get_db_session() as db:
-        from app.domains.asset.service import DeviceGroupService
-        from app.domains.asset.schemas import CreateDeviceGroupRequest
-        body = await request.json()
-        req = CreateDeviceGroupRequest(**body)
-        svc = DeviceGroupService(db)
-        group = svc.create_group(req)
-        return success_response(data=group, trace_id=get_trace_id(), message="Device group created")
-
-
-@router.put("/groups/{group_id}", summary="更新设备分组")
-async def update_device_group(group_id: int, request: Request):
-    """更新设备分组"""
-    with get_db_session() as db:
-        from app.domains.asset.service import DeviceGroupService
-        from app.domains.asset.schemas import UpdateDeviceGroupRequest
-        body = await request.json()
-        req = UpdateDeviceGroupRequest(**body)
-        svc = DeviceGroupService(db)
-        group = svc.update_group(group_id, req)
-        if not group:
-            raise HTTPException(status_code=404, detail="Device group not found")
-        return success_response(data=group, trace_id=get_trace_id(), message="Device group updated")
-
-
-@router.delete("/groups/{group_id}", summary="删除设备分组")
-async def delete_device_group(group_id: int):
-    """删除设备分组"""
-    with get_db_session() as db:
-        from app.domains.asset.service import DeviceGroupService
-        svc = DeviceGroupService(db)
-        try:
-            ok = svc.delete_group(group_id)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        if not ok:
-            raise HTTPException(status_code=404, detail="Device group not found")
-        return success_response(message="Device group deleted", trace_id=get_trace_id())
-
-
-@router.get("/groups/{group_id}/devices", summary="获取分组下的设备")
-async def get_group_devices(
-    group_id: int,
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(50, ge=1, le=200, description="每页数量"),
-):
-    """获取设备分组下的所有设备"""
-    with get_db_session() as db:
-        from app.domains.asset.service import DeviceGroupService
-        svc = DeviceGroupService(db)
-        items, total = svc.get_group_devices(group_id, page=page, page_size=page_size)
-        return paginated_response(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            trace_id=get_trace_id(),
-        )
-
-
-# ============== 业务系统接口 ==============
-
-@router.get("/business-systems/", summary="获取业务系统列表")
-async def list_business_systems(
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(50, ge=1, le=200, description="每页数量"),
-    name: str = Query(None, description="业务系统名称过滤"),
-    status: str = Query(None, description="业务系统状态过滤"),
-):
-    """获取业务系统列表"""
-    with get_db_session() as db:
-        from app.domains.asset.service import BusinessSystemService
-        svc = BusinessSystemService(db)
-        items, total = svc.list_systems(page=page, page_size=page_size, name=name, status=status)
-        return paginated_response(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            trace_id=get_trace_id(),
-        )
-
-
-@router.get("/business-systems/{system_id}", summary="获取业务系统详情")
-async def get_business_system(system_id: int):
-    """获取业务系统详情"""
-    with get_db_session() as db:
-        from app.domains.asset.service import BusinessSystemService
-        svc = BusinessSystemService(db)
-        system = svc.get_system(system_id)
-        if not system:
-            raise HTTPException(status_code=404, detail="Business system not found")
-        return success_response(data=system, trace_id=get_trace_id())
-
-
-@router.post("/business-systems/", summary="创建业务系统", status_code=status.HTTP_201_CREATED)
-async def create_business_system(request: Request):
-    """创建业务系统"""
-    with get_db_session() as db:
-        from app.domains.asset.service import BusinessSystemService
-        from app.domains.asset.schemas import CreateBusinessSystemRequest
-        body = await request.json()
-        req = CreateBusinessSystemRequest(**body)
-        svc = BusinessSystemService(db)
-        system = svc.create_system(req)
-        return success_response(data=system, trace_id=get_trace_id(), message="Business system created")
-
-
-@router.put("/business-systems/{system_id}", summary="更新业务系统")
-async def update_business_system(system_id: int, request: Request):
-    """更新业务系统"""
-    with get_db_session() as db:
-        from app.domains.asset.service import BusinessSystemService
-        from app.domains.asset.schemas import UpdateBusinessSystemRequest
-        body = await request.json()
-        req = UpdateBusinessSystemRequest(**body)
-        svc = BusinessSystemService(db)
-        system = svc.update_system(system_id, req)
-        if not system:
-            raise HTTPException(status_code=404, detail="Business system not found")
-        return success_response(data=system, trace_id=get_trace_id(), message="Business system updated")
-
-
-@router.delete("/business-systems/{system_id}", summary="删除业务系统")
-async def delete_business_system(system_id: int):
-    """删除业务系统"""
-    with get_db_session() as db:
-        from app.domains.asset.service import BusinessSystemService
-        svc = BusinessSystemService(db)
-        ok = svc.delete_system(system_id)
-        if not ok:
-            raise HTTPException(status_code=404, detail="Business system not found")
-        return success_response(message="Business system deleted", trace_id=get_trace_id())
-
-
-@router.get("/business-systems/{system_id}/devices", summary="获取业务系统下的设备")
-async def get_system_devices(
-    system_id: int,
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(50, ge=1, le=200, description="每页数量"),
-):
-    """获取业务系统下的所有设备"""
-    with get_db_session() as db:
-        from app.domains.asset.service import BusinessSystemService
-        svc = BusinessSystemService(db)
-        items, total = svc.get_system_devices(system_id, page=page, page_size=page_size)
-        return paginated_response(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            trace_id=get_trace_id(),
-        )
-
-
-# ============== 标签接口 ==============
-
-@router.get("/tags/", summary="获取所有标签")
-async def list_tags():
-    """获取所有标签列表及计数"""
-    with get_db_session() as db:
-        from app.domains.asset.service import TagService
-        svc = TagService(db)
-        tags = svc.list_tags()
+        svc = AssetTagService(db)
+        tags = svc.list_tags(category)
         return success_response(data=tags, trace_id=get_trace_id())
 
 
-@router.get("/tags/{tag}/devices", summary="获取指定标签下的设备")
-async def get_tag_devices(
-    tag: str,
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(50, ge=1, le=200, description="每页数量"),
-):
-    """获取指定标签下的所有设备"""
+@router.post("/tags", summary="创建资产标签", status_code=status.HTTP_201_CREATED)
+async def create_tag(req: CreateTagRequest):
+    """创建资产标签"""
     with get_db_session() as db:
-        from app.domains.asset.service import TagService
-        svc = TagService(db)
-        items, total = svc.get_tag_devices(tag, page=page, page_size=page_size)
+        svc = AssetTagService(db)
+        tag = svc.create_tag(req)
+        return success_response(data=tag, trace_id=get_trace_id())
+
+
+@router.post("/{asset_id}/tags/{tag_id}", summary="绑定标签到资产", status_code=status.HTTP_201_CREATED)
+async def bind_tag(asset_id: int, tag_id: int):
+    """将标签绑定到资产"""
+    with get_db_session() as db:
+        svc = AssetTagService(db)
+        binding = svc.bind_tag(asset_id, tag_id, created_by=get_user_id())
+        return success_response(data=binding, trace_id=get_trace_id())
+
+
+@router.delete("/{asset_id}/tags/{tag_id}", summary="解除资产标签绑定")
+async def unbind_tag(asset_id: int, tag_id: int):
+    """解除资产的标签绑定"""
+    with get_db_session() as db:
+        svc = AssetTagService(db)
+        ok = svc.unbind_tag(asset_id, tag_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Binding not found")
+        return success_response(data={"unbound": True}, trace_id=get_trace_id())
+
+
+# ============== 业务系统 ==============
+
+@router.get("/business/list", summary="获取业务系统列表")
+async def list_business_systems(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    name: str = Query(None),
+    status: str = Query(None),
+):
+    """获取业务系统列表"""
+    with get_db_session() as db:
+        svc = BusinessSystemService(db)
+        items, total = svc.list_systems(
+            page=page, page_size=page_size,
+            name=name, status=status,
+        )
         return paginated_response(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
+            items=items, total=total,
+            page=page, page_size=page_size,
             trace_id=get_trace_id(),
         )
 
 
-# ============== 设备关联接口 ==============
-
-@router.patch("/{asset_id}/binding", summary="更新设备关联")
-async def update_device_binding(asset_id: int, request: Request):
-    """更新设备分组、业务系统、标签等关联"""
+@router.post("/business", summary="创建业务系统", status_code=status.HTTP_201_CREATED)
+async def create_business_system(req: CreateBusinessSystemRequest):
+    """创建业务系统"""
+    from modules.foundation.db_models.device import BusinessSystem as LegacyBusinessSystem
     with get_db_session() as db:
-        from app.domains.asset.service import AssetService
-        from app.domains.asset.schemas import DeviceBindingRequest
-        body = await request.json()
-        req = DeviceBindingRequest(**body)
-
-        svc = AssetService(db)
-        device = svc.get_asset(asset_id)
-        if not device:
-            raise HTTPException(status_code=404, detail="Asset not found")
-
-        # 构建更新请求
-        from app.domains.asset.schemas import UpdateDeviceRequest
-        update_data = {}
-        if req.group_id is not None:
-            update_data['group_id'] = req.group_id
-        if req.business_id is not None:
-            update_data['business_id'] = req.business_id
-        if req.tags is not None:
-            update_data['tags'] = req.tags
-
-        if update_data:
-            update_req = UpdateDeviceRequest(**update_data)
-            device = svc.update_asset(asset_id, update_req)
-
-        return success_response(data=device, trace_id=get_trace_id(), message="Binding updated")
+        system = LegacyBusinessSystem(
+            name=req.name,
+            code=req.code,
+            description=req.description,
+            sla_level=req.sla_level,
+            availability_target=req.availability_target,
+            owner=req.owner,
+            owner_email=req.owner_email,
+            status='active',
+        )
+        db.add(system)
+        db.commit()
+        db.refresh(system)
+        return success_response(
+            data={
+                'id': system.id, 'name': system.name, 'code': system.code,
+                'description': system.description, 'status': system.status,
+            },
+            trace_id=get_trace_id()
+        )

@@ -18,6 +18,7 @@ from api.routes import (
     report_router,
     inspection_router,
     asset_router,
+    asset_domain_router,
     ai_router,
     admin_router,
     system_router,
@@ -146,7 +147,14 @@ def create_app() -> FastAPI:
         prefix="/api/v1/assets",
         tags=["资产管理"],
     )
-    
+
+    # 新版资产中心路由（app/domains/asset/router.py）
+    app.include_router(
+        asset_domain_router,
+        prefix="/api/v1/assets",
+        tags=["资产管理"],
+    )
+
     app.include_router(
         ai_router,
         prefix="/api/v1/ai",
