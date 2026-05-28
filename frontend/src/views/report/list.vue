@@ -137,7 +137,7 @@
           </template>
         </el-table-column>
       </el-table>
-        <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
+        <el-empty v-if="!loading && reportList.length === 0" description="暂无数据" />
 
 
       <el-pagination

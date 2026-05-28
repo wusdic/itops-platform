@@ -188,8 +188,9 @@ async def get_current_user(
     
     # 如果没有提供凭证
     if not credentials:
-        if settings.DEBUG:
-            # 开发环境返回默认用户
+        # 仅当显式设置 SKIP_AUTH=true 时绕过认证（本地开发用）
+        if os.getenv("SKIP_AUTH", "").lower() == "true":
+            logging.warning("SKIP_AUTH enabled - using dev user, DO NOT use in production")
             return CurrentUser(
                 user_id="dev_user",
                 username="developer",
@@ -238,8 +239,9 @@ async def get_current_user(
         )
         
     except JWTError as e:
-        if settings.DEBUG:
-            # 开发环境允许无有效token访问
+        # 仅当显式设置 SKIP_AUTH=true 时绕过认证
+        if os.getenv("SKIP_AUTH", "").lower() == "true":
+            logging.warning("SKIP_AUTH enabled - using dev user, DO NOT use in production")
             return CurrentUser(
                 user_id="dev_user",
                 username="developer",
@@ -433,9 +435,10 @@ async def verify_api_key(
     except HTTPException:
         raise
     except Exception as e:
-        # 如果数据库查询失败，在开发环境返回api_key继续处理
+        # 仅当显式设置 SKIP_AUTH=true 时绕过认证
         settings = get_settings()
-        if settings.DEBUG:
+        if os.getenv("SKIP_AUTH", "").lower() == "true":
+            logging.warning("SKIP_AUTH enabled - using api_key, DO NOT use in production")
             return api_key
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -58,7 +58,6 @@
                 </el-space>
               </div>
               <el-table
-                v-model:selected="selectedDevices"
                 :data="ipResults"
                 row-key="ip"
                 :pagination="false"
@@ -302,7 +301,7 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Connection, Monitor, DataAnalysis } from '@element-plus/icons-vue'
-import { discovery } from '@/api'
+import { discovery, request } from '@/api'
 
 // ── Tab 状态 ──────────────────────────────────────────────
 const activeTab = ref('ip')
@@ -334,16 +333,11 @@ async function startIpScan() {
   ipCurrentIp.value = ''
 
   try {
-    const token = localStorage.getItem('token')
-    const startRes = await fetch('/api/v1/discovery/ip/scan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        cidr: ipForm.cidr,
-        scan_ports: ipForm.scanPorts,
-        grab_banners: ipForm.grabBanners,
-        snmp_detect: ipForm.snmpDetect
-      })
+    const startRes = await discovery.scan.scanIp({
+      cidr: ipForm.cidr,
+      scan_ports: ipForm.scanPorts,
+      grab_banners: ipForm.grabBanners,
+      snmp_detect: ipForm.snmpDetect
     })
 
     if (!startRes.ok) throw new Error(`启动扫描失败 HTTP ${startRes.status}`)
@@ -352,9 +346,7 @@ async function startIpScan() {
     // 轮询进度
     while (true) {
       await new Promise(r => setTimeout(r, 1000))
-      const pollRes = await fetch(`/api/v1/discovery/scan/${task_id}/status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const pollRes = await request.get(`/discovery/scan/${task_id}/status`)
       if (!pollRes.ok) continue
 
       const data = await pollRes.json()
@@ -419,20 +411,15 @@ function onDeviceSelectionChange(keys) {
 
 async function importSelectedDevices() {
   if (!selectedDevices.value.length) return
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch('/api/v1/discovery/devices/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ips: selectedDevices.value.map(h => h.ip), device_type: 'server' })
-    })
+    const res = await discovery.import.importHosts({ ips: selectedDevices.value.map(h => h.ip), device_type: 'server' })
     if (res.ok) {
       ElMessage.success(`成功导入 ${selectedDevices.value.length} 台设备`)
       ipResults.value = ipResults.value.filter(r => !selectedDevices.value.map(h => h.ip).includes(r.ip))
       selectedDevices.value = []
       loadScanHistory()
     } else {
-      const err = await res.json().catch(() => ({}))
+      const err = res.json().catch(() => ({}))
       ElMessage.error(`导入失败: ${err.message || res.status}`)
     }
   } catch (e) {
@@ -441,19 +428,14 @@ async function importSelectedDevices() {
 }
 
 async function importSingleDevice(row) {
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch('/api/v1/discovery/devices/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ cidr: row.ip + '/32' })
-    })
+    const res = await discovery.import.importHosts({ cidr: row.ip + '/32' })
     if (res.ok) {
       ElMessage.success('设备导入成功')
       ipResults.value = ipResults.value.filter(r => r.ip !== row.ip)
       loadScanHistory()
     } else {
-      const err = await res.json().catch(() => ({}))
+      const err = res.json().catch(() => ({}))
       ElMessage.error(`导入失败: ${err.message || res.status}`)
     }
   } catch (e) {
@@ -487,15 +469,7 @@ async function startSnmpScan() {
   snmpDevices.value = []
 
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/discovery/snmp/scan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(snmpForm)
-    })
-
-    if (!res.ok) throw new Error(`扫描失败 HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await discovery.scan.scanSnmp(snmpForm)
 
     snmpProgress.value = 100
     snmpDevices.value = data.devices || [data] || []
@@ -518,20 +492,15 @@ function showSnmpDetail(row) {
 }
 
 async function importSnmpDevice(row) {
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch('/api/v1/discovery/devices/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ cidr: row.ip + '/32', device_type: 'snmp_device', snmp_data: row })
-    })
+    const res = await discovery.import.importHosts({ cidr: row.ip + '/32', device_type: 'snmp_device', snmp_data: row })
     if (res.ok) {
       ElMessage.success('SNMP 设备导入成功')
       snmpDevices.value = snmpDevices.value.filter(d => d.ip !== row.ip)
       snmpDetailVisible.value = false
       loadScanHistory()
     } else {
-      const err = await res.json().catch(() => ({}))
+      const err = res.json().catch(() => ({}))
       ElMessage.error(`导入失败: ${err.message || res.status}`)
     }
   } catch (e) {
@@ -559,15 +528,10 @@ async function startArpScan() {
   arpResults.value = []
 
   try {
-    const token = localStorage.getItem('token')
-    const startRes = await fetch('/api/v1/discovery/arp/scan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ cidr: arpForm.cidr })
-    })
+    const result = await discovery.scan.scanArp({ cidr: arpForm.cidr })
 
-    if (!startRes.ok) throw new Error(`ARP扫描失败 HTTP ${startRes.status}`)
-    const result = await startRes.json()
+    if (!result.ok) throw new Error(`ARP扫描失败 HTTP ${result.status}`)
+    const data = await result.json()
 
     // ARP 扫描是同步的，直接返回结果，无需轮询
     arpProgress.value = 100
@@ -592,19 +556,14 @@ function stopArpScan() {
 }
 
 async function importArpDevice(row) {
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch('/api/v1/discovery/devices/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ cidr: row.ip + '/32', device_type: 'arp_device', mac: row.mac })
-    })
+    const res = await discovery.import.importHosts({ cidr: row.ip + '/32', device_type: 'arp_device', mac: row.mac })
     if (res.ok) {
       ElMessage.success('设备导入成功')
       arpResults.value = arpResults.value.filter(r => r.ip !== row.ip)
       loadScanHistory()
     } else {
-      const err = await res.json().catch(() => ({}))
+      const err = res.json().catch(() => ({}))
       ElMessage.error(`导入失败: ${err.message || res.status}`)
     }
   } catch (e) {

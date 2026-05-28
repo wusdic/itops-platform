@@ -88,7 +88,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Check } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
-import { notification } from '@/api'
+import { notification, request } from '@/api'
 
 const loading = ref(false)
 const list = ref([])
@@ -154,9 +154,7 @@ const showDetail = (row) => { currentMessage.value = row; detailModalVisible.val
 const markAsRead = async () => {
   if (!currentMessage.value) return
   try {
-    await fetch(`/api/v1/notifications/history/${currentMessage.value.id}/read`, {
-      method: 'PUT'
-    })
+    await request.put(`/notifications/messages/${currentMessage.value.id}/read`)
     currentMessage.value.read = true
     loadData()
     detailModalVisible.value = false
@@ -167,8 +165,11 @@ const markAsRead = async () => {
 
 const toggleRead = async (row) => {
   try {
-    const method = row.read ? 'DELETE' : 'PUT'
-    await fetch(`/api/v1/notifications/history/${row.id}/read`, { method })
+    if (row.read) {
+      await request.delete(`/notifications/messages/${row.id}/read`)
+    } else {
+      await request.put(`/notifications/messages/${row.id}/read`)
+    }
     loadData()
   } catch (e) {
     ElMessage.error(`操作失败: ${e.message}`)
