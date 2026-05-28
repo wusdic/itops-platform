@@ -2,6 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '../router'
 import { CONFIG } from '../config/constants'
+import { useAppStore } from '@/stores/app'
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -11,7 +12,8 @@ const request = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
+    const appStore = useAppStore()
+    const token = appStore.token
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }

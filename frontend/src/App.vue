@@ -8,6 +8,7 @@
 import { ref, onMounted, onUnmounted, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import request from '@/api/request'
 
 const defaultSize = ref('default')
 const router = useRouter()
@@ -67,16 +68,10 @@ onUnmounted(() => {
 
 async function loadTimezone() {
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/admin/info', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    })
-    if (res.ok) {
-      const data = await res.json()
-      if (data.timezone) {
-        const { setTimezone } = await import('./utils/date')
-        setTimezone(data.timezone)
-      }
+    const data = await request.get('/admin/info')
+    if (data?.timezone) {
+      const { setTimezone } = await import('./utils/date')
+      setTimezone(data.timezone)
     }
   } catch (_) {}
 }
