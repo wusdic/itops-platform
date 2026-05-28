@@ -56,7 +56,7 @@ class Conversation:
         recent = self.messages[-max_messages:] if max_messages > 0 else self.messages
         return [{"role": m.role, "content": m.content} for m in recent]
     
-    def get_token_count(self, model: str = "qwen3.5-9b-deepseek-v4-flash-q8_0") -> int:
+    def get_token_count(self, model: str = "Qwen_Qwen3.5-0.8B-Q4_K_M") -> int:
         """估算token数量"""
         total = 0
         for msg in self.messages:
@@ -88,7 +88,7 @@ class LLMClient:
         
         self._models: Dict[str, ModelInfo] = {}
         self._conversations: Dict[str, Conversation] = {}
-        self._default_model = self.model_config.get("default", "qwen3.5-9b-deepseek-v4-flash-q8_0")
+        self._default_model = self.model_config.get("default", "Qwen_Qwen3.5-0.8B-Q4_K_M")
         
         self._init_models()
         

@@ -318,12 +318,12 @@ async def chat_debug(
     async def stream_generator():
         payload = {
             "messages": [{"role": "user", "content": request.message}],
-            "model": "qwen3.5-9b-deepseek-v4-flash-q8_0",
+            "model": "Qwen_Qwen3.5-0.8B-Q4_K_M",
             "stream": True,
             "temperature": 0.0,
             "max_tokens": 100,
         }
-        base_url = os.getenv("AI_BASE_URL", "http://localhost:11435")
+        base_url = os.getenv("AI_BASE_URL", "http://localhost:11436")
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
                 async with client.stream("POST", f"{base_url}/v1/chat/completions", json=payload) as resp:
@@ -416,8 +416,8 @@ async def chat(
 
     if request.stream:
         # Streaming response: use module-level generator (avoid Python 3.13 nested async def closure bug)
-        base_url = os.getenv("AI_BASE_URL", llm_client.base_url or "http://localhost:11435")
-        model = llm_client._default_model or "qwen3.5-9b-deepseek-v4-flash-q8_0"
+        base_url = os.getenv("AI_BASE_URL", llm_client.base_url or "http://localhost:11436")
+        model = llm_client._default_model or "Qwen_Qwen3.5-0.8B-Q4_K_M"
         return StreamingResponse(
             _llm_stream_generator(base_url, model, messages, conversation_id),
             media_type="text/event-stream",
@@ -440,7 +440,7 @@ async def chat(
 
     if result.get("done") and result.get("content"):
         response_message = result["content"]
-        model_name = result.get("model", "qwen3.5-9b-deepseek-v4-flash-q8_0")
+        model_name = result.get("model", "Qwen_Qwen3.5-0.8B-Q4_K_M")
         suggestions = ["resume对话", "进入fault排查", "生成优化建议"]
         
         # Save user message和ai_reply
@@ -1579,7 +1579,7 @@ async def get_remediation(
     alert_data = {
         "alert_id": str(alert_id),
         "alert_type": alert.alert_type or "unknown",
-        "name": alert.name or "",
+        "name": alert.title or "",
         "message": alert.message or "",
         "level": alert.level or "medium",
     }
@@ -1681,7 +1681,7 @@ async def unified_analyze(
             alert = db.query(Alert).filter(Alert.id == request.target_id).first()
             if not alert:
                 raise HTTPException(status_code=404, detail=f"告警 {request.target_id} 不存在")
-            result["summary"] = f"分析告警「{alert.name}」: {alert.message or '无详细描述'}"
+            result["summary"] = f"分析告警「{alert.title}」: {alert.message or '无详细描述'}"
             result["confidence"] = 0.75
             result["root_causes"] = ["资源使用率过高", "服务响应超时"]
             result["recommended_actions"] = [

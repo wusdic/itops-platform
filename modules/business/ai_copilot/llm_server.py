@@ -28,7 +28,7 @@ app = Flask(__name__)
 
 _llama_model: Optional[llama_cpp.Llama] = None
 _model_path: Optional[str] = None
-_model_name: str = "qwen3.5-9b-deepseek-v4-flash-q8_0"
+_model_name: str = "Qwen_Qwen3.5-0.8B-Q4_K_M"
 _executor: Optional[ThreadPoolExecutor] = None
 _parent_pid: int = os.getpid()
 _max_tokens_per_request: int = 32  # 限制每次最大 token 数，防止触发 llama.cpp KV cache bug

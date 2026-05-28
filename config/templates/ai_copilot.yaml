@@ -4,19 +4,19 @@
 
 # LLM 服务配置
 ollama:
-  base_url: "http://localhost:11435"
+  base_url: "http://localhost:11436"
   timeout: 300
   retry_count: 3
   retry_delay: 5
 
 # 模型配置
 models:
-  default: "qwen3.5-9b-deepseek-v4-flash-q8_0"
+  default: "Qwen_Qwen3.5-0.8B-Q4_K_M"
   available:
-    - name: "qwen3.5-9b-deepseek-v4-flash-q8_0"
-      display_name: "Qwen3.5-9B-DeepSeek-V4-Flash-Q8_0"
-      max_tokens: 8192
-      context_window: 32768
+    - name: "Qwen_Qwen3.5-0.8B-Q4_K_M"
+      display_name: "Qwen3.5-0.8B"
+      max_tokens: 1024
+      context_window: 8192
       enabled: true
 
 # 对话配置
@@ -111,35 +111,35 @@ chain_of_thought:
 # 场景配置
 scenarios:
   fault_diagnosis:
-    model: "qwen3.5-9b-deepseek-v4-flash-q8_0"
+    model: "Qwen_Qwen3.5-0.8B-Q4_K_M"
     temperature: 0.3
     enable_rag: true
     rag_top_k: 5
 
   daily_report:
-    model: "qwen3.5-9b-deepseek-v4-flash-q8_0"
+    model: "Qwen_Qwen3.5-0.8B-Q4_K_M"
     temperature: 0.5
     enable_rag: false
 
   weekly_report:
-    model: "qwen3.5-9b-deepseek-v4-flash-q8_0"
+    model: "Qwen_Qwen3.5-0.8B-Q4_K_M"
     temperature: 0.5
     enable_rag: false
 
   sop_generation:
-    model: "qwen3.5-9b-deepseek-v4-flash-q8_0"
+    model: "Qwen_Qwen3.5-0.8B-Q4_K_M"
     temperature: 0.4
     enable_rag: true
     rag_top_k: 3
 
   change_review:
-    model: "qwen3.5-9b-deepseek-v4-flash-q8_0"
+    model: "Qwen_Qwen3.5-0.8B-Q4_K_M"
     temperature: 0.3
     enable_rag: true
     rag_top_k: 5
 
   qa:
-    model: "qwen3.5-9b-deepseek-v4-flash-q8_0"
+    model: "Qwen_Qwen3.5-0.8B-Q4_K_M"
     temperature: 0.7
     enable_rag: true
     rag_top_k: 10
