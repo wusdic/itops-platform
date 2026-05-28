@@ -191,7 +191,33 @@ await ElMessageBox.confirm(
 </el-button>
 ```
 
-### 5.3 密码字段
+### 5.3 凭证安全
+
+**禁止在任何代码文件中硬编码用户名/密码。**
+
+| 场景 | 允许 | 不允许 |
+|------|------|--------|
+| README / 文档 | ✅ 公开默认账号密码作为初始访问说明 | - |
+| .env.example | ✅ 提示需配置真实密码 | - |
+| 数据库初始化 | ✅ 首次启动时写入数据库 | - |
+| 前端登录表单 data | ❌ 禁止预填默认值 | `username: 'admin'` `password: 'Admin@123456'` |
+| 后端默认值 | ✅ 可接受（有生产环境强检） | - |
+
+```javascript
+// ✅ 正确：表单初始化为空
+const form = reactive({
+  username: '',
+  password: ''
+})
+
+// ❌ 错误：硬编码凭证
+const form = reactive({
+  username: 'admin',
+  password: 'Admin@123456'
+})
+```
+
+### 5.4 密码字段
 - 必须用 `type="password"` + `show-password-on="click"`
 - 不能明文显示
 

@@ -40,14 +40,16 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock, Monitor } from '@element-plus/icons-vue'
 import { auth } from '@/api'
+import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
+const appStore = useAppStore()
 const formRef = ref(null)
 const loading = ref(false)
 
 const form = reactive({
-  username: 'admin',
-  password: 'Admin@123456'
+  username: '',
+  password: ''
 })
 
 const rules = {
@@ -71,6 +73,7 @@ const handleLogin = async () => {
 
       const token = res.access_token
       localStorage.setItem('token', token)
+      appStore.setToken(token)
 
       const userInfo = res.user || {}
       localStorage.setItem('user', JSON.stringify(userInfo))
@@ -94,6 +97,7 @@ const handleLogin = async () => {
       if (res.success) {
         const token = res.access_token
         localStorage.setItem('token', token)
+        appStore.setToken(token)
         const userInfo = res.user || {}
         localStorage.setItem('user', JSON.stringify(userInfo))
         ElMessage.success('SSO登录成功')

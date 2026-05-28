@@ -223,9 +223,11 @@ import {
 } from '@element-plus/icons-vue'
 import { notification, auth } from '@/api'
 import { CONFIG } from '@/config/constants'
+import { useAuth } from '@/composables/useAuth'
 
 const router = useRouter()
 const route = useRoute()
+const { checkTokenExpiry, startTokenMonitor, stopTokenMonitor, loadTimezone } = useAuth()
 
 const collapsed = ref(false)
 const isMobile = ref(false)
@@ -334,19 +336,21 @@ onMounted(() => {
   window.addEventListener('resize', checkMobile)
   fetchNotificationCount()
   notifInterval = setInterval(fetchNotificationCount, CONFIG.POLL_INTERVAL_LONG)
+  loadTimezone()
+  startTokenMonitor()
 })
-
-watch(() => route.path, () => {
-  // Auto-collapse sidebar on mobile when navigating
-  if (isMobile.value) {
-    collapsed.value = true
-  }
-}, { immediate: true })
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
   if (notifInterval) clearInterval(notifInterval)
+  stopTokenMonitor()
 })
+
+watch(() => route.path, () => {
+  if (isMobile.value) {
+    collapsed.value = true
+  }
+}, { immediate: true })
 </script>
 
 <style scoped>

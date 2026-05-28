@@ -61,9 +61,14 @@ request.interceptors.response.use(
     if (error.response) {
       const data = error.response.data
       if (error.response.status === 401) {
-        ElMessage.error('登录已过期，请重新登录')
+        // 登录页的 401 不弹提示（避免刷新登录页时显示"登录已过期"）
+        if (window.location.pathname !== '/login') {
+          ElMessage.error('登录已过期，请重新登录')
+        }
         localStorage.removeItem('token')
-        router.push('/login')
+        if (window.location.pathname !== '/login') {
+          router.push('/login')
+        }
       } else if (error.response.status === 403) {
         ElMessage.error('没有权限访问')
       } else if (error.response.status === 404 && data?.detail?.includes('无指标数据')) {
