@@ -85,7 +85,7 @@ export const adapters = {
    * @param {number} [params.page_size=20] - 每页数量
    * @param {string} [params.protocol_type] - 协议类型过滤
    */
-  getTemplates: (params) => request.get('/adapters', { params }),
+  getTemplates: (params) => request.get('/admin/adapters', { params }),
   
   /**
    * 创建协议适配器模板
@@ -96,39 +96,39 @@ export const adapters = {
    * @param {Object} [data.default_config] - 默认配置
    * @param {boolean} [data.enabled=true] - 是否启用
    */
-  createTemplate: (data) => request.post('/adapters', data),
+  createTemplate: (data) => request.post('/admin/adapters', data),
   
   /**
    * 更新协议适配器模板
    * @param {number} adapterId - 适配器ID
    * @param {Object} data - 更新数据
    */
-  updateTemplate: (adapterId, data) => request.put(`/adapters/${adapterId}`, data),
+  updateTemplate: (adapterId, data) => request.put(`/admin/adapters/${adapterId}`, data),
   
   /**
    * 删除协议适配器模板
    * @param {number} adapterId - 适配器ID
    */
-  deleteTemplate: (adapterId) => request.delete(`/adapters/${adapterId}`),
+  deleteTemplate: (adapterId) => request.delete(`/admin/adapters/${adapterId}`),
 
   // ========== 设备协议配置 ==========
   /**
    * 获取设备的所有协议配置
    * @param {number} deviceId - 设备ID
    */
-  getDeviceProtocols: (deviceId) => request.get(`/adapters/device/${deviceId}/protocols`),
+  getDeviceProtocols: (deviceId) => request.get(`/admin/adapters/device/${deviceId}/protocols`),
   
   /**
    * 批量保存设备协议配置
    * @param {number} deviceId - 设备ID
    * @param {Array} data - 协议配置列表
    */
-  saveDeviceProtocols: (deviceId, data) => request.put(`/adapters/device/${deviceId}/protocols`, data),
+  saveDeviceProtocols: (deviceId, data) => request.put(`/admin/adapters/device/${deviceId}/protocols`, data),
   
   /**
    * 测试设备指定协议的连通性
    * @param {number} deviceId - 设备ID
    * @param {string} protocolType - 协议类型
    */
-  testDeviceProtocol: (deviceId, protocolType) => request.post(`/adapters/device/${deviceId}/protocols/${protocolType}/test`),
+  testDeviceProtocol: (deviceId, protocolType) => request.post(`/admin/adapters/device/${deviceId}/protocols/${protocolType}/test`),
 }
