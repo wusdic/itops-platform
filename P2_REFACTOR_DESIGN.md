@@ -9,14 +9,15 @@
 
 | ID | 问题 | 严重度 | 影响范围 | 修复代价 | 是否重构 |
 |----|------|--------|---------|---------|---------|
-| F1 | 23个Vue页面使用 raw fetch()，绕过 auth interceptor | 🔴 致命 | 前端安全 | 高 | ✅ |
-| F2 | 67处直接调用 localStorage.getItem('token') | 🔴 高 | 前端可维护 | 中 | ✅ |
-| F3 | v-model:selected（Vue 3 反模式）| 🟡 低 | targets.vue | 低 | ✅ |
-| F4 | v-model:selected 存在于 targets.vue | 🟡 低 | 1个文件 | 低 | ✅ |
-| B1 | API 响应格式不统一（3种格式混用）| 🔴 高 | 后端全体 | 高 | ✅ |
-| B2 | DEBUG 模式 auth bypass 返回 dev 默认用户 | 🔴 安全 | 后端安全 | 中 | ✅ |
+| F1 | 23个Vue页面使用 raw fetch()，绕过 auth interceptor | 🔴 致命 | 前端安全 | 高 | ✅ 已完成（39个文件迁移完成，0残留）|
+| F2 | 67处直接调用 localStorage.getItem('token') | 🔴 高 | 前端可维护 | 中 | ✅ 已完成（request.js→store读token）|
+| F3 | v-model:selected（Vue 3 反模式）| 🟡 低 | targets.vue | 低 | ✅ 已完成 |
+| F4 | v-model:selected 存在于 targets.vue | 🟡 低 | 1个文件 | 低 | ✅ 已完成 |
+| B1 | API 响应格式不统一（3种格式混用）| 🔴 高 | 后端全体 | 高 | ⚠️ 已定义PaginatedResponse但未强制使用 |
+| B2 | DEBUG 模式 auth bypass 返回 dev 默认用户 | 🔴 安全 | 后端安全 | 中 | ✅ 已完成（SKIP_AUTH显式控制）|
 | B3 | admin.py 70+端点单一文件 | 🟡 中 | admin路由 | 中 | 延后 |
-| B4 | device_metrics/device_import 路由 prefix 缺失 | 🟢 低 | 2个路由 | 低 | ✅ (已修) |
+| B4 | device_metrics/device_import 路由 prefix 缺失 | 🟢 低 | 2个路由 | 低 | ✅ 已完成 |
+| P3-3 | 前端枚举硬编码散落，无统一常量文件 | 🟡 中 | 前端全体 | 低 | ✅ 已完成（新建enums.js）|
 
 ---
 
