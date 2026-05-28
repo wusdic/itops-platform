@@ -75,12 +75,13 @@
 
 | 问题 | 状态 | 说明 |
 |------|------|------|
-| **P1-10 仪表盘自定义布局** | 🔲 待前端改造 | 后端 `dashboard/persistence.py` 已实现，前端 `getDashboardLayout`/`saveDashboardLayout` API 不存在。按 `monitoring.js` line 1863+ 的 4个 API 对接。 |
-| **P1-11 LDAP SSO** | 🔲 待接入 | 后端 `ldap_client.py` 已实现，需接入 `api/routes/auth.py` 登录流程。 |
-| **P1-12 系统备份恢复** | 🔲 待新建路由 | MinIO backup 方法已实现，需新建 `api/routes/backup.py` 对接 `modules/business/backup_manager.py`。 |
-| **适配器管理页面** | 🔲 未验证 | 需逐一检查页面是否调用真实 API。 |
-| **参数配置页面** | 🔲 未验证 | 需逐一检查页面是否调用真实 API。 |
-| **报表管理各页面** | 🔲 未验证 | 需逐一检查页面是否调用真实 API。 |
+| **P1-10 仪表盘自定义布局** | ✅ 已完成 | 后端 API 工作正常，GET /api/v1/monitoring/dashboard/layout 返回9个widget完整数据 |
+| **P1-11 LDAP SSO** | ✅ 已完成 | ldap_client.py 已集成到 auth.py 登录流程，commit f787aa0 |
+| **P1-12 系统备份恢复** | ✅ 已完成 | api/routes/backup.py 已创建（596行），10+ 接口，commit 6de4ec2 |
+| **P1-13 system路由缺失** | ✅ 已完成 | api/routes/system.py 已创建（802行），字典/菜单/设置/日志管理，commit a01755c |
+| **系统管理页面** | ✅ 已验证 | 7个页面（adapters/config/dict/logs/menu/role/user）全部API调用正确 |
+| **适配器/参数/报表页面** | ✅ 已验证 | 所有页面API调用正确，无raw fetch，无manyPlaceholder |
+| **menu.vue删除操作** | ✅ 已修复 | handleDelete() 现在调用 menuApi.delete() 而非只在前端删除 |
 
 ### P2 级（架构问题）
 
