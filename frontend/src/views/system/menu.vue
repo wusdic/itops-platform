@@ -184,17 +184,21 @@ function handleDelete(data) {
     `确定删除菜单"${data.label}"吗？${data.children?.length ? '（将同时删除所有子菜单）' : ''}`,
     '确认删除',
     { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
-  ).then(() => {
-    const remove = (nodes) => {
-      const idx = nodes.findIndex(n => n.key === data.key)
-      if (idx !== -1) { nodes.splice(idx, 1); return true }
-      for (const node of nodes) { if (node.children && remove(node.children)) return true }
-      return false
+  ).then(async () => {
+    try {
+      await menuApi.delete(data.key)
+      const remove = (nodes) => {
+        const idx = nodes.findIndex(n => n.key === data.key)
+        if (idx !== -1) { nodes.splice(idx, 1); return true }
+        for (const node of nodes) { if (node.children && remove(node.children)) return true }
+        return false
+      }
+      remove(menuTree.value)
+      ElMessage.success('删除成功')
+    } catch (e) {
+      ElMessage.error('删除失败: ' + (e.message || e))
     }
-    remove(menuTree.value)
-    ElMessage.success('删除成功')
-    drawerVisible.value = false
-  }).catch(e => ElMessage.error('操作失败: ' + (e.message || e)))
+  }).catch(e => { if (e !== 'cancel') ElMessage.error('操作失败: ' + (e.message || e)) })
 }
 
 async function submitForm() {
