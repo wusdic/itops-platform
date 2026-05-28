@@ -1,3 +1,12 @@
+> 文档状态：archived
+> 替代文档：
+>   - 架构总纲：docs/01-architecture/AUTONOMOUS_ITOPS_TARGET_ARCHITECTURE.md
+>   - 开发计划：docs/05-implementation/DETAILED_REFACTOR_AND_GOVERNANCE_PLAN.md
+> 归档原因：本文件内容已被新架构文档取代，不再作为开发依据。
+> 最后归档日期：2026-05-28
+
+---
+
 # ITOps Platform 物理机部署指南
 
 > **本部署方案完全不依赖 Docker**。所有服务直接运行在物理机上，使用 systemd 管理进程、MySQL 存储数据、Nginx 反向代理。

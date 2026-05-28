@@ -1,3 +1,12 @@
+> 文档状态：archived
+> 替代文档：
+>   - 架构总纲：docs/01-architecture/AUTONOMOUS_ITOPS_TARGET_ARCHITECTURE.md
+>   - 开发计划：docs/05-implementation/DETAILED_REFACTOR_AND_GOVERNANCE_PLAN.md
+> 归档原因：本文件内容已被新架构文档取代，不再作为开发依据。
+> 最后归档日期：2026-05-28
+
+---
+
 # ITOps Platform 需求全景清单（历史参考）
 
 > ⚠️ **已废弃**：本文档内容已迁移至 `IMPLEMENTATION_STATUS.md`（实现状态）和 `DESIGN.md`（功能模块设计）。

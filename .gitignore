@@ -43,6 +43,12 @@ docker-compose.override.yml
 .DS_Store
 Thumbs.db
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+itops_platform.db
+
 # Pytest
 .pytest_cache/
 .coverage
