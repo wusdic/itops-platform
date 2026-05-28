@@ -3,44 +3,55 @@
     <!-- 自定义工具栏 -->
     <div class="dashboard-toolbar">
       <el-space>
-        <el-button type="primary" plain size="small" @click="showCustomize = !showCustomize">
+        <el-button type="primary" plain size="small" @click="dashboardStore.showCustomize = !dashboardStore.showCustomize">
           <el-icon><Setting /></el-icon> 自定义布局
         </el-button>
-        <el-button size="small" @click="resetLayout" :disabled="saving">
+        <el-button size="small" @click="dashboardStore.resetLayout()" :disabled="dashboardStore.saving">
           <el-icon><RefreshRight /></el-icon> 重置默认
         </el-button>
-        <el-button type="success" size="small" @click="saveLayout" :disabled="saving || !layoutModified">
-          <el-icon v-if="saving"><Loading /></el-icon>
-          <el-icon v-else><Check /></el-icon> {{ saving ? '保存中...' : '保存布局' }}
+        <el-button type="success" size="small" @click="dashboardStore.saveLayout()" :disabled="dashboardStore.saving || !dashboardStore.layoutModified">
+          <el-icon v-if="dashboardStore.saving"><Loading /></el-icon>
+          <el-icon v-else><Check /></el-icon> {{ dashboardStore.saving ? '保存中...' : '保存布局' }}
         </el-button>
       </el-space>
-      <el-tag v-if="layoutModified" type="warning" size="small">有未保存的更改</el-tag>
+      <el-tag v-if="dashboardStore.layoutModified" type="warning" size="small">有未保存的更改</el-tag>
     </div>
 
     <!-- Loading State -->
-    <div v-loading="loading" class="loading-container" element-loading-text="加载数据中...">
+    <div v-loading="dashboardStore.loading" class="loading-container" element-loading-text="加载数据中...">
 
       <!-- 统计卡片（始终显示） -->
       <el-row :gutter="16" class="stats-grid">
-        <el-col :xs="24" :sm="12" :md="6" v-for="(item, idx) in statWidgets" :key="item.item_id">
+        <el-col :xs="24" :sm="12" :md="6" v-for="(item, idx) in dashboardStore.statWidgets" :key="item.item_id">
           <!-- 自定义模式：可拖拽/隐藏/折叠 -->
-          <div v-if="showCustomize" class="widget-control">
+          <div v-if="dashboardStore.showCustomize" class="widget-control">
             <el-button-group size="small">
-              <el-button @click="toggleVisibility(item)" :type="item.visibility === false ? 'info' : 'default'" :icon="item.visibility === false ? 'Hide' : 'View'"></el-button>
-              <el-button @click="toggleCollapse(item)" :type="item.collapsed ? 'warning' : 'default'" :icon="item.collapsed ? 'DArrowRight' : 'DArrowLeft'"></el-button>
+              <el-button
+                @click="dashboardStore.toggleVisibility(item)"
+                :type="item.visibility === false ? 'info' : 'default'"
+                :icon="item.visibility === false ? Hide : View"
+              />
+              <el-button
+                @click="dashboardStore.toggleCollapse(item)"
+                :type="item.collapsed ? 'warning' : 'default'"
+                :icon="item.collapsed ? DArrowRight : DArrowLeft"
+              />
             </el-button-group>
           </div>
-          <div v-show="item.visibility !== false && !item.collapsed" class="stat-card" :style="{ borderLeftColor: statCardColors[idx] }" @click="handleStatClick(item.widget?.metric_names?.[0])">
-            <div class="stat-icon-wrap" :style="{ background: statCardBgColors[idx] }">
-              <el-icon :size="24" :color="statCardColors[idx]">
-                <component :is="statIcons[idx]" />
-              </el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value">{{ statCardValues[idx] }}</div>
-              <div class="stat-label">{{ item.widget?.title || statLabels[idx] }}</div>
-            </div>
-          </div>
+          <StatCard
+            v-show="item.visibility !== false && !item.collapsed"
+            :value="statCardValues[idx]"
+            :label="item.widget?.title || statLabels[idx]"
+            :icon="statIcons[idx]"
+            :color="statCardColors[idx]"
+            :clickable="true"
+            :show-controls="dashboardStore.showCustomize"
+            :visible="item.visibility"
+            :collapsed="item.collapsed"
+            @click="handleStatClick(item.widget?.metric_names?.[0])"
+            @visibility-change="(v) => { item.visibility = v; dashboardStore.layoutModified = true }"
+            @collapse-change="(v) => { item.collapsed = v; dashboardStore.layoutModified = true }"
+          />
           <div v-show="item.visibility !== false && item.collapsed" class="stat-card collapsed" :style="{ borderLeftColor: statCardColors[idx] }">
             <span class="collapsed-hint">{{ item.widget?.title || statLabels[idx] }}: {{ statCardValues[idx] }}</span>
           </div>
@@ -48,29 +59,33 @@
       </el-row>
 
       <!-- 系统健康状态 -->
-      <div v-if="healthWidget && (healthWidget.visibility !== false)" class="health-card" v-show="!healthWidget.collapsed">
-        <div v-if="showCustomize" class="widget-control inline">
+      <div v-if="dashboardStore.healthWidget && (dashboardStore.healthWidget.visibility !== false)" class="health-card" v-show="!dashboardStore.healthWidget.collapsed">
+        <div v-if="dashboardStore.showCustomize" class="widget-control inline">
           <el-button-group size="small">
-            <el-button @click="toggleCollapse(healthWidget)" :type="healthWidget.collapsed ? 'warning' : 'default'" :icon="healthWidget.collapsed ? 'DArrowRight' : 'DArrowLeft'"></el-button>
+            <el-button
+              @click="dashboardStore.toggleCollapse(dashboardStore.healthWidget)"
+              :type="dashboardStore.healthWidget.collapsed ? 'warning' : 'default'"
+              :icon="dashboardStore.healthWidget.collapsed ? DArrowRight : DArrowLeft"
+            />
           </el-button-group>
         </div>
         <div class="health-header">
           <span class="card-title">系统健康状态</span>
           <el-tag :type="healthType" size="small">{{ healthText }}</el-tag>
         </div>
-        <div class="health-body" v-show="!healthWidget.collapsed">
+        <div class="health-body" v-show="!dashboardStore.healthWidget.collapsed">
           <el-space :size="20" alignment="normal" style="width: 100%; justify-content: space-between;">
             <div class="health-item">
               <span class="health-label">CPU使用率</span>
-              <el-progress :percentage="systemHealth.cpu" :status="getProgressStatus(systemHealth.cpu)" :stroke-width="10" />
+              <el-progress :percentage="dashboardStore.systemHealth.cpu" :status="getProgressStatus(dashboardStore.systemHealth.cpu)" :stroke-width="10" />
             </div>
             <div class="health-item">
               <span class="health-label">内存使用率</span>
-              <el-progress :percentage="systemHealth.memory" :status="getProgressStatus(systemHealth.memory)" :stroke-width="10" />
+              <el-progress :percentage="dashboardStore.systemHealth.memory" :status="getProgressStatus(dashboardStore.systemHealth.memory)" :stroke-width="10" />
             </div>
             <div class="health-item">
               <span class="health-label">磁盘使用率</span>
-              <el-progress :percentage="systemHealth.disk" :status="getProgressStatus(systemHealth.disk)" :stroke-width="10" />
+              <el-progress :percentage="dashboardStore.systemHealth.disk" :status="getProgressStatus(dashboardStore.systemHealth.disk)" :stroke-width="10" />
             </div>
           </el-space>
         </div>
@@ -78,44 +93,48 @@
 
       <!-- 图表区域：直接用 class 标记类型，不依赖 Vue ref -->
       <el-row :gutter="16" class="chart-grid">
-        <el-col :xs="24" :md="12" v-for="item in chartWidgets" :key="item.item_id">
-          <div v-if="showCustomize" class="widget-control inline">
-            <el-button-group size="small">
-              <el-button @click="toggleVisibility(item)" :type="item.visibility === false ? 'info' : 'default'" :icon="item.visibility === false ? 'Hide' : 'View'"></el-button>
-              <el-button @click="toggleCollapse(item)" :type="item.collapsed ? 'warning' : 'default'" :icon="item.collapsed ? 'DArrowRight' : 'DArrowLeft'"></el-button>
-            </el-button-group>
-          </div>
-          <div v-show="item.visibility !== false && !item.collapsed" class="card">
-            <div class="card-header">
-              <span class="card-title">{{ item.widget?.title || '图表' }}</span>
-              <el-space>
-                <template v-if="item.widget?.widget_type === 'alert_chart'">
-                  <el-tag type="danger" size="small">严重 {{ alertStats.critical }}</el-tag>
-                  <el-tag type="warning" size="small">警告 {{ alertStats.warning }}</el-tag>
-                  <el-tag type="info" size="small">提示 {{ alertStats.info }}</el-tag>
-                </template>
-                <template v-else-if="item.widget?.widget_type === 'device_status_chart'">
-                  <el-tag type="success" size="small">在线 {{ deviceStats.online }}</el-tag>
-                  <el-tag size="small">离线 {{ deviceStats.offline }}</el-tag>
-                  <el-tag type="warning" size="small">告警 {{ deviceStats.warning }}</el-tag>
-                </template>
-              </el-space>
-            </div>
-            <div class="card-body">
-              <!-- 用唯一的 class 标记图表类型，initCharts() 用 querySelector 查找 -->
-              <div class="chart-container" :class="'chart-' + item.widget?.widget_type"></div>
-            </div>
-          </div>
+        <el-col :xs="24" :md="12" v-for="item in dashboardStore.chartWidgets" :key="item.item_id">
+          <ChartCard
+            :title="item.widget?.title || '图表'"
+            :chart-class="'chart-' + item.widget?.widget_type"
+            :show-controls="dashboardStore.showCustomize"
+            :visible="item.visibility"
+            :collapsed="item.collapsed"
+            @visibility-change="(v) => { item.visibility = v; dashboardStore.layoutModified = true }"
+            @collapse-change="(v) => { item.collapsed = v; dashboardStore.layoutModified = true }"
+            @chart-ready="onChartReady"
+          >
+            <template #extra>
+              <template v-if="item.widget?.widget_type === 'alert_chart'">
+                <el-tag type="danger" size="small">严重 {{ dashboardStore.alertStats.critical }}</el-tag>
+                <el-tag type="warning" size="small">警告 {{ dashboardStore.alertStats.warning }}</el-tag>
+                <el-tag type="info" size="small">提示 {{ dashboardStore.alertStats.info }}</el-tag>
+              </template>
+              <template v-else-if="item.widget?.widget_type === 'device_status_chart'">
+                <el-tag type="success" size="small">在线 {{ dashboardStore.deviceStats.online }}</el-tag>
+                <el-tag size="small">离线 {{ dashboardStore.deviceStats.offline }}</el-tag>
+                <el-tag type="warning" size="small">告警 {{ dashboardStore.deviceStats.warning }}</el-tag>
+              </template>
+            </template>
+          </ChartCard>
         </el-col>
       </el-row>
 
       <!-- 表格区域 -->
       <el-row :gutter="16" class="table-grid">
-        <el-col :xs="24" :md="12" v-for="item in tableWidgets" :key="item.item_id">
-          <div v-if="showCustomize" class="widget-control inline">
+        <el-col :xs="24" :md="12" v-for="item in dashboardStore.tableWidgets" :key="item.item_id">
+          <div v-if="dashboardStore.showCustomize" class="widget-control inline">
             <el-button-group size="small">
-              <el-button @click="toggleVisibility(item)" :type="item.visibility === false ? 'info' : 'default'" :icon="item.visibility === false ? 'Hide' : 'View'"></el-button>
-              <el-button @click="toggleCollapse(item)" :type="item.collapsed ? 'warning' : 'default'" :icon="item.collapsed ? 'DArrowRight' : 'DArrowLeft'"></el-button>
+              <el-button
+                @click="dashboardStore.toggleVisibility(item)"
+                :type="item.visibility === false ? 'info' : 'default'"
+                :icon="item.visibility === false ? Hide : View"
+              />
+              <el-button
+                @click="dashboardStore.toggleCollapse(item)"
+                :type="item.collapsed ? 'warning' : 'default'"
+                :icon="item.collapsed ? DArrowRight : DArrowLeft"
+              />
             </el-button-group>
           </div>
           <div v-show="item.visibility !== false && !item.collapsed" class="card">
@@ -125,19 +144,35 @@
               <el-button v-else-if="item.widget?.widget_type === 'pending_workorders_table'" type="primary" text @click="$router.push('/workorder/list')">查看更多</el-button>
             </div>
             <div class="card-body">
-              <el-table v-if="item.widget?.widget_type === 'recent_alerts_table'" :data="recentAlerts" :border="false" size="small" v-loading="alertsLoading">
+              <el-table
+                v-if="item.widget?.widget_type === 'recent_alerts_table'"
+                :data="dashboardStore.recentAlerts"
+                :border="false"
+                size="small"
+                v-loading="dashboardStore.alertsLoading"
+              >
                 <el-table-column title="级别" key="level" width="80">
                   <template #default="{ row }">
-                    <el-tag :type="severityTypeMap[row.level] || 'info'" size="small">{{ severityTextMap[row.level] || row.level || '未知' }}</el-tag>
+                    <el-tag :type="severityTypeMap[row.level] || 'info'" size="small">
+                      {{ severityTextMap[row.level] || row.level || '未知' }}
+                    </el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column title="告警信息" key="message" showOverflowTooltip prop="message" />
                 <el-table-column title="时间" key="created_at" width="160" prop="created_at" :formatter="(row) => row.created_at ? formatDate(new Date(row.created_at)) : '-'" />
               </el-table>
-              <el-table v-else-if="item.widget?.widget_type === 'pending_workorders_table'" :data="pendingOrders" :border="false" size="small" v-loading="workordersLoading">
+              <el-table
+                v-else-if="item.widget?.widget_type === 'pending_workorders_table'"
+                :data="dashboardStore.pendingOrders"
+                :border="false"
+                size="small"
+                v-loading="dashboardStore.workordersLoading"
+              >
                 <el-table-column title="优先级" key="priority" width="80">
                   <template #default="{ row }">
-                    <el-tag :type="priorityTypeMap[row.priority] || 'info'" size="small">{{ priorityTextMap[row.priority] || row.priority || '普通' }}</el-tag>
+                    <el-tag :type="priorityTypeMap[row.priority] || 'info'" size="small">
+                      {{ priorityTextMap[row.priority] || row.priority || '普通' }}
+                    </el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column title="工单标题" key="title" showOverflowTooltip prop="title" />
@@ -149,7 +184,7 @@
                   </template>
                 </el-table-column>
               </el-table>
-              <el-empty v-if="((item.widget?.widget_type === 'recent_alerts_table' && !alertsLoading && recentAlerts.length === 0) || (item.widget?.widget_type === 'pending_workorders_table' && !workordersLoading && pendingOrders.length === 0))" description="暂无数据" />
+              <el-empty v-if="((item.widget?.widget_type === 'recent_alerts_table' && !dashboardStore.alertsLoading && dashboardStore.recentAlerts.length === 0) || (item.widget?.widget_type === 'pending_workorders_table' && !dashboardStore.workordersLoading && dashboardStore.pendingOrders.length === 0))" description="暂无数据" />
             </div>
           </div>
         </el-col>
@@ -158,10 +193,10 @@
     </div>
 
     <!-- Error State -->
-    <div v-if="error && !loading" class="error-state">
-      <el-result icon="error" title="加载失败" :subTitle="error">
+    <div v-if="dashboardStore.error && !dashboardStore.loading" class="error-state">
+      <el-result icon="error" title="加载失败" :subTitle="dashboardStore.error">
         <template #extra>
-          <el-button @click="loadDashboard">重试</el-button>
+          <el-button @click="dashboardStore.loadDashboard()">重试</el-button>
         </template>
       </el-result>
     </div>
@@ -169,56 +204,25 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, h, computed, nextTick } from 'vue'
+import { computed, onMounted, onUnmounted, nextTick } from 'vue'
 import {
-  Monitor, Warning, Ticket, CircleCheck, CloseBold, WarningFilled,
+  Monitor, CircleCheck, Warning, Ticket,
   Setting, RefreshRight, Check, Loading, View, Hide, DArrowLeft, DArrowRight
 } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
-import { devices, alerts, workorder } from '@/api'
-import { performance as monitorApi } from '@/api/monitoring'
-import { ElMessage } from 'element-plus'
+import { useDashboardStore } from '@/stores/dashboard'
+import { StatCard, ChartCard } from '@/components/common'
 
-const message = ElMessage
-
-// Loading states
-const loading = ref(false)
-const alertsLoading = ref(false)
-const workordersLoading = ref(false)
-
-// Error handling
-const error = ref(null)
-
-// Layout state
-const showCustomize = ref(false)
-const saving = ref(false)
-const layoutModified = ref(false)
-const currentLayout = ref(null)
-const layoutId = ref(null)
+const dashboardStore = useDashboardStore()
 
 // Stat card data
 const statCardColors = ['#165dff', '#00b42a', '#ff7d00', '#f53f3f']
 const statCardBgColors = ['#e8f0ff', '#e8ffea', '#fff7e6', '#fff1f0']
 const statIcons = [Monitor, CircleCheck, Warning, Ticket]
 const statLabels = ['设备总数', '在线设备', '告警数量', '待办工单']
-const statCardValues = ref([0, 0, 0, 0])
 
-// Alert/Device/Health stats
-const alertStats = reactive({ critical: 0, warning: 0, info: 0 })
-const deviceStats = reactive({ online: 0, offline: 0, warning: 0 })
-const systemHealth = ref({ cpu: 0, memory: 0, disk: 0 })
-
-// Tables data
-const recentAlerts = ref([])
-const pendingOrders = ref([])
-
-// Widget collections
-const allItems = ref([])
-
-const statWidgets = computed(() => allItems.value.filter(i => i.widget?.widget_type?.startsWith('stat_')))
-const healthWidget = computed(() => allItems.value.find(i => i.widget?.widget_type === 'health_status'))
-const chartWidgets = computed(() => allItems.value.filter(i => ['alert_chart', 'device_status_chart'].includes(i.widget?.widget_type)))
-const tableWidgets = computed(() => allItems.value.filter(i => ['recent_alerts_table', 'pending_workorders_table'].includes(i.widget?.widget_type)))
+// 从 store 获取统计数据（ref 会自动解包）
+const statCardValues = dashboardStore.statCardValues
 
 // Alert severity
 const severityTypeMap = { critical: 'danger', high: 'danger', medium: 'warning', low: 'info', info: 'info' }
@@ -228,33 +232,6 @@ const severityTextMap = { critical: '严重', high: '高', medium: '中', low: '
 const priorityTypeMap = { urgent: 'danger', high: 'warning', medium: 'info', low: 'info' }
 const priorityTextMap = { urgent: '紧急', high: '高', medium: '中', low: '低' }
 
-const alertColumns = [
-  { title: '级别', key: 'level', width: 80, render(row) {
-    const type = severityTypeMap[row.level] || 'info'
-    const text = severityTextMap[row.level] || row.level || '未知'
-    return h(ElTag, { type, size: 'small' }, () => text)
-  }},
-  { title: '告警信息', key: 'message', showOverflowTooltip: true },
-  { title: '时间', key: 'created_at', width: 160, render(row) {
-    if (!row.created_at) return '-'
-    return formatDate(new Date(row.created_at))
-  }}
-]
-
-const workorderColumns = [
-  { title: '优先级', key: 'priority', width: 80, render(row) {
-    const type = priorityTypeMap[row.priority] || 'info'
-    const text = priorityTextMap[row.priority] || row.priority || '普通'
-    return h(ElTag, { type, size: 'small' }, () => text)
-  }},
-  { title: '工单标题', key: 'title', showOverflowTooltip: true },
-  { title: '状态', key: 'status', width: 100, render(row) {
-    const statusMap = { pending: { type: 'warning', text: '待处理' }, processing: { type: 'info', text: '处理中' }, resolved: { type: 'success', text: '已解决' }, closed: { type: 'info', text: '已关闭' } }
-    const status = statusMap[row.status] || { type: 'info', text: row.status || '-' }
-    return h(ElTag, { type: status.type, size: 'small' }, () => status.text)
-  }}
-]
-
 const getProgressStatus = (value) => {
   if (value >= 90) return 'exception'
   if (value >= 70) return 'warning'
@@ -262,147 +239,37 @@ const getProgressStatus = (value) => {
 }
 
 const healthType = computed(() => {
-  if (!systemHealth.value) return 'info'
-  const { cpu, memory, disk } = systemHealth.value
+  if (!dashboardStore.systemHealth) return 'info'
+  const { cpu, memory, disk } = dashboardStore.systemHealth
   if (cpu >= 90 || memory >= 90 || disk >= 90) return 'danger'
   if (cpu >= 70 || memory >= 70 || disk >= 70) return 'warning'
   return 'success'
 })
 
 const healthText = computed(() => {
-  if (!systemHealth.value) return '未知'
-  const { cpu, memory, disk } = systemHealth.value
+  if (!dashboardStore.systemHealth) return '未知'
+  const { cpu, memory, disk } = dashboardStore.systemHealth
   if (cpu >= 90 || memory >= 90 || disk >= 90) return '危险'
   if (cpu >= 70 || memory >= 70 || disk >= 70) return '警告'
   return '正常'
 })
 
-// API call with 3-level error handling
-const fetchWithErrorHandling = async (apiCall, fallback = null, showError = true) => {
-  try {
-    return await apiCall()
-  } catch (err) {
-    if (err.response) {
-      const status = err.response.status
-      if (status === 401) {
-        message.warning('登录已过期，请重新登录')
-        localStorage.removeItem('token')
-        window.location.href = '/login'
-        return fallback
-      }
-      if (status === 403) {
-        message.warning('没有权限访问')
-        return fallback
-      }
-      if (showError && err.response.data?.msg) {
-        message.error(err.response.data.msg)
-      }
-    } else if (err.request) {
-      if (showError) message.error('网络连接失败，请检查网络')
-    }
-    return fallback
-  }
+const handleStatClick = (key) => {
+  const routes = { total: '/monitoring/devices', online: '/monitoring/devices', alert: '/monitoring/alerts', workorder: '/workorder/list' }
+  const metricMap = { device_count: 'total', online_devices: 'online', alert_count: 'alert', pending_workorders: 'workorder' }
+  const route = routes[metricMap[key] || key]
+  if (route) window.location.hash = route
 }
 
-// Load layout from API then load dashboard data
-const loadDashboard = async () => {
-  loading.value = true
-  error.value = null
+// ========== 图表初始化 ==========
+let alertChart = null
+let deviceChart = null
 
-  try {
-    // Step 1: Load layout from API
-    try {
-      const layoutRes = await monitorApi.getDashboardLayout()
-      const layout = layoutRes?.data || layoutRes
-      if (layout && layout.items) {
-        currentLayout.value = layout
-        layoutId.value = layout.layout_id
-        allItems.value = (layout.items || []).map(item => ({
-          ...item,
-          collapsed: item.collapsed || false,
-          visibility: item.visibility !== false
-        }))
-      }
-    } catch (e) {
-      console.warn('Failed to load layout, using defaults:', e)
-      allItems.value = []
-    }
-
-    // Step 2: Load dashboard data in parallel
-    const [statsRes, alertRes, workorderRes, healthRes] = await Promise.allSettled([
-      fetchWithErrorHandling(() => devices.getStats(), { total: 0, online: 0, offline: 0, warning: 0 }),
-      fetchWithErrorHandling(() => alerts.getList({ page: 1, page_size: 10 }), { items: [], total: 0 }),
-      fetchWithErrorHandling(() => workorder.getList({ page: 1, page_size: 10, status: 'pending' }), { items: [], total: 0 }),
-      fetchWithErrorHandling(() => devices.getStats(), null, false)
-    ])
-
-    // Process device stats
-    if (statsRes.status === 'fulfilled' && statsRes.value) {
-      const data = statsRes.value
-      if (typeof data.total === 'number') {
-        statCardValues.value = [
-          data.total,
-          data.online || 0,
-          statCardValues.value[2],
-          data.pending_orders || 0
-        ]
-        deviceStats.online = data.online || 0
-        deviceStats.offline = data.offline || 0
-      }
-    }
-
-    // Process alerts
-    if (alertRes.status === 'fulfilled' && alertRes.value) {
-      const data = alertRes.value
-      const items = Array.isArray(data) ? data : (data.items || [])
-      recentAlerts.value = items.slice(0, 10)
-      alertStats.critical = items.filter(a => ['critical', 'high'].includes(a.level)).length
-      alertStats.warning = items.filter(a => ['medium', 'warning'].includes(a.level)).length
-      alertStats.info = items.filter(a => ['low', 'info'].includes(a.level)).length
-      statCardValues.value[2] = items.length
-      deviceStats.warning = items.length
-    } else {
-      recentAlerts.value = []
-    }
-
-    // Process workorders
-    if (workorderRes.status === 'fulfilled' && workorderRes.value) {
-      const data = workorderRes.value
-      const items = Array.isArray(data) ? data : (data.items || [])
-      pendingOrders.value = items.slice(0, 10)
-      statCardValues.value[3] = data.total || items.length
-    } else {
-      pendingOrders.value = []
-    }
-
-    // Process system health
-    if (healthRes.status === 'fulfilled' && healthRes.value) {
-      const data = healthRes.value
-      if (data && typeof data === 'object') {
-        if (data.cpu !== undefined) {
-          systemHealth.value = { cpu: data.cpu || 0, memory: data.memory || 0, disk: data.disk || 0 }
-        } else if (data.metrics) {
-          systemHealth.value = { cpu: data.metrics.cpu || 0, memory: data.metrics.memory || 0, disk: data.metrics.disk || 0 }
-        }
-      }
-    }
-
-    layoutModified.value = false
-
-    // Initialize charts after DOM is rendered
-    await nextTick()
-    initCharts()
-
-  } catch (err) {
-    console.error('Dashboard load error:', err)
-    error.value = err.message || '加载仪表盘数据失败，请稍后重试'
-    message.error('加载仪表盘数据失败')
-  } finally {
-    loading.value = false
-  }
+const onChartReady = (chartInstance) => {
+  // 图表准备就绪时的处理
+  console.log('Chart ready:', chartInstance)
 }
 
-// ========== 核心修复：用 document.querySelector 直接查找 DOM，不依赖 Vue ref ==========
 const initCharts = () => {
   if (typeof window.echarts === 'undefined') {
     console.warn('ECharts not loaded, skipping chart init')
@@ -414,9 +281,9 @@ const initCharts = () => {
   if (alertContainer) {
     const w = alertContainer.clientWidth
     if (w > 0) {
-      const chart = window.echarts.init(alertContainer)
-      const alertData = generateTrendData(recentAlerts.value, 'created_at')
-      chart.setOption({
+      alertChart = window.echarts.init(alertContainer)
+      const alertData = dashboardStore.generateTrendData(dashboardStore.recentAlerts, 'created_at')
+      alertChart.setOption({
         tooltip: { trigger: 'axis' },
         grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
         xAxis: { type: 'category', boundaryGap: false, data: alertData.dates },
@@ -426,7 +293,6 @@ const initCharts = () => {
           data: alertData.values, lineStyle: { color: '#ff7d00' }, itemStyle: { color: '#ff7d00' }
         }]
       })
-      window._dashboardAlertChart = chart
     }
   }
 
@@ -435,8 +301,8 @@ const initCharts = () => {
   if (deviceContainer) {
     const w = deviceContainer.clientWidth
     if (w > 0) {
-      const chart = window.echarts.init(deviceContainer)
-      chart.setOption({
+      deviceChart = window.echarts.init(deviceContainer)
+      deviceChart.setOption({
         tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
         legend: { bottom: '5%', left: 'center' },
         series: [{
@@ -445,136 +311,50 @@ const initCharts = () => {
           label: { show: false },
           emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
           data: [
-            { value: deviceStats.online, name: '在线', itemStyle: { color: '#00b42a' } },
-            { value: deviceStats.offline, name: '离线', itemStyle: { color: '#8c8c8c' } },
-            { value: deviceStats.warning, name: '告警', itemStyle: { color: '#ff7d00' } }
+            { value: dashboardStore.deviceStats.online, name: '在线', itemStyle: { color: '#00b42a' } },
+            { value: dashboardStore.deviceStats.offline, name: '离线', itemStyle: { color: '#8c8c8c' } },
+            { value: dashboardStore.deviceStats.warning, name: '告警', itemStyle: { color: '#ff7d00' } }
           ].filter(d => d.value > 0)
         }]
       })
-      window._dashboardDeviceChart = chart
     }
   }
-}
-
-const generateTrendData = (items, dateField) => {
-  const now = new Date()
-  const dates = []
-  const values = []
-
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(now)
-    date.setDate(date.getDate() - i)
-    dates.push(`${date.getMonth() + 1}/${date.getDate()}`)
-
-    const dayStart = new Date(date)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(date)
-    dayEnd.setHours(23, 59, 59, 999)
-
-    const count = items.filter(item => {
-      if (!item[dateField]) return false
-      const itemDate = new Date(item[dateField])
-      return itemDate >= dayStart && itemDate <= dayEnd
-    }).length
-
-    values.push(count)
-  }
-
-  return { dates, values }
 }
 
 const handleResize = () => {
-  window._dashboardAlertChart?.resize()
-  window._dashboardDeviceChart?.resize()
-}
-
-function handleStatClick(key) {
-  const routes = { total: '/monitoring/devices', online: '/monitoring/devices', alert: '/monitoring/alerts', workorder: '/workorder/list' }
-  const metricMap = { device_count: 'total', online_devices: 'online', alert_count: 'alert', pending_workorders: 'workorder' }
-  const route = routes[metricMap[key] || key]
-  if (route) window.location.hash = route
-}
-
-function toggleVisibility(item) {
-  item.visibility = item.visibility === false ? true : false
-  layoutModified.value = true
-}
-
-function toggleCollapse(item) {
-  item.collapsed = !item.collapsed
-  layoutModified.value = true
-}
-
-async function saveLayout() {
-  if (!currentLayout.value) return
-  saving.value = true
-  try {
-    const layoutData = {
-      layout_id: layoutId.value,
-      name: currentLayout.value.name || '默认布局',
-      description: currentLayout.value.description || '',
-      grid_size: currentLayout.value.grid_size || 'medium',
-      columns: currentLayout.value.columns || 12,
-      row_height: currentLayout.value.row_height || 80,
-      items: allItems.value.map(item => ({
-        item_id: item.item_id,
-        widget: item.widget,
-        position: item.position,
-        visibility: item.visibility,
-        collapsed: item.collapsed,
-        locked: item.locked || false
-      })),
-      column_config: currentLayout.value.column_config || [],
-      theme: currentLayout.value.theme || 'default',
-      is_default: currentLayout.value.is_default || false,
-      is_shared: currentLayout.value.is_shared || false,
-      tags: currentLayout.value.tags || []
-    }
-    await monitorApi.saveDashboardLayout(layoutData)
-    layoutModified.value = false
-    message.success('布局保存成功')
-    showCustomize.value = false
-  } catch (err) {
-    message.error('保存布局失败')
-  } finally {
-    saving.value = false
-  }
-}
-
-function resetLayout() {
-  allItems.value.forEach(item => {
-    item.visibility = true
-    item.collapsed = false
-  })
-  layoutModified.value = true
+  alertChart?.resize()
+  deviceChart?.resize()
 }
 
 let pollTimer = null
 
-function startPoll() {
+const startPoll = () => {
   stopPoll()
-  pollTimer = setInterval(() => { loadDashboard() }, 30000)
+  pollTimer = setInterval(() => { dashboardStore.loadDashboard() }, 30000)
 }
 
-function stopPoll() {
+const stopPoll = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
 onMounted(async () => {
-  await loadDashboard()
+  await dashboardStore.loadDashboard()
   startPoll()
   window.addEventListener('resize', handleResize)
+  // 等待 DOM 渲染完成后初始化图表
+  await nextTick()
+  initCharts()
 })
 
 onUnmounted(() => {
   stopPoll()
   window.removeEventListener('resize', handleResize)
-  window._dashboardAlertChart?.dispose()
-  window._dashboardDeviceChart?.dispose()
+  alertChart?.dispose()
+  deviceChart?.dispose()
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page-container { padding: 20px; min-height: calc(100vh - 40px); }
 .loading-container { width: 100%; min-height: 400px; }
 .dashboard-toolbar {
@@ -591,13 +371,6 @@ onUnmounted(() => {
   box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-left: 4px solid;
 }
 .stat-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
-.stat-icon-wrap {
-  width: 48px; height: 48px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.stat-content { flex: 1; min-width: 0; }
-.stat-value { font-size: 24px; font-weight: 700; color: #1d2129; line-height: 1; }
-.stat-label { font-size: 13px; color: #86909c; margin-top: 4px; }
 .stat-card.collapsed { padding: 12px 16px; justify-content: flex-start; }
 .collapsed-hint { font-size: 12px; color: #86909c; }
 .health-card {
@@ -624,8 +397,6 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .page-container { padding: 12px; }
   .stat-card { padding: 16px; }
-  .stat-icon-wrap { width: 40px; height: 40px; }
-  .stat-value { font-size: 20px; }
   .health-body { flex-direction: column; }
   .health-item { padding: 8px 0; }
 }

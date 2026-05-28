@@ -35,6 +35,10 @@ from api.routes import (
     report_singular_alias_router,
     backup_router,
 )
+from app.domains.collector.router import router as collector_router
+from app.domains.config.router import router as config_router
+from app.domains.alert.router import router as alert_router
+from app.domains.strategy.router import router as strategy_router
 from api.dependencies import get_settings
 from api.middleware.logging import LoggingMiddleware
 from api.middleware.error_handler import ErrorHandlerMiddleware
@@ -259,6 +263,30 @@ def create_app() -> FastAPI:
         backup_router,
         prefix="/api/v1/backup",
         tags=["备份恢复"],
+    )
+
+    app.include_router(
+        collector_router,
+        prefix="/api/v1/collectors",
+        tags=["采集器管理"],
+    )
+
+    app.include_router(
+        config_router,
+        prefix="/api/v1",
+        tags=["配置与凭证管理"],
+    )
+
+    app.include_router(
+        alert_router,
+        prefix="/api/v1",
+        tags=["告警管理"],
+    )
+
+    app.include_router(
+        strategy_router,
+        prefix="/api/v1",
+        tags=["策略中心"],
     )
 
     # 前端静态文件服务 - 使用中间件方式避免路由冲突

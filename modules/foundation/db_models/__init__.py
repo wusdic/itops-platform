@@ -35,6 +35,7 @@ from .automation import (
 from .menu import Menu
 from .dict_model import DictType, DictItem
 from .inspection import InspectionTask, InspectionResult, InspectionCheckItem
+from .system_configs import SystemConfig, ConfigVersion, Credential
 
 __all__ = [
     'Base',
@@ -85,6 +86,9 @@ __all__ = [
     'InspectionTask',
     'InspectionResult',
     'InspectionCheckItem',
+    'SystemConfig',
+    'ConfigVersion',
+    'Credential',
 ]
 
 __version__ = '1.0.0'

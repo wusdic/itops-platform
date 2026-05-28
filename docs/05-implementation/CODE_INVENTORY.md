@@ -215,13 +215,72 @@
 - `itops_platform.db` — 本地 SQLite 数据库文件，已移入 .gitignore
 - `auto_trigger_log.py` — 临时脚本，待评估后归档
 
-### 5.2 归档模块
+### 5.2 采集器清单
 
-- `src/_archive_20250516/` — 旧版组件，已归档
+> 生成方式：扫描 `modules/collection/` 下所有 Python 文件，按 Collector/Client/Scanner/Receiver 类提取
+> 总计：32 个采集器实现
 
-### 5.3 待删除表（数据已迁移或无数据）
+| # | 采集器类 | 类型 | 协议 | 文件路径 |
+|--|------|------|------|----------|
+| 1 | DockerClient | api_collector | HTTP/API | modules/collection/api_collector/docker_client.py |
+| 2 | HTTPClient | api_collector | HTTP/API | modules/collection/api_collector/http_client.py |
+| 3 | K8sClient | api_collector | HTTP/API | modules/collection/api_collector/kubernetes_client.py |
+| 4 | PrometheusClient | api_collector | HTTP/API | modules/collection/api_collector/prometheus_client.py |
+| 5 | ZabbixClient | api_collector | HTTP/API | modules/collection/api_collector/zabbix_client.py |
+| 6 | BrowserCollectorConfig | browser_collector | Browser | modules/collection/browser_collector/browser_client.py |
+| 7 | MySQLCollector | db_collector | MySQL | modules/collection/db_collector/mysql_client.py |
+| 8 | PostgreSQLCollector | db_collector | PostgreSQL | modules/collection/db_collector/postgres_client.py |
+| 9 | EnhancedScanner | discovery | Discovery | modules/collection/discovery/enhanced_scanner.py |
+| 10 | IPScanner | discovery | Discovery | modules/collection/discovery/scanner.py |
+| 11 | SNMPScanner | discovery | Discovery | modules/collection/discovery/snmp_scanner.py |
+| 12 | ElasticsearchCollector | elasticsearch_collector | ES | modules/collection/elasticsearch_collector/elasticsearch_client.py |
+| 13 | PassiveFingerprintCollector | fingerprint | Fingerprint | modules/collection/fingerprint/passive_fingerprint_collector.py |
+| 14 | IPMIClient | ipmi_collector | IPMI | modules/collection/ipmi_collector/ipmi_client.py |
+| 15 | SyslogReceiver | log_collector | Syslog | modules/collection/log_collector/syslog_receiver.py |
+| 16 | WindowsEventCollector | log_collector | Windows Event | modules/collection/log_collector/windows_event.py |
+| 17 | KafkaCollector | mq_collector | Kafka | modules/collection/mq_collector/kafka_client.py |
+| 18 | RabbitMQCollector | mq_collector | RabbitMQ | modules/collection/mq_collector/rabbitmq_client.py |
+| 19 | RedisCollector | mq_collector | Redis | modules/collection/mq_collector/redis_client.py |
+| 20 | RedfishCollector | redfish_collector | Redfish | modules/collection/redfish_collector/redfish_client.py |
+| 21 | SecurityScanner | security_scanner | Security | modules/collection/security_scanner.py |
+| 22 | AsyncSNMPClient | snmp_collector | SNMP | modules/collection/snmp_collector/snmp_client.py |
+| 23 | TrapReceiver | snmp_collector | SNMP Trap | modules/collection/snmp_collector/trap_receiver.py |
+| 24 | KylinCollector | ssh_collector | SSH | modules/collection/ssh_collector/collectors/kylin_collector.py |
+| 25 | LinuxCollector | ssh_collector | SSH | modules/collection/ssh_collector/collectors/linux_collector.py |
+| 26 | WindowsCollector | ssh_collector | SSH | modules/collection/ssh_collector/collectors/windows_collector.py |
+| 27 | SSHClient | ssh_collector | SSH | modules/collection/ssh_collector/ssh_client.py |
+| 28 | WinRMClient | ssh_collector | WinRM | modules/collection/ssh_collector/winrm_client.py |
+| 29 | SyslogCollector | syslog_collector | Syslog | modules/collection/syslog_collector/syslog_client.py |
+| 30 | TelnetCollector | telnet_collector | Telnet | modules/collection/telnet_collector/telnet_client.py |
+| 31 | VMwareCollector | vmware_collector | VMware | modules/collection/vmware_collector/vmware_client.py |
+| 32 | WinRMClient | wmi_collector | WMI | modules/collection/wmi_collector/client.py |
+
+**采集器处理决策**：
+- `keep`：Linux/SSH、Windows/WinRM、SNMP、IPMI、Redfish、VMware、MySQL、PostgreSQL、Kafka、RabbitMQ、Redis — 改造为 BaseCollector 统一接口
+- `adapt`：API Collector (Prometheus/Zabbix/K8s)、ES Collector — 纳入统一 API Collector 框架
+- `remove`：`browser_automation/` — 实验性，与目标架构不符
+
+### 5.3 自动化脚本与任务清单
+
+> 总计：7 个脚本/服务
+
+| # | 模块 | 类型 | 说明 |
+|--|------|------|------|
+| 1 | modules/business/automation/approval_service.py | service | 审批流服务 |
+| 2 | modules/business/automation/execution_service.py | service | 执行引擎服务 |
+| 3 | modules/business/automation/script_service.py | service | 脚本管理服务 |
+| 4 | scripts/preflight_check.py | script | 部署前检查脚本 |
+| 5 | scripts/deploy.sh | script | 部署脚本 |
+| 6 | scripts/install_deps.sh | script | 依赖安装脚本 |
+| 7 | scripts/install_service.sh | script | 服务安装脚本 |
+
+### 5.4 待删除表（数据已迁移或无数据）
 
 - `devices_t202605239779` — 测试分片表
+
+### 5.5 归档模块
+
+- `frontend/src/_archive_20250516/` — 旧版组件，已归档
 
 ---
 

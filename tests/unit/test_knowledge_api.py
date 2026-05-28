@@ -247,11 +247,11 @@ class TestKnowledgeEnums:
         """测试文档状态枚举"""
         from modules.business.knowledge_base.models import DocumentStatus
         
-        assert DocumentStatus.DRAFT.value == "draft"
-        assert DocumentStatus.PENDING_REVIEW.value == "pending_review"
-        assert DocumentStatus.APPROVED.value == "approved"
-        assert DocumentStatus.REJECTED.value == "rejected"
-        assert DocumentStatus.OBSOLETE.value == "obsolete"
+        assert DocumentStatus.DRAFT.value == "DRAFT"
+        assert DocumentStatus.PENDING_REVIEW.value == "PENDING_REVIEW"
+        assert DocumentStatus.APPROVED.value == "APPROVED"
+        assert DocumentStatus.REJECTED.value == "REJECTED"
+        assert DocumentStatus.OBSOLETE.value == "OBSOLETE"
     
     def test_fault_level_enum(self):
         """测试故障级别枚举"""

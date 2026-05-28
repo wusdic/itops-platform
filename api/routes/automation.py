@@ -680,6 +680,199 @@ async def get_execution_logs(
     }
 
 
+# ============== Approval API（审批流）==============
+
+class ApprovalRequestCreate(BaseModel):
+    """创建审批请求"""
+    execution_id: str = Field(..., description="执行ID")
+    reason: Optional[str] = Field("", description="审批原因")
+    timeout_hours: Optional[int] = Field(24, description="审批超时时间")
+
+
+class ApprovalActionRequest(BaseModel):
+    """审批操作请求"""
+    comment: Optional[str] = Field("", description="审批意见")
+
+
+@router.post("/executions/{execution_id}/approval", summary="创建审批请求")
+async def create_approval_request(
+    execution_id: str,
+    request: ApprovalRequestCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """为执行创建审批请求（当执行需要审批时）"""
+    from modules.business.automation.approval_service import ApprovalService
+    from modules.business.automation.execution_service import ExecutionService
+
+    # 获取执行信息
+    exec_service = ExecutionService(db)
+    execution = exec_service.get_execution(execution_id)
+    if not execution:
+        raise HTTPException(status_code=404, detail=f"Execution {execution_id} not found")
+
+    # 检查风险等级
+    risk_level, required_level, _ = exec_service.check_risk_level(execution["script_id"])
+    if required_level == 0:
+        return {"code": 0, "message": "No approval needed", "data": {"needs_approval": False}}
+
+    # 创建审批请求
+    approval_service = ApprovalService(db)
+    result, error = approval_service.create_approval_request(
+        execution_id=execution_id,
+        script_id=execution["script_id"],
+        risk_level=risk_level,
+        required_approval_level=required_level,
+        created_by=current_user.username,
+        reason=request.reason,
+        timeout_hours=request.timeout_hours,
+    )
+
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    # 更新执行状态
+    exec_record = db.query(AutomationExecution).filter(AutomationExecution.id == execution_id).first()
+    if exec_record:
+        exec_record.status = "pending_approval"
+        db.commit()
+
+    return {"code": 0, "message": "success", "data": {
+        "needs_approval": True,
+        "approval_id": result["id"],
+        "required_level": required_level,
+    }}
+
+
+@router.get("/approvals/pending", summary="获取待我审批的列表")
+async def list_pending_approvals(
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取当前用户待审批的列表"""
+    from modules.business.automation.approval_service import ApprovalService
+
+    approval_service = ApprovalService(db)
+    items, total = approval_service.list_pending_approvals(
+        approver=current_user.username,
+        page=page,
+        page_size=page_size,
+    )
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+    }
+
+
+@router.post("/approvals/{approval_id}/approve", summary="审批通过")
+async def approve_approval(
+    approval_id: str,
+    request: ApprovalActionRequest = ApprovalActionRequest(),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """审批通过"""
+    from modules.business.automation.approval_service import ApprovalService
+
+    approval_service = ApprovalService(db)
+    success, error = approval_service.approve(
+        approval_id=approval_id,
+        approver=current_user.username,
+        comment=request.comment,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail=error)
+
+    return {"code": 0, "message": "success"}
+
+
+@router.post("/approvals/{approval_id}/reject", summary="审批拒绝")
+async def reject_approval(
+    approval_id: str,
+    request: ApprovalActionRequest = ApprovalActionRequest(),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """审批拒绝"""
+    from modules.business.automation.approval_service import ApprovalService
+
+    approval_service = ApprovalService(db)
+    success, error = approval_service.reject(
+        approval_id=approval_id,
+        approver=current_user.username,
+        comment=request.comment,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail=error)
+
+    return {"code": 0, "message": "success"}
+
+
+@router.post("/approvals/{approval_id}/cancel", summary="取消审批请求")
+async def cancel_approval(
+    approval_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """取消审批请求"""
+    from modules.business.automation.approval_service import ApprovalService
+
+    approval_service = ApprovalService(db)
+    success, error = approval_service.cancel_approval(
+        approval_id=approval_id,
+        cancelled_by=current_user.username,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail=error)
+
+    return {"code": 0, "message": "success"}
+
+
+@router.get("/approvals/{approval_id}", summary="获取审批详情")
+async def get_approval(
+    approval_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取审批详情"""
+    from modules.business.automation.approval_service import ApprovalService
+
+    approval_service = ApprovalService(db)
+    result = approval_service.get_approval_request(approval_id)
+
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Approval {approval_id} not found")
+
+    return {"code": 0, "message": "success", "data": result}
+
+
+@router.get("/executions/{execution_id}/approval", summary="获取执行的审批状态")
+async def get_execution_approval(
+    execution_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取指定执行的审批状态"""
+    from modules.business.automation.approval_service import ApprovalService
+
+    approval_service = ApprovalService(db)
+    result = approval_service.get_approval_request_by_execution(execution_id)
+
+    return {"code": 0, "message": "success", "data": result or {"execution_id": execution_id, "status": "no_approval_required"}}
+
+
 # ============== Events API（AI 决策引擎入口）==============
 
 class EventContext(BaseModel):

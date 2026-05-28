@@ -1,410 +1,530 @@
-# API 路由清单
-
-> 文档状态：current
-> 适用版本：v2.0
-> 最后更新：2026-05-28
-> 维护人：ITOPS 开发团队
-> 是否为事实源：yes
-
----
-
-## 说明
-
-本文档记录所有现有 API 路由，按领域分类。文档归档标识：
-- **keep**：功能有价值，可直接纳入新架构
-- **adapt**：API 或模型需统一适配后使用
-- **refactor**：功能方向正确但实现需重构
-- **remove**：过期/重复，应删除
-
----
-
-## 1. 资产与设备 (adapt)
-
-### asset.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /asset/business | 业务列表 | adapt | 业务系统管理 |
-| GET | /asset/business/{business_id} | 业务详情 | adapt | |
-| GET | /asset/business/{business_id}/devices | 业务下设备 | adapt | |
-| GET | /asset/config | 配置列表 | adapt | |
-| POST | /asset/config/snapshot | 配置快照 | adapt | |
-| POST | /asset/config/sync/{device_id} | 配置同步 | adapt | |
-| GET | /asset/config/{config_id} | 配置详情 | adapt | |
-| GET | /asset/device | 设备列表 | adapt | 与 device_api 重复 |
-| POST | /asset/device/batch | 批量设备操作 | adapt | |
-| GET | /asset/device/{device_id} | 设备详情 | adapt | |
-| POST | /asset/device/{device_id}/decommission | 设备退役 | adapt | |
-| POST | /asset/device/{device_id}/maintain | 设备维护 | adapt | |
-| GET | /asset/group | 分组列表 | adapt | |
-| GET | /asset/group/{group_id}/devices | 分组下设备 | adapt | |
-| GET | /asset/stats | 资产统计 | adapt | |
-
-### device_api.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /device/adapters/list | 适配器列表 | adapt | |
-| GET | /device/adapters/protocols | 协议列表 | adapt | |
-| POST | /device/collect | 采集 | adapt | |
-| POST | /device/collect/all | 全量采集 | adapt | |
-| POST | /device/config/reload | 配置重载 | adapt | |
-| GET | /device/config/stats | 配置统计 | adapt | |
-| GET | /device/stats | 设备统计 | adapt | |
-| GET | /device/{device_id}/metrics/configs | 指标配置 | adapt | |
-| GET | /device/{device_name}/metrics | 设备指标 | adapt | |
-| GET | /device/{device_name}/metrics/history | 指标历史 | adapt | |
-| GET | /device/{device_name}/status | 设备状态 | adapt | |
-
----
-
-## 2. 设备发现 (keep)
-
-### discovery.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| POST | /discovery/arp/scan | ARP 扫描 | keep | |
-| POST | /discovery/devices/import | 导入设备 | keep | |
-| GET | /discovery/hosts | 主机列表 | keep | |
-| POST | /discovery/import | 导入 | keep | |
-| POST | /discovery/ip/hosts | IP 主机 | keep | |
-| POST | /discovery/ip/scan | IP 扫描 | keep | |
-| POST | /discovery/ip/scan/sync | IP 同步扫描 | keep | |
-| GET | /discovery/ip/scan/{task_id}/results | 扫描结果 | keep | |
-| GET | /discovery/networks | 网络列表 | keep | |
-| POST | /discovery/scan | 扫描 | keep | |
-| POST | /discovery/scan-and-import | 扫描并导入 | keep | |
-| POST | /discovery/scan-and-import-stream | 流式扫描导入 | keep | |
-| GET | /discovery/snmp/devices | SNMP 设备 | keep | |
-| POST | /discovery/snmp/discover | SNMP 发现 | keep | |
-| POST | /discovery/snmp/scan | SNMP 扫描 | keep | |
-
----
-
-## 3. 采集与监控 (adapt)
-
-### device_metrics.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /metrics/name/{device_name}/metrics | 设备指标 | adapt | |
-| GET | /metrics/{device_id}/metrics | 设备指标 | adapt | |
-| POST | /metrics/{device_id}/metrics/bulk | 批量指标 | adapt | |
-| GET | /metrics/{device_id}/metrics/categories | 指标分类 | adapt | |
-
-### monitoring.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /monitoring/alerts | 告警列表 | adapt | |
-| GET | /monitoring/alerts/statistics | 告警统计 | adapt | |
-| GET | /monitoring/alerts/{alert_id} | 告警详情 | adapt | |
-| POST | /monitoring/alerts/{alert_id}/acknowledge | 确认告警 | adapt | |
-| POST | /monitoring/alerts/{alert_id}/resolve | 解决告警 | adapt | |
-| POST | /monitoring/alerts/{alert_id}/restore | 恢复告警 | adapt | |
-| POST | /monitoring/alerts/{alert_id}/suppress | 抑制告警 | adapt | |
-| POST | /monitoring/alerts/{alert_id}/transfer | 转交告警 | adapt | |
-| GET | /monitoring/dashboard/columns | 仪表盘列 | adapt | |
-| GET | /monitoring/dashboard/layout | 仪表盘布局 | adapt | |
-| GET | /monitoring/dashboards | 仪表盘列表 | adapt | |
-| GET | /monitoring/dashboards/{dashboard_id} | 仪表盘详情 | adapt | |
-
----
-
-## 4. 自动化 (refactor)
-
-### automation.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| POST | /automation/evaluate | 风险评估 | refactor | 缺少状态机 |
-| GET | /automation/events | 自动化事件 | refactor | |
-| GET | /automation/executions | 执行列表 | refactor | |
-| GET | /automation/executions/{execution_id} | 执行详情 | refactor | |
-| GET | /automation/executions/{execution_id}/logs | 执行日志 | refactor | 需改进实时性 |
-| POST | /automation/executions/{execution_id}/rollback | 回滚执行 | refactor | |
-| GET | /automation/executions/{execution_id}/snapshot | 执行快照 | refactor | |
-| GET | /automation/scripts | 脚本列表 | refactor | |
-| POST | /automation/scripts/{script_id}/execute | 执行脚本 | refactor | |
-| GET | /automation/scripts/{script_id}/versions | 脚本版本 | refactor | |
-| GET | /automation/tasks | 任务列表 | refactor | |
-| POST | /automation/tasks/{task_id}/run | 运行任务 | refactor | |
-| GET | /automation/trigger-rules | 触发规则 | refactor | |
-| POST | /automation/trigger-rules/{rule_id}/test | 测试规则 | refactor | |
-
----
-
-## 5. AI / AIOps (adapt)
-
-### ai.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| POST | /ai/analyze | 分析 | adapt | 需结构化输出 |
-| GET | /ai/analyze/history | 分析历史 | adapt | |
-| GET | /ai/analyze/logs | 分析日志 | adapt | |
-| POST | /ai/chat | 聊天 | adapt | 降级为辅助入口 |
-| POST | /ai/conversations | 会话 | adapt | |
-| GET | /ai/conversations/{conversation_id} | 会话详情 | adapt | |
-| GET | /ai/conversations/{conversation_id}/messages | 会话消息 | adapt | |
-| POST | /ai/conversations/{conversation_id}/pin | 置顶会话 | adapt | |
-| POST | /ai/interpret/report | 解读报告 | adapt | |
-| POST | /ai/knowledge-qa | 知识问答 | adapt | |
-| POST | /ai/qa | 问答 | adapt | |
-| GET | /ai/stats | AI 统计 | adapt | |
-| POST | /ai/suggest | 建议 | adapt | |
-| POST | /ai/troubleshoot | 故障排查 | adapt | |
-| POST | /ai/troubleshoot/auto | 自动排查 | adapt | |
-
----
-
-## 6. 告警与事件 (adapt)
-
-见 monitoring.py 的告警部分，以及 event 相关（需新建）
-
----
-
-## 7. 工单 (keep)
-
-### workorder.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /workorder/ | 工单列表 | keep | |
-| GET | /workorder/categories | 工单分类 | keep | |
-| POST | /workorder/convert-to-workorder | 转为工单 | keep | |
-| GET | /workorder/draft/list | 草稿列表 | keep | |
-| POST | /workorder/draft/save | 保存草稿 | keep | |
-| GET | /workorder/export/{workorder_id} | 导出工单 | keep | |
-| GET | /workorder/priorities | 优先级列表 | keep | |
-| GET | /workorder/sla/summary | SLA 汇总 | keep | |
-| GET | /workorder/stats/summary | 统计汇总 | keep | |
-| GET | /workorder/{workorder_id} | 工单详情 | keep | |
-| POST | /workorder/{workorder_id}/approve | 审批通过 | keep | |
-| POST | /workorder/{workorder_id}/assign | 分配工单 | keep | |
-
----
-
-## 8. 知识库 (keep)
-
-### knowledge.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /knowledge/category | 分类列表 | keep | |
-| GET | /knowledge/fault-case | 故障案例 | keep | |
-| GET | /knowledge/fault-case/{case_id} | 案例详情 | keep | |
-| GET | /knowledge/graph/nodes | 知识图谱节点 | keep | |
-| GET | /knowledge/graph/stats | 图谱统计 | keep | |
-| POST | /knowledge/reviews | 提交审核 | keep | |
-| POST | /knowledge/reviews/{review_id}/approve | 审核通过 | keep | |
-
----
-
-## 9. 通知 (adapt)
-
-### notification.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| POST | /notification/alert | 告警通知 | adapt | 变为策略动作 |
-| GET | /notification/channels | 通知渠道 | adapt | |
-| POST | /notification/send | 发送通知 | adapt | |
-| GET | /notification/target-rules | 目标规则 | adapt | |
-
----
-
-## 10. 系统与配置 (adapt)
-
-### system.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /system/dict | 字典列表 | adapt | |
-| GET | /system/logs | 系统日志 | adapt | |
-| GET | /system/menu | 菜单 | adapt | |
-| GET | /system/settings | 系统设置 | adapt | |
-| GET | /system/settings/{key} | 某项设置 | adapt | |
-
-### admin.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /admin/ai/config | AI 配置 | adapt | |
-| GET | /admin/api-keys | API Key 列表 | adapt | |
-| POST | /admin/backup | 备份 | adapt | |
-| GET | /admin/backups | 备份列表 | adapt | |
-| GET | /admin/cache/clear | 清除缓存 | adapt | |
-| GET | /admin/config | 系统配置 | adapt | |
-| GET | /admin/departments | 部门列表 | adapt | |
-
-### config (散落在多处)
-| 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|
-| /config | 配置项 | adapt | 应统一到配置中心 |
-| /api/v1/config/* | API 配置 | adapt | |
-
----
-
-## 11. 认证与权限 (keep)
-
-### auth.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| POST | /auth/login | 登录 | keep | |
-| POST | /auth/logout | 登出 | keep | |
-| POST | /auth/ldap-login | LDAP 登录 | keep | |
-| GET | /auth/ldap/status | LDAP 状态 | keep | |
-| GET | /auth/userinfo | 用户信息 | keep | |
-| POST | /auth/refresh | 刷新 Token | keep | |
-| GET | /auth/captcha | 验证码 | keep | |
-
-### api_keys.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /api-keys | API Key 列表 | keep | |
-| POST | /api-keys | 创建 API Key | keep | |
-| POST | /api-keys/{key_id}/activate | 激活 | keep | |
-| POST | /api-keys/{key_id}/revoke | 撤销 | keep | |
-
----
-
-## 12. 凭证管理 (adapt)
-
-### vendor_credentials.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /vendor/probe/banner | 探测 Banner | adapt | |
-| GET | /vendor/vendors | 厂商列表 | adapt | |
-| GET | /vendor/versions | 版本列表 | adapt | |
-
----
-
-## 13. 日志服务 (adapt)
-
-### log_service.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /log/get_all | 日志列表 | adapt | 升级为日志中心 |
-| GET | /log/stats | 日志统计 | adapt | |
-
----
-
-## 14. 巡检 (keep)
-
-### inspection.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /inspection/reports/template | 巡检报告模板 | keep | |
-| GET | /inspection/reports/{task_id} | 巡检报告 | keep | |
-| GET | /inspection/results/{task_id} | 巡检结果 | keep | |
-| GET | /inspection/tasks | 巡检任务 | keep | |
-
----
-
-## 15. 报表 (keep)
-
-### report.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /report/ | 报表列表 | keep | |
-| POST | /report/generate | 生成报表 | keep | |
-| GET | /report/schedule | 报表计划 | keep | |
-| GET | /report/template | 报表模板 | keep | |
-
----
-
-## 16. 备份恢复 (keep)
-
-### backup.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| POST | /backup/cleanup | 清理备份 | keep | |
-| GET | /backup/configs | 备份配置 | keep | |
-| POST | /backup/execute | 执行备份 | keep | |
-| GET | /backup/history | 备份历史 | keep | |
-| POST | /backup/restore/{backup_id} | 恢复备份 | keep | |
-
----
-
-## 17. 部署管理 (keep)
-
-### deploy.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /api/v1/deploy/health | 部署健康 | keep | |
-| GET | /api/v1/deploy/status | 部署状态 | keep | |
-| GET | /api/v1/deploy/history | 部署历史 | keep | |
-| POST | /api/v1/deploy/canary | 金丝雀部署 | keep | |
-
----
-
-## 18. 分片路由 (keep)
-
-### sharding.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /sharding/routes/{logical_table} | 分片路由 | keep | |
-| POST | /sharding/routes/{logical_table}/create | 创建分片 | keep | |
-| GET | /sharding/stats | 分片统计 | keep | |
-
----
-
-## 19. 水印 (keep)
-
-### watermark.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| POST | /api/v1/watermark/generate | 生成水印 | keep | |
-| GET | /api/v1/watermark/list | 水印列表 | keep | |
-| POST | /api/v1/watermark/verify | 验证水印 | keep | |
-
----
-
-## 20. 租户 (adapt)
-
-### tenant.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /tenants/{tenant_id} | 租户详情 | adapt | |
-| GET | /tenants/{tenant_id}/quota | 租户配额 | adapt | |
-| GET | /tenants/{tenant_id}/users | 租户用户 | adapt | |
-
----
-
-## 21. 其他适配器 (adapt)
-
-### adapters.py
-| 方法 | 路径 | 功能 | 状态 | 说明 |
-|------|------|------|------|------|
-| GET | /adapters | 适配器列表 | adapt | |
-| GET | /adapters/{adapter_id} | 适配器详情 | adapt | |
-| GET | /device/{device_id}/protocols | 设备协议 | adapt | |
-| POST | /device/{device_id}/protocols/{protocol_type}/test | 测试协议 | adapt | |
-
----
-
-## 需新建的 API（按目标架构）
-
-| 模块 | API | 说明 |
-|------|-----|------|
-| event | POST /events | 事件上报 |
-| event | GET /events | 事件列表 |
-| event | GET /events/{event_id} | 事件详情 |
-| state | GET /state/assets/{asset_id} | 资产最新状态 |
-| state | GET /state/assets/{asset_id}/history | 状态历史 |
-| policy | GET /policies | 策略列表 |
-| policy | POST /policies | 创建策略 |
-| policy | POST /policies/{policy_id}/simulate | 策略模拟 |
-| config | GET /config/definitions | 配置定义 |
-| config | POST /config/versions/{id}/release | 发布配置 |
-| credential | POST /credentials | 创建凭证 |
-| credential | POST /credentials/{id}/test | 测试凭证 |
-
----
-
-## API 统计
-
-| 状态 | 数量 | 说明 |
-|------|------|------|
-| keep | ~25 | 保留，直接纳入新架构 |
-| adapt | ~60 | 需适配后使用 |
-| refactor | ~20 | 需重构 |
-| remove | ~5 | 应删除（重复接口） |
-
----
-
-## 后续工作
-
-1. 对每个 adapt/refactor 的 API 制定适配方案
-2. 识别重复 API，确定保留哪个版本
-3. 补充缺失的 API（event、state、policy 等）
+# API Route Inventory
+
+> 文档状态：active
+
+> 事实源：否（从代码扫描生成）
+
+> 版本：v1.0
+
+> 生成方式：`grep -rn '@router\.' api/routes/`
+
+
+
+总计：510 个 API 端点
+
+
+
+| # | 模块 | 方法 | 路径 |
+
+|--|------|------|------|
+
+| 1 | adapters | GET | /adapters |
+| 2 | adapters | POST | /adapters |
+| 3 | adapters | PUT | /adapters/{adapter_id} |
+| 4 | adapters | DELETE | /adapters/{adapter_id} |
+| 5 | adapters | GET | /device/{device_id}/protocols |
+| 6 | adapters | PUT | /device/{device_id}/protocols |
+| 7 | adapters | POST | /device/{device_id}/protocols/{protocol_type}/test |
+| 8 | admin | GET | /ai/config |
+| 9 | admin | GET | /api-keys |
+| 10 | admin | POST | /api-keys |
+| 11 | admin | GET | /api-keys/{key_id} |
+| 12 | admin | PUT | /api-keys/{key_id} |
+| 13 | admin | DELETE | /api-keys/{key_id} |
+| 14 | admin | POST | /api-keys/{key_id}/activate |
+| 15 | admin | POST | /api-keys/{key_id}/revoke |
+| 16 | admin | POST | /api-keys/{key_id}/rotate |
+| 17 | admin | GET | /backup |
+| 18 | admin | POST | /backup |
+| 19 | admin | GET | /backup/config |
+| 20 | admin | POST | /backup/{backup_id}/restore |
+| 21 | admin | GET | /backups |
+| 22 | admin | POST | /backups |
+| 23 | admin | POST | /backups/cleanup |
+| 24 | admin | GET | /backups/{backup_id} |
+| 25 | admin | DELETE | /backups/{backup_id} |
+| 26 | admin | POST | /backups/{backup_id}/restore |
+| 27 | admin | POST | /cache/clear |
+| 28 | admin | GET | /collection-logs |
+| 29 | admin | GET | /config |
+| 30 | admin | PUT | /config/{config_key} |
+| 31 | admin | GET | /departments |
+| 32 | admin | POST | /departments |
+| 33 | admin | GET | /departments/tree |
+| 34 | admin | GET | /departments/{dept_id} |
+| 35 | admin | PUT | /departments/{dept_id} |
+| 36 | admin | DELETE | /departments/{dept_id} |
+| 37 | admin | GET | /dict |
+| 38 | admin | POST | /dict |
+| 39 | admin | GET | /dict/all-items |
+| 40 | admin | POST | /dict/all-items |
+| 41 | admin | POST | /dict/init |
+| 42 | admin | GET | /dict/items/{item_id} |
+| 43 | admin | PUT | /dict/items/{item_id} |
+| 44 | admin | DELETE | /dict/items/{item_id} |
+| 45 | admin | GET | /dict/{type_code}/items |
+| 46 | admin | GET | /dict/{type_id} |
+| 47 | admin | PUT | /dict/{type_id} |
+| 48 | admin | DELETE | /dict/{type_id} |
+| 49 | admin | GET | /dicts |
+| 50 | admin | GET | /health |
+| 51 | admin | GET | /info |
+| 52 | admin | POST | /internal/sql |
+| 53 | admin | GET | /log-configs |
+| 54 | admin | PUT | /log-configs |
+| 55 | admin | GET | /log-stats |
+| 56 | admin | GET | /logs |
+| 57 | admin | POST | /logs/cleanup |
+| 58 | admin | GET | /logs/groups |
+| 59 | admin | GET | /logs/groups/{group_id}/items |
+| 60 | admin | GET | /menu |
+| 61 | admin | POST | /menu |
+| 62 | admin | GET | /menu/{menu_id} |
+| 63 | admin | PUT | /menu/{menu_id} |
+| 64 | admin | DELETE | /menu/{menu_id} |
+| 65 | admin | GET | /menus |
+| 66 | admin | GET | /metrics |
+| 67 | admin | GET | /permissions |
+| 68 | admin | GET | /restores |
+| 69 | admin | GET | /restores/{restore_id} |
+| 70 | admin | GET | /roles |
+| 71 | admin | POST | /roles |
+| 72 | admin | PUT | /roles/{role_id} |
+| 73 | admin | DELETE | /roles/{role_id} |
+| 74 | admin | GET | /system-logs |
+| 75 | admin | GET | /timezones |
+| 76 | admin | GET | /users |
+| 77 | admin | POST | /users |
+| 78 | admin | GET | /users/{user_id} |
+| 79 | admin | PUT | /users/{user_id} |
+| 80 | admin | DELETE | /users/{user_id} |
+| 81 | admin | POST | /users/{user_id}/reset-password |
+| 82 | ai | POST | /analyze |
+| 83 | ai | GET | /analyze/history |
+| 84 | ai | POST | /analyze/logs |
+| 85 | ai | POST | /chat |
+| 86 | ai | POST | /chat/_debug |
+| 87 | ai | GET | /conversations |
+| 88 | ai | GET | /conversations/{conversation_id} |
+| 89 | ai | DELETE | /conversations/{conversation_id} |
+| 90 | ai | POST | /conversations/{conversation_id}/messages |
+| 91 | ai | PUT | /conversations/{conversation_id}/pin |
+| 92 | ai | POST | /interpret/report |
+| 93 | ai | POST | /knowledge-qa |
+| 94 | ai | POST | /qa |
+| 95 | ai | GET | /stats |
+| 96 | ai | POST | /suggest |
+| 97 | ai | POST | /troubleshoot |
+| 98 | ai | POST | /troubleshoot/auto |
+| 99 | api_keys | GET | /{key_id} |
+| 100 | api_keys | PUT | /{key_id} |
+| 101 | api_keys | DELETE | /{key_id} |
+| 102 | api_keys | POST | /{key_id}/activate |
+| 103 | api_keys | POST | /{key_id}/revoke |
+| 104 | api_keys | POST | /{key_id}/rotate |
+| 105 | asset | GET | /business |
+| 106 | asset | GET | /business/{business_id} |
+| 107 | asset | GET | /business/{business_id}/devices |
+| 108 | asset | GET | /config |
+| 109 | asset | POST | /config/snapshot |
+| 110 | asset | POST | /config/sync/{device_id} |
+| 111 | asset | PUT | /config/{config_id} |
+| 112 | asset | DELETE | /config/{config_id} |
+| 113 | asset | GET | /device |
+| 114 | asset | POST | /device |
+| 115 | asset | POST | /device/batch |
+| 116 | asset | GET | /device/{device_id} |
+| 117 | asset | PUT | /device/{device_id} |
+| 118 | asset | DELETE | /device/{device_id} |
+| 119 | asset | POST | /device/{device_id}/decommission |
+| 120 | asset | POST | /device/{device_id}/maintain |
+| 121 | asset | GET | /group |
+| 122 | asset | GET | /group/{group_id}/devices |
+| 123 | asset | GET | /stats |
+| 124 | auth | GET | /captcha |
+| 125 | auth | POST | /change-password-first-login |
+| 126 | auth | POST | /ldap-login |
+| 127 | auth | GET | /ldap/status |
+| 128 | auth | POST | /login |
+| 129 | auth | POST | /login |
+| 130 | auth | POST | /logout |
+| 131 | auth | PUT | /password |
+| 132 | auth | POST | /refresh |
+| 133 | auth | POST | /register |
+| 134 | auth | GET | /userinfo |
+| 135 | automation | GET | /approvals/pending |
+| 136 | automation | GET | /approvals/{approval_id} |
+| 137 | automation | POST | /approvals/{approval_id}/approve |
+| 138 | automation | POST | /approvals/{approval_id}/cancel |
+| 139 | automation | POST | /approvals/{approval_id}/reject |
+| 140 | automation | POST | /evaluate |
+| 141 | automation | POST | /events |
+| 142 | automation | GET | /executions |
+| 143 | automation | GET | /executions/{execution_id} |
+| 144 | automation | POST | /executions/{execution_id}/approval |
+| 145 | automation | GET | /executions/{execution_id}/approval |
+| 146 | automation | GET | /executions/{execution_id}/logs |
+| 147 | automation | POST | /executions/{execution_id}/rollback |
+| 148 | automation | GET | /executions/{execution_id}/snapshot |
+| 149 | automation | GET | /rollback-history |
+| 150 | automation | GET | /scripts |
+| 151 | automation | POST | /scripts |
+| 152 | automation | GET | /scripts/{script_id} |
+| 153 | automation | PUT | /scripts/{script_id} |
+| 154 | automation | DELETE | /scripts/{script_id} |
+| 155 | automation | POST | /scripts/{script_id}/execute |
+| 156 | automation | GET | /scripts/{script_id}/versions |
+| 157 | automation | GET | /tasks |
+| 158 | automation | POST | /tasks |
+| 159 | automation | GET | /tasks/{task_id} |
+| 160 | automation | PUT | /tasks/{task_id} |
+| 161 | automation | DELETE | /tasks/{task_id} |
+| 162 | automation | POST | /tasks/{task_id}/run |
+| 163 | automation | GET | /trigger-rules |
+| 164 | automation | POST | /trigger-rules |
+| 165 | automation | GET | /trigger-rules/{rule_id} |
+| 166 | automation | PUT | /trigger-rules/{rule_id} |
+| 167 | automation | DELETE | /trigger-rules/{rule_id} |
+| 168 | automation | POST | /trigger-rules/{rule_id}/test |
+| 169 | backup | POST | /cleanup |
+| 170 | backup | GET | /configs |
+| 171 | backup | POST | /configs |
+| 172 | backup | GET | /configs/{config_id} |
+| 173 | backup | PUT | /configs/{config_id} |
+| 174 | backup | DELETE | /configs/{config_id} |
+| 175 | backup | POST | /execute |
+| 176 | backup | GET | /history |
+| 177 | backup | GET | /history/{backup_id} |
+| 178 | backup | DELETE | /history/{backup_id} |
+| 179 | backup | POST | /restore/{backup_id} |
+| 180 | backup | GET | /restores |
+| 181 | backup | GET | /restores/{restore_id} |
+| 182 | backup | GET | /status |
+| 183 | deploy | POST | /canary |
+| 184 | deploy | GET | /canary |
+| 185 | deploy | GET | /canary/{canary_id} |
+| 186 | deploy | DELETE | /canary/{canary_id} |
+| 187 | deploy | POST | /canary/{canary_id}/promote |
+| 188 | deploy | POST | /canary/{canary_id}/rollback |
+| 189 | deploy | PUT | /canary/{canary_id}/weight |
+| 190 | deploy | GET | /health |
+| 191 | deploy | GET | /history |
+| 192 | deploy | GET | /status |
+| 193 | deploy | GET | /versions |
+| 194 | deploy | POST | /versions |
+| 195 | deploy | GET | /versions/{name} |
+| 196 | deploy | DELETE | /versions/{name} |
+| 197 | device_api | GET | /adapters/list |
+| 198 | device_api | GET | /adapters/protocols |
+| 199 | device_api | POST | /collect |
+| 200 | device_api | POST | /collect/all |
+| 201 | device_api | POST | /config/reload |
+| 202 | device_api | GET | /config/stats |
+| 203 | device_api | GET | /stats |
+| 204 | device_api | GET | /{device_id}/metrics/configs |
+| 205 | device_api | PATCH | /{device_id}/metrics/{metric} |
+| 206 | device_api | GET | /{device_id}/metrics/{metric}/config |
+| 207 | device_api | GET | /{device_name} |
+| 208 | device_api | GET | /{device_name}/collection-config |
+| 209 | device_api | PATCH | /{device_name}/collection-config |
+| 210 | device_api | GET | /{device_name}/metrics |
+| 211 | device_api | GET | /{device_name}/metrics/history |
+| 212 | device_api | GET | /{device_name}/status |
+| 213 | device_import | POST | /simple |
+| 214 | device_import | GET | /template |
+| 215 | device_import | POST | /validate |
+| 216 | device_metrics | GET | /name/{device_name}/metrics |
+| 217 | device_metrics | PATCH | /name/{device_name}/metrics |
+| 218 | device_metrics | GET | /{device_id}/metrics |
+| 219 | device_metrics | PATCH | /{device_id}/metrics |
+| 220 | device_metrics | POST | /{device_id}/metrics/bulk |
+| 221 | device_metrics | GET | /{device_id}/metrics/categories |
+| 222 | discovery | POST | /arp/scan |
+| 223 | discovery | POST | /devices/import |
+| 224 | discovery | GET | /hosts |
+| 225 | discovery | POST | /import |
+| 226 | discovery | GET | /ip/hosts |
+| 227 | discovery | POST | /ip/scan |
+| 228 | discovery | POST | /ip/scan/sync |
+| 229 | discovery | GET | /ip/scan/{task_id}/results |
+| 230 | discovery | GET | /networks |
+| 231 | discovery | POST | /networks |
+| 232 | discovery | GET | /networks/{network_id} |
+| 233 | discovery | PUT | /networks/{network_id} |
+| 234 | discovery | DELETE | /networks/{network_id} |
+| 235 | discovery | POST | /scan |
+| 236 | discovery | POST | /scan-and-import |
+| 237 | discovery | POST | /scan-and-import-stream |
+| 238 | discovery | GET | /scan-and-import-stream/{scan_id} |
+| 239 | discovery | GET | /scan-history |
+| 240 | discovery | GET | /scan/{task_id}/status |
+| 241 | discovery | GET | /snmp/devices |
+| 242 | discovery | POST | /snmp/discover |
+| 243 | discovery | POST | /snmp/scan |
+| 244 | discovery | POST | /snmp/scan/sync |
+| 245 | discovery | GET | /snmp/scan/{task_id}/results |
+| 246 | discovery | POST | /tasks |
+| 247 | discovery | GET | /tasks |
+| 248 | inspection | GET | /reports/template |
+| 249 | inspection | GET | /reports/{task_id} |
+| 250 | inspection | GET | /reports/{task_id}/export |
+| 251 | inspection | GET | /results/{task_id} |
+| 252 | inspection | GET | /statistics/summary |
+| 253 | inspection | GET | /tasks |
+| 254 | inspection | POST | /tasks |
+| 255 | inspection | GET | /tasks/{task_id} |
+| 256 | inspection | PUT | /tasks/{task_id} |
+| 257 | inspection | DELETE | /tasks/{task_id} |
+| 258 | knowledge | GET | /category |
+| 259 | knowledge | POST | /category |
+| 260 | knowledge | PUT | /category/{category_id} |
+| 261 | knowledge | DELETE | /category/{category_id} |
+| 262 | knowledge | GET | /fault-case |
+| 263 | knowledge | POST | /fault-case |
+| 264 | knowledge | GET | /fault-case/{case_id} |
+| 265 | knowledge | PUT | /fault-case/{case_id} |
+| 266 | knowledge | DELETE | /fault-case/{case_id} |
+| 267 | knowledge | POST | /fault-case/{case_id}/recommend-similar |
+| 268 | knowledge | POST | /graph/build |
+| 269 | knowledge | GET | /graph/case/{case_id}/context |
+| 270 | knowledge | GET | /graph/case/{case_id}/similar |
+| 271 | knowledge | POST | /graph/nodes |
+| 272 | knowledge | GET | /graph/nodes |
+| 273 | knowledge | GET | /graph/path/{case_a_id}/{case_b_id} |
+| 274 | knowledge | POST | /graph/relationships |
+| 275 | knowledge | GET | /graph/stats |
+| 276 | knowledge | GET | /review-flows |
+| 277 | knowledge | POST | /review-flows |
+| 278 | knowledge | GET | /review-flows/{flow_id} |
+| 279 | knowledge | PUT | /review-flows/{flow_id} |
+| 280 | knowledge | DELETE | /review-flows/{flow_id} |
+| 281 | knowledge | GET | /reviews |
+| 282 | knowledge | GET | /reviews/pending |
+| 283 | knowledge | POST | /reviews/submit |
+| 284 | knowledge | GET | /reviews/{review_id} |
+| 285 | knowledge | POST | /reviews/{review_id}/approve |
+| 286 | knowledge | POST | /reviews/{review_id}/reject |
+| 287 | knowledge | POST | /reviews/{review_id}/request-revision |
+| 288 | knowledge | POST | /reviews/{review_id}/resubmit |
+| 289 | knowledge | POST | /reviews/{review_id}/withdraw |
+| 290 | knowledge | GET | /search |
+| 291 | knowledge | GET | /sop |
+| 292 | knowledge | POST | /sop |
+| 293 | knowledge | GET | /sop/{doc_id} |
+| 294 | knowledge | PUT | /sop/{doc_id} |
+| 295 | knowledge | DELETE | /sop/{doc_id} |
+| 296 | knowledge | POST | /sop/{doc_id}/approve |
+| 297 | knowledge | POST | /sop/{doc_id}/review |
+| 298 | knowledge | GET | /stats |
+| 299 | knowledge | GET | /tag |
+| 300 | knowledge | POST | /tag |
+| 301 | log_service | GET | /access-configs |
+| 302 | log_service | POST | /access-configs |
+| 303 | log_service | DELETE | /access-configs/{config_id} |
+| 304 | log_service | POST | /cleanup |
+| 305 | log_service | GET | /config |
+| 306 | log_service | PUT | /config |
+| 307 | log_service | GET | /config/init |
+| 308 | log_service | GET | /groups |
+| 309 | log_service | GET | /groups/{group_id}/items |
+| 310 | log_service | GET | /indexes |
+| 311 | log_service | POST | /indexes |
+| 312 | log_service | DELETE | /indexes/{index_id} |
+| 313 | log_service | GET | /operation |
+| 314 | log_service | GET | /stats |
+| 315 | monitoring | GET | /alerts |
+| 316 | monitoring | POST | /alerts |
+| 317 | monitoring | GET | /alerts/statistics |
+| 318 | monitoring | GET | /alerts/stats |
+| 319 | monitoring | GET | /alerts/{alert_id} |
+| 320 | monitoring | DELETE | /alerts/{alert_id} |
+| 321 | monitoring | PUT | /alerts/{alert_id}/acknowledge |
+| 322 | monitoring | GET | /alerts/{alert_id}/audit-logs |
+| 323 | monitoring | POST | /alerts/{alert_id}/audit-logs |
+| 324 | monitoring | PUT | /alerts/{alert_id}/resolve |
+| 325 | monitoring | POST | /alerts/{alert_id}/restore |
+| 326 | monitoring | POST | /alerts/{alert_id}/suppress |
+| 327 | monitoring | POST | /alerts/{alert_id}/transfer |
+| 328 | monitoring | GET | /audit-logs |
+| 329 | monitoring | GET | /audit-logs |
+| 330 | monitoring | GET | /dashboard/columns |
+| 331 | monitoring | GET | /dashboard/layout |
+| 332 | monitoring | PUT | /dashboard/layout |
+| 333 | monitoring | POST | /dashboard/layout/snapshot |
+| 334 | monitoring | GET | /dashboard/layout/snapshot/{layout_id}/{version} |
+| 335 | monitoring | DELETE | /dashboard/layout/{layout_id} |
+| 336 | monitoring | GET | /dashboard/layouts |
+| 337 | monitoring | GET | /dashboard/stats |
+| 338 | monitoring | GET | /dashboards |
+| 339 | monitoring | GET | /dashboards/{dashboard_id} |
+| 340 | monitoring | POST | /maintenance-windows |
+| 341 | monitoring | GET | /maintenance-windows |
+| 342 | monitoring | GET | /maintenance-windows/{window_id} |
+| 343 | monitoring | PUT | /maintenance-windows/{window_id} |
+| 344 | monitoring | DELETE | /maintenance-windows/{window_id} |
+| 345 | monitoring | GET | /metric-configs |
+| 346 | monitoring | POST | /metric-configs |
+| 347 | monitoring | GET | /metric-configs/device/{device_id} |
+| 348 | monitoring | GET | /metric-configs/{config_id} |
+| 349 | monitoring | PATCH | /metric-configs/{config_id} |
+| 350 | monitoring | DELETE | /metric-configs/{config_id} |
+| 351 | monitoring | PATCH | /metric-configs/{config_id}/toggle |
+| 352 | monitoring | GET | /metrics |
+| 353 | monitoring | GET | /metrics/available |
+| 354 | monitoring | POST | /metrics/collect |
+| 355 | monitoring | GET | /metrics/history |
+| 356 | monitoring | GET | /metrics/hosts |
+| 357 | monitoring | POST | /metrics/query |
+| 358 | monitoring | GET | /metrics/top/{metric_type} |
+| 359 | monitoring | GET | /rules |
+| 360 | monitoring | GET | /rules/{rule_id} |
+| 361 | monitoring | GET | /trigger-events |
+| 362 | monitoring | GET | /trigger-rules |
+| 363 | monitoring | POST | /trigger-rules |
+| 364 | monitoring | GET | /trigger-rules/{rule_id} |
+| 365 | monitoring | PUT | /trigger-rules/{rule_id} |
+| 366 | monitoring | DELETE | /trigger-rules/{rule_id} |
+| 367 | monitoring | POST | /trigger-rules/{rule_id}/test |
+| 368 | monitoring | POST | /trigger/evaluate |
+| 369 | notification | POST | /alert |
+| 370 | notification | GET | /channels |
+| 371 | notification | POST | /channels |
+| 372 | notification | GET | /channels/{channel_id} |
+| 373 | notification | PUT | /channels/{channel_id} |
+| 374 | notification | DELETE | /channels/{channel_id} |
+| 375 | notification | GET | /history |
+| 376 | notification | PUT | /history/read-all |
+| 377 | notification | PUT | /history/{log_id}/read |
+| 378 | notification | GET | /messages |
+| 379 | notification | POST | /messages |
+| 380 | notification | PUT | /messages/read-all |
+| 381 | notification | GET | /messages/unread-count |
+| 382 | notification | GET | /messages/{message_id} |
+| 383 | notification | DELETE | /messages/{message_id} |
+| 384 | notification | PUT | /messages/{message_id}/read |
+| 385 | notification | POST | /send |
+| 386 | notification | GET | /target-rules |
+| 387 | notification | POST | /target-rules |
+| 388 | notification | GET | /target-rules/match |
+| 389 | notification | GET | /target-rules/{rule_id} |
+| 390 | notification | PUT | /target-rules/{rule_id} |
+| 391 | notification | DELETE | /target-rules/{rule_id} |
+| 392 | notification | POST | /target-rules/{rule_id}/toggle |
+| 393 | notification | GET | /targets |
+| 394 | notification | POST | /targets |
+| 395 | notification | GET | /targets/{target_id} |
+| 396 | notification | DELETE | /targets/{target_id} |
+| 397 | notification | POST | /test/{channel_id} |
+| 398 | notification | GET | /types |
+| 399 | report | GET | / |
+| 400 | report | GET | /files/{filename} |
+| 401 | report | POST | /generate |
+| 402 | report | POST | /generate/async |
+| 403 | report | GET | /list |
+| 404 | report | POST | /preview |
+| 405 | report | GET | /schedule |
+| 406 | report | POST | /schedule |
+| 407 | report | PUT | /schedule/{schedule_id} |
+| 408 | report | DELETE | /schedule/{schedule_id} |
+| 409 | report | POST | /schedule/{schedule_id}/toggle |
+| 410 | report | GET | /stats |
+| 411 | report | GET | /template |
+| 412 | report | POST | /template |
+| 413 | report | GET | /template/{template_id} |
+| 414 | report | PUT | /template/{template_id} |
+| 415 | report | DELETE | /template/{template_id} |
+| 416 | report | GET | /templates |
+| 417 | report | GET | /{report_id} |
+| 418 | report | DELETE | /{report_id} |
+| 419 | report | GET | /{report_id}/download |
+| 420 | sharding | GET | /routes/{logical_table} |
+| 421 | sharding | POST | /routes/{logical_table}/create |
+| 422 | sharding | GET | /stats |
+| 423 | system | GET | /dict |
+| 424 | system | POST | /dict |
+| 425 | system | GET | /dict/all |
+| 426 | system | GET | /dict/items |
+| 427 | system | POST | /dict/items |
+| 428 | system | GET | /dict/items/by-code/{type_code} |
+| 429 | system | GET | /dict/items/{item_id} |
+| 430 | system | PUT | /dict/items/{item_id} |
+| 431 | system | DELETE | /dict/items/{item_id} |
+| 432 | system | GET | /dict/{dict_id} |
+| 433 | system | PUT | /dict/{dict_id} |
+| 434 | system | DELETE | /dict/{dict_id} |
+| 435 | system | GET | /log-configs |
+| 436 | system | PUT | /log-configs |
+| 437 | system | GET | /log-stats |
+| 438 | system | GET | /logs |
+| 439 | system | POST | /logs/cleanup |
+| 440 | system | GET | /logs/groups/{group_id}/items |
+| 441 | system | GET | /menu |
+| 442 | system | POST | /menu |
+| 443 | system | GET | /menu/{menu_id} |
+| 444 | system | PUT | /menu/{menu_id} |
+| 445 | system | DELETE | /menu/{menu_id} |
+| 446 | system | GET | /menus |
+| 447 | system | GET | /settings |
+| 448 | system | GET | /settings/{key} |
+| 449 | system | PUT | /settings/{key} |
+| 450 | tenant | GET | /{tenant_id} |
+| 451 | tenant | PUT | /{tenant_id} |
+| 452 | tenant | DELETE | /{tenant_id} |
+| 453 | tenant | GET | /{tenant_id}/quota |
+| 454 | tenant | GET | /{tenant_id}/users |
+| 455 | tenant | POST | /{tenant_id}/users |
+| 456 | tenant | DELETE | /{tenant_id}/users/{user_id} |
+| 457 | vendor_credentials | GET | /probe/banner |
+| 458 | vendor_credentials | GET | /probe/mac |
+| 459 | vendor_credentials | GET | /probe/oid |
+| 460 | vendor_credentials | GET | /vendors |
+| 461 | vendor_credentials | POST | /vendors |
+| 462 | vendor_credentials | GET | /vendors/categories |
+| 463 | vendor_credentials | GET | /vendors/common-creds |
+| 464 | vendor_credentials | GET | /vendors/{vendor_name} |
+| 465 | vendor_credentials | PUT | /vendors/{vendor_name} |
+| 466 | vendor_credentials | DELETE | /vendors/{vendor_name} |
+| 467 | vendor_credentials | POST | /versions |
+| 468 | vendor_credentials | GET | /versions |
+| 469 | vendor_credentials | GET | /versions/{version} |
+| 470 | vendor_credentials | POST | /versions/{version}/rollback |
+| 471 | watermark | POST | /generate |
+| 472 | watermark | GET | /list |
+| 473 | watermark | POST | /log |
+| 474 | watermark | GET | /track/{watermark_id} |
+| 475 | watermark | POST | /verify |
+| 476 | workorder | GET | / |
+| 477 | workorder | POST | / |
+| 478 | workorder | POST | /analyze/remediation |
+| 479 | workorder | POST | /analyze/root-cause |
+| 480 | workorder | GET | /categories |
+| 481 | workorder | POST | /convert-to-workorder |
+| 482 | workorder | GET | /draft/list |
+| 483 | workorder | POST | /draft/save |
+| 484 | workorder | GET | /draft/{draft_id} |
+| 485 | workorder | DELETE | /draft/{draft_id} |
+| 486 | workorder | GET | /export |
+| 487 | workorder | GET | /export |
+| 488 | workorder | GET | /export/{workorder_id} |
+| 489 | workorder | GET | /priorities |
+| 490 | workorder | GET | /sla/summary |
+| 491 | workorder | GET | /sla/{workorder_id} |
+| 492 | workorder | POST | /sla/{workorder_id}/start |
+| 493 | workorder | GET | /stats/summary |
+| 494 | workorder | GET | /stats/trend |
+| 495 | workorder | GET | /{workorder_id} |
+| 496 | workorder | PUT | /{workorder_id} |
+| 497 | workorder | DELETE | /{workorder_id} |
+| 498 | workorder | GET | /{workorder_id}/approval-flow |
+| 499 | workorder | POST | /{workorder_id}/approve |
+| 500 | workorder | POST | /{workorder_id}/assign |
+| 501 | workorder | POST | /{workorder_id}/cancel |
+| 502 | workorder | POST | /{workorder_id}/close |
+| 503 | workorder | PUT | /{workorder_id}/draft |
+| 504 | workorder | GET | /{workorder_id}/flows |
+| 505 | workorder | POST | /{workorder_id}/flows |
+| 506 | workorder | POST | /{workorder_id}/resolve |
+| 507 | workorder | GET | /{workorder_id}/sla |
+| 508 | workorder | GET | /{workorder_id}/sla/history |
+| 509 | workorder | POST | /{workorder_id}/sla/refresh |
+| 510 | workorder | POST | /{workorder_id}/sla/timer/start |

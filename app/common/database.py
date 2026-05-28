@@ -18,24 +18,27 @@ def get_db_session() -> Generator[Session, None, None]:
     """
     获取数据库 session 的标准方式
 
+    _legacy_session() 是一个 @contextmanager 装饰的生成器函数，
+    调用 db_session() 返回一个生成器，需用 next() 取出 session。
+
     用法:
         with get_db_session() as db:
             db.query(...)
             db.commit()
-
-    或者在 FastAPI 依赖中:
-        def get_db():
-            with get_db_session() as db:
-                yield db
     """
-    db = _legacy_session
+    gen = _legacy_session()
     try:
-        yield db
+        session = next(gen)  # 取出 @contextmanager yield 的 session
+        yield session
     except Exception:
-        db.rollback()
+        session.rollback()
         raise
     finally:
-        pass  # legacy session is managed by lifespan, don't close here
+        try:
+            next(gen)  # 驱动生成器结束（触发 StopIteration）
+        except StopIteration:
+            pass
+        session.close()
 
 
 def commit_with_audit(db: Session, audit_action: str, resource: str, resource_id: str = None):

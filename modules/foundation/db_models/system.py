@@ -230,6 +230,33 @@ class LogItem(Base):
     )
 
 
+class LogAccessConfig(Base):
+    """
+    日志接入配置
+    存储日志后端（Elasticsearch/Loki/Splunk）的接入凭证和索引配置
+    """
+    __tablename__ = "log_access_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(128), nullable=False, unique=True, index=True)  # 配置名称
+    backend = Column(String(32), nullable=False)  # elasticsearch / loki / splunk
+    host = Column(String(256), nullable=False)  # 后端地址
+    port = Column(Integer, default=9200)  # 端口
+    username = Column(String(128))  # 用户名
+    password = Column(String(256))  # 密码（加密存储）
+    index_pattern = Column(String(512))  # 索引模式，如 nginx-access-*
+    log_type = Column(String(64))  # 日志类型: nginx / system / application / custom
+    enabled = Column(Integer, default=1)  # 1=启用, 0=禁用
+    retention_days = Column(Integer, default=7)  # 保留天数
+    description = Column(String(512))  # 描述
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index('idx_backend_enabled', 'backend', 'enabled'),
+    )
+
+
 class SystemUser(Base):
     """
     系统用户模型

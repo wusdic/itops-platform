@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
@@ -436,3 +436,411 @@ class LogAggregationService:
                 "total_groups": total_groups,
             }
         return stats
+
+
+# ============== API Routes ==============
+
+from app.common.response import success_response, error_response, paginated_response
+from app.common.error_codes import ErrorCode
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+
+class LogConfigUpdateItem(BaseModel):
+    """日志配置项更新"""
+    category: str
+    sub_category: str
+    enabled: Optional[bool] = None
+    min_level: Optional[str] = None
+    retention_days: Optional[int] = None
+    aggregation_enabled: Optional[bool] = None
+
+
+class LogConfigUpdateRequest(BaseModel):
+    """批量更新日志配置请求"""
+    configs: List[LogConfigUpdateItem]
+
+
+class LogIndexConfig(BaseModel):
+    """日志接入配置"""
+    id: Optional[int] = None
+    name: str
+    index_pattern: str  # like: nginx-access-*
+    log_type: str  # nginx, system, application, custom
+    enabled: bool = True
+    retention_days: int = 7
+    description: Optional[str] = None
+
+
+class LogIndexCreateRequest(BaseModel):
+    """创建日志接入配置请求"""
+    name: str = Field(..., description="配置名称")
+    index_pattern: str = Field(..., description="索引模式，如 nginx-access-*")
+    log_type: str = Field(..., description="日志类型: nginx, system, application, custom")
+    enabled: bool = Field(True, description="是否启用")
+    retention_days: int = Field(7, description="保留天数")
+    description: Optional[str] = Field(None, description="描述")
+
+
+class LogAccessConfig(BaseModel):
+    """日志接入凭证配置"""
+    id: Optional[int] = None
+    name: str
+    backend: str  # elasticsearch, loki, splunk
+    host: str
+    port: int = 9200
+    username: Optional[str] = None
+    password: Optional[str] = None
+    index_pattern: Optional[str] = None
+    enabled: bool = True
+
+
+class LogAccessConfigCreateRequest(BaseModel):
+    """创建日志接入凭证配置请求"""
+    name: str = Field(..., description="配置名称")
+    backend: str = Field(..., description="后端类型: elasticsearch, loki, splunk")
+    host: str = Field(..., description="主机地址")
+    port: int = Field(9200, description="端口")
+    username: Optional[str] = Field(None, description="用户名")
+    password: Optional[str] = Field(None, description="密码")
+    index_pattern: Optional[str] = Field(None, description="索引模式")
+    enabled: bool = Field(True, description="是否启用")
+
+
+# ---- 日志配置管理 ----
+
+@router.get("/config", summary="获取日志配置列表")
+async def get_log_configs(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取所有日志配置项"""
+    try:
+        configs = LogConfigService.get_all(db)
+        return success_response(data=configs, message="获取日志配置成功")
+    except Exception as e:
+        logger.error(f"获取日志配置失败: {e}")
+        return error_response(code=ErrorCode.LOG_QUERY_FAILED, message=f"获取日志配置失败: {str(e)}")
+
+
+@router.put("/config", summary="批量更新日志配置")
+async def update_log_configs(
+    req: LogConfigUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """批量更新日志配置项"""
+    try:
+        configs = LogConfigService.update_all(db, req.configs)
+        return success_response(data={"updated": configs}, message="更新日志配置成功")
+    except Exception as e:
+        logger.error(f"更新日志配置失败: {e}")
+        return error_response(code=ErrorCode.LOG_CONFIG_UPDATE_FAILED, message=f"更新日志配置失败: {str(e)}")
+
+
+@router.get("/config/init", summary="初始化日志配置")
+async def init_log_config(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """初始化默认日志配置（仅在数据库为空时插入）"""
+    try:
+        LogConfigService.init_defaults(db)
+        return success_response(message="日志配置初始化成功")
+    except Exception as e:
+        logger.error(f"初始化日志配置失败: {e}")
+        return error_response(code=ErrorCode.LOG_CONFIG_UPDATE_FAILED, message=f"初始化日志配置失败: {str(e)}")
+
+
+# ---- 日志接入配置（索引管理） ----
+
+@router.get("/indexes", summary="获取日志接入配置列表")
+async def get_log_indexes(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取日志接入配置列表（索引模式配置）"""
+    from modules.foundation.db_models.system import LogAccessConfig
+    try:
+        configs = db.query(LogAccessConfig).all()
+        items = [{
+            "id": c.id,
+            "name": c.name,
+            "backend": c.backend,
+            "host": c.host,
+            "port": c.port,
+            "username": c.username,
+            "index_pattern": c.index_pattern,
+            "enabled": bool(c.enabled),
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        } for c in configs]
+        return success_response(data={"items": items, "total": len(items)}, message="获取日志接入配置成功")
+    except Exception as e:
+        logger.error(f"获取日志接入配置失败: {e}")
+        return error_response(code=ErrorCode.LOG_QUERY_FAILED, message=f"获取日志接入配置失败: {str(e)}")
+
+
+@router.post("/indexes", summary="创建日志接入配置")
+async def create_log_index(
+    req: LogIndexCreateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """创建日志接入配置（索引模式）"""
+    from modules.foundation.db_models.system import LogAccessConfig
+    try:
+        config = LogAccessConfig(
+            name=req.name,
+            index_pattern=req.index_pattern,
+            log_type=req.log_type,
+            enabled=1 if req.enabled else 0,
+            retention_days=req.retention_days,
+            description=req.description,
+        )
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+        return success_response(data={
+            "id": config.id,
+            "name": config.name,
+            "index_pattern": config.index_pattern,
+            "log_type": config.log_type,
+            "enabled": bool(config.enabled),
+        }, message="创建日志接入配置成功", code="OK")
+    except Exception as e:
+        logger.error(f"创建日志接入配置失败: {e}")
+        db.rollback()
+        return error_response(code=ErrorCode.LOG_INDEX_CREATE_FAILED, message=f"创建日志接入配置失败: {str(e)}")
+
+
+@router.delete("/indexes/{index_id}", summary="删除日志接入配置")
+async def delete_log_index(
+    index_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除指定的日志接入配置"""
+    from modules.foundation.db_models.system import LogAccessConfig
+    try:
+        config = db.query(LogAccessConfig).filter(LogAccessConfig.id == index_id).first()
+        if not config:
+            return error_response(code=ErrorCode.LOG_INDEX_NOT_FOUND, message="日志接入配置不存在")
+        db.delete(config)
+        db.commit()
+        return success_response(message="删除日志接入配置成功")
+    except Exception as e:
+        logger.error(f"删除日志接入配置失败: {e}")
+        db.rollback()
+        return error_response(code=ErrorCode.LOG_INDEX_DELETE_FAILED, message=f"删除日志接入配置失败: {str(e)}")
+
+
+# ---- 日志接入凭证管理 ----
+
+@router.get("/access-configs", summary="获取日志接入凭证列表")
+async def get_access_configs(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取日志后端接入凭证配置列表"""
+    from modules.foundation.db_models.system import LogAccessConfig
+    try:
+        configs = db.query(LogAccessConfig).all()
+        items = [{
+            "id": c.id,
+            "name": c.name,
+            "backend": c.backend,
+            "host": c.host,
+            "port": c.port,
+            "username": c.username,
+            "index_pattern": c.index_pattern,
+            "enabled": bool(c.enabled),
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        } for c in configs]
+        return success_response(data={"items": items, "total": len(items)}, message="获取接入凭证成功")
+    except Exception as e:
+        logger.error(f"获取接入凭证失败: {e}")
+        return error_response(code=ErrorCode.LOG_QUERY_FAILED, message=f"获取接入凭证失败: {str(e)}")
+
+
+@router.post("/access-configs", summary="创建日志接入凭证")
+async def create_access_config(
+    req: LogAccessConfigCreateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """创建日志接入凭证配置"""
+    from modules.foundation.db_models.system import LogAccessConfig
+    try:
+        config = LogAccessConfig(
+            name=req.name,
+            backend=req.backend,
+            host=req.host,
+            port=req.port,
+            username=req.username,
+            password=req.password,
+            index_pattern=req.index_pattern,
+            enabled=1 if req.enabled else 0,
+        )
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+        return success_response(data={
+            "id": config.id,
+            "name": config.name,
+            "backend": config.backend,
+            "host": config.host,
+            "port": config.port,
+            "enabled": bool(config.enabled),
+        }, message="创建接入凭证成功", code="OK")
+    except Exception as e:
+        logger.error(f"创建接入凭证失败: {e}")
+        db.rollback()
+        return error_response(code=ErrorCode.LOG_ACCESS_CONFIG_UPDATE_FAILED, message=f"创建接入凭证失败: {str(e)}")
+
+
+@router.delete("/access-configs/{config_id}", summary="删除日志接入凭证")
+async def delete_access_config(
+    config_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除指定的日志接入凭证"""
+    from modules.foundation.db_models.system import LogAccessConfig
+    try:
+        config = db.query(LogAccessConfig).filter(LogAccessConfig.id == config_id).first()
+        if not config:
+            return error_response(code=ErrorCode.LOG_ACCESS_CONFIG_NOT_FOUND, message="接入凭证不存在")
+        db.delete(config)
+        db.commit()
+        return success_response(message="删除接入凭证成功")
+    except Exception as e:
+        logger.error(f"删除接入凭证失败: {e}")
+        db.rollback()
+        return error_response(code=ErrorCode.LOG_ACCESS_CONFIG_UPDATE_FAILED, message=f"删除接入凭证失败: {str(e)}")
+
+
+# ---- 日志查询 ----
+
+@router.get("/groups", summary="获取日志归集组列表")
+async def get_log_groups(
+    category: str = Query(..., description="日志分类: operation/system/collection/audit"),
+    keyword: Optional[str] = Query(None, description="关键词过滤"),
+    start_date: Optional[datetime] = Query(None, description="开始时间"),
+    end_date: Optional[datetime] = Query(None, description="结束时间"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取指定分类的日志归集组列表"""
+    try:
+        result = LogAggregationService.get_groups(
+            db, category, keyword, start_date, end_date, page, page_size
+        )
+        return success_response(data=result, message="获取日志归集组成功")
+    except Exception as e:
+        logger.error(f"获取日志归集组失败: {e}")
+        return error_response(code=ErrorCode.LOG_QUERY_FAILED, message=f"获取日志归集组失败: {str(e)}")
+
+
+@router.get("/groups/{group_id}/items", summary="获取日志归集组明细")
+async def get_group_items(
+    group_id: int,
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(50, ge=1, le=200, description="每页数量"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取指定归集组内的日志明细"""
+    try:
+        result = LogAggregationService.get_group_items(db, group_id, page, page_size)
+        return success_response(data=result, message="获取日志明细成功")
+    except Exception as e:
+        logger.error(f"获取日志明细失败: {e}")
+        return error_response(code=ErrorCode.LOG_QUERY_FAILED, message=f"获取日志明细失败: {str(e)}")
+
+
+@router.get("/stats", summary="获取日志统计")
+async def get_log_stats(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取各分类日志实时统计"""
+    try:
+        stats = LogAggregationService.get_stats(db)
+        return success_response(data=stats, message="获取日志统计成功")
+    except Exception as e:
+        logger.error(f"获取日志统计失败: {e}")
+        return error_response(code=ErrorCode.LOG_QUERY_FAILED, message=f"获取日志统计失败: {str(e)}")
+
+
+@router.post("/cleanup", summary="清理过期日志")
+async def cleanup_logs(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """触发过期日志清理"""
+    try:
+        LogAggregationService.cleanup_old_logs(db)
+        return success_response(message="日志清理完成")
+    except Exception as e:
+        logger.error(f"日志清理失败: {e}")
+        return error_response(code=ErrorCode.LOG_QUERY_FAILED, message=f"日志清理失败: {str(e)}")
+
+
+# ---- 操作日志查询（兼容旧接口） ----
+
+@router.get("/operation", summary="查询操作日志")
+async def query_operation_logs(
+    username: Optional[str] = Query(None, description="用户名"),
+    action: Optional[str] = Query(None, description="操作类型"),
+    resource: Optional[str] = Query(None, description="资源类型"),
+    start_time: Optional[datetime] = Query(None, description="开始时间"),
+    end_time: Optional[datetime] = Query(None, description="结束时间"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """查询操作日志（从 operation_logs 表）"""
+    from modules.foundation.db_models.system import OperationLog
+    try:
+        query = db.query(OperationLog)
+        if username:
+            query = query.filter(OperationLog.username.ilike(f"%{username}%"))
+        if action:
+            query = query.filter(OperationLog.action == action)
+        if resource:
+            query = query.filter(OperationLog.resource == resource)
+        if start_time:
+            query = query.filter(OperationLog.timestamp >= start_time)
+        if end_time:
+            query = query.filter(OperationLog.timestamp <= end_time)
+
+        total = query.count()
+        logs = query.order_by(OperationLog.timestamp.desc()) \
+            .offset((page - 1) * page_size).limit(page_size).all()
+
+        items = [{
+            "id": log.id,
+            "username": log.username,
+            "action": log.action,
+            "resource": log.resource,
+            "resource_id": log.resource_id,
+            "method": log.method,
+            "path": log.path,
+            "ip_address": log.ip_address,
+            "response_status": log.response_status,
+            "duration_ms": log.duration_ms,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+        } for log in logs]
+
+        return success_response(data={
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }, message="查询操作日志成功")
+    except Exception as e:
+        logger.error(f"查询操作日志失败: {e}")
+        return error_response(code=ErrorCode.LOG_QUERY_FAILED, message=f"查询操作日志失败: {str(e)}")
