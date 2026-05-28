@@ -12,7 +12,7 @@ from .inspection import router as inspection_router
 from .asset import router as asset_router
 from .ai import router as ai_router
 from .admin import router as admin_router
-from .admin import system_router
+from .system import router as system_router
 from .notification import router as notification_router
 from .device_api import router as device_router
 from .device_metrics import router as device_metrics_router
