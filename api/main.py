@@ -33,6 +33,7 @@ from api.routes import (
     api_keys_router,
     log_service_router,
     report_singular_alias_router,
+    backup_router,
 )
 from api.dependencies import get_settings
 from api.middleware.logging import LoggingMiddleware
@@ -252,6 +253,12 @@ def create_app() -> FastAPI:
         report_singular_alias_router,
         prefix="",
         tags=["报表别名"],
+    )
+
+    app.include_router(
+        backup_router,
+        prefix="/api/v1/backup",
+        tags=["备份恢复"],
     )
 
     # 前端静态文件服务 - 使用中间件方式避免路由冲突
