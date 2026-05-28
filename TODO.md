@@ -1,26 +1,33 @@
 # TODO - ITOps Platform（IT运维智能平台）
 
+> ⚠️ **本文档已迁移**：
+> - 架构设计 → `DESIGN.md`
+> - 实现状态 → `IMPLEMENTATION_STATUS.md`
+> - 技术规范 → `SPEC.md`
+> - 变更历史 → `CHANGES.md`
+>
+> 本文档保留作为遗留问题跟踪，不再作为主文档。
+
 ## 核心目的
 构建智能化、一体化的IT运维管理平台，实现设备自动发现、实时监控告警、工单自动流转、AI辅助决策的完整闭环。
 
 ## 项目信息
 - 仓库：https://github.com/wusdic/itops_platform
-- 当前实现度：~95%（175/184需求）
-- P0缺口：0项（已全部完成 ✅）
-- P1缺口：部分（见下方遗留问题）
+- 当前实现度：~87%（184 项需求中约 160 项已实现）
+- 详细状态 → 见 `IMPLEMENTATION_STATUS.md`
 
 ## 整体架构
 ```
-前端( Vue/RuoYi ) → API层( FastAPI ) → 业务层( modules/business/ )
-                                      → 采集层( modules/collection/ )
-                                      → 自动化层( modules/automation/ )
-                                      → 存储层( MySQL + TDengine + Redis + MinIO )
-                                      → AI层( Qwen3.5-9B via llama-cpp )
+前端( Vue 3 + Element Plus ) → API层( FastAPI ) → 业务层( modules/business/ )
+                                                      → 采集层( modules/collection/ )
+                                                      → 基础层( modules/foundation/ )
+                                                      → 存储层( MySQL + Redis + MinIO )
+                                                      → AI层( Qwen3.5-0.8B via llama-cpp )
 ```
 
 ---
 
-## 任务清单
+## 遗留问题（仅 P0/P1）
 
 ### Phase 0: 项目治理（已完成 ✅）
 - [x] 0.1 测试基础设施修复（conftest.py + 模型导出）

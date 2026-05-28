@@ -1,3 +1,59 @@
+## 2026-05-28 第六次更新 — 文档体系重构
+
+### 修改概述
+
+全面重构项目文档体系，建立清晰的文档层次，删除 36 个过时文档。
+
+### 新增文档
+
+| 文档 | 说明 |
+|------|------|
+| `DESIGN.md` | 架构设计主文档，替代 20+ 个分散文档 |
+| `IMPLEMENTATION_STATUS.md` | 实现状态主文档，精确到每个 API/页面 |
+| `docs/DOCS_STRUCTURE.md` | 文档更新机制规范 |
+
+### 更新文档
+
+| 文档 | 变更 |
+|------|------|
+| `README.md` | 精简为 5 分钟快速入门，保留核心信息 |
+| `SPEC.md` | 保持不变（已是最新） |
+| `TODO.md` | 标记为遗留问题跟踪，不再作为主文档 |
+| `REQUIREMENTS_MASTER.md` | 标记为历史参考 |
+
+### 删除文档（36 个）
+
+```
+# 根目录（18 个）
+ARCHITECTURE_REPORT.md, BACKEND_FIX_REPORT.md, GAP_ANALYSIS*.md (3个)
+QA_REPORT.md, DEVELOPMENT_PLAN.md, FRONTEND_PLAN.md, PARALLEL_PLAN.md
+VERIFICATION_REPORT.md, DEPLOYMENT_ISSUES.md, CONFIG_GUIDE.md
+EXTRACTED_EXPERIENCE.md, P2_REFACTOR_DESIGN.md, PLAN_DEVICE_FINGERPRINT.md
+ITOPS_API_AUDIT.md, API_INVENTORY.md, LOG.md
+整体优化要求.docx, verification_log_*.txt
+
+# docs/ 目录（14 个）
+OVERALL_OPTIMIZATION_AUDIT_2026-05-26.md
+OVERALL_OPTIMIZATION_PLAN_2026-05-26.md
+REFACTORING_DESIGN.md, FRONTEND_REFACTORING_DESIGN.md
+INTEGRATION_ANALYSIS.md, LOGGING_SYSTEM_DESIGN.md
+REFACTORING_AUTOMATION.md, TEST_COVERAGE_ANALYSIS.md
+TEST_REPORT.md, TESTING_STANDARDS.md
+API_CONTRACT_GAP_REPORT_2026-05-27.md, TASK_PLAN.md
+ARCHITECTURE.md, ARCHITECTURE_REPORT.md
+
+# reports/ 目录（4 个）
+API_AUDIT_REPORT.md, API_COVERAGE_REPORT.md
+monitoring_api_verification_20260528.md
+(整个 reports/ 目录已删除)
+```
+
+### Git 提交
+
+- commit d229440: `docs: 重构文档体系 - 建立清晰的 DESIGN/IMPLEMENTATION_STATUS/SPEC 结构`
+
+---
+
 ## 2026-05-26 第五次更新 — 新增6个API接口 + Alert import路径修复
 
 ### 修改概述
