@@ -20,7 +20,8 @@ const deploy = {
     delete: (id) => request.delete(`/deploy/canary/${id}`),
     promote: (id) => request.post(`/deploy/canary/${id}/promote`),
     rollback: (id) => request.post(`/deploy/canary/${id}/rollback`),
-    updateWeight: (id, data) => request.put(`/deploy/canary/${id}/weight`, data)
+    updateWeight: (id, data) => request.put(`/deploy/canary/${id}/weight`, data),
+    terminate: (id) => request.post(`/deploy/canary/${id}/terminate`)
   },
 
   // ========== 部署历史 ==========
@@ -30,7 +31,8 @@ const deploy = {
 
   // ========== 健康检查 ==========
   health: {
-    getStatus: (params) => request.get('/deploy/health', { params })
+    getStatus: (params) => request.get('/deploy/health', { params }),
+    restart: (id) => request.post(`/deploy/health/${id}/restart`)
   }
 }
 

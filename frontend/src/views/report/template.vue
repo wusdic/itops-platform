@@ -146,6 +146,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Document, Edit, Delete } from '@element-plus/icons-vue'
+import { report } from '@/api'
 
 const message = ElMessage
 const loading = ref(false)
@@ -218,13 +219,6 @@ function formatType(type) {
   return labels[type] || type
 }
 
-function getHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${localStorage.getItem('token')}`
-  }
-}
-
 function resetForm() {
   formData.name = ''
   formData.type = null
@@ -237,12 +231,7 @@ function resetForm() {
 async function fetchTemplates() {
   loading.value = true
   try {
-    const response = await fetch('/api/v1/reports/template', {
-      method: 'GET',
-      headers: getHeaders()
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
+    const data = await report.getTemplates()
     templateList.value = data.items || data || []
   } catch (error) {
     message.error('加载模板失败')
@@ -254,13 +243,7 @@ async function fetchTemplates() {
 
 async function createTemplate() {
   try {
-    const response = await fetch('/api/v1/reports/template', {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(formData)
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
+    const data = await report.createTemplate(formData)
     message.success('模板创建成功')
     modal.show = false
     resetForm()
@@ -274,13 +257,7 @@ async function createTemplate() {
 
 async function updateTemplate() {
   try {
-    const response = await fetch(`/api/v1/reports/template/${modal.currentId}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify(formData)
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
+    const data = await report.updateTemplate(modal.currentId, formData)
     message.success('模板更新成功')
     modal.show = false
     resetForm()
@@ -294,11 +271,7 @@ async function updateTemplate() {
 
 async function deleteTemplate(id) {
   try {
-    const response = await fetch(`/api/v1/reports/template/${id}`, {
-      method: 'DELETE',
-      headers: getHeaders()
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+    await report.deleteTemplate(id)
     message.success('模板删除成功')
     fetchTemplates()
   } catch (error) {

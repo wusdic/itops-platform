@@ -170,6 +170,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Right, Loading } from '@element-plus/icons-vue'
 import { formatTime } from '@/utils/date'
+import { deploy } from '@/api'
 
 const canaries = ref([])
 const loading = ref(false)
@@ -230,17 +231,9 @@ const promote = async (canary) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/deploy/canary/${canary.id}/promote`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      ElMessage.success('金丝雀已提升为正式版本')
-      loadCanaries()
-    } else {
-      ElMessage.error('提升失败')
-    }
+    await deploy.canary.promote(canary.id)
+    ElMessage.success('金丝雀已提升为正式版本')
+    loadCanaries()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('操作失败')
   }
@@ -253,17 +246,9 @@ const rollback = async (canary) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/deploy/canary/${canary.id}/rollback`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      ElMessage.success('已回滚到稳定版本')
-      loadCanaries()
-    } else {
-      ElMessage.error('回滚失败')
-    }
+    await deploy.canary.rollback(canary.id)
+    ElMessage.success('已回滚到稳定版本')
+    loadCanaries()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('操作失败')
   }
@@ -276,17 +261,9 @@ const terminate = async (canary) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/deploy/canary/${canary.id}/terminate`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      ElMessage.success('金丝雀发布已终止')
-      loadCanaries()
-    } else {
-      ElMessage.error('终止失败')
-    }
+    await deploy.canary.terminate(canary.id)
+    ElMessage.success('金丝雀发布已终止')
+    loadCanaries()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('操作失败')
   }
@@ -296,19 +273,10 @@ const handleAdjustWeight = async () => {
   if (!currentCanary.value) return
   submitLoading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/deploy/canary/${currentCanary.value.id}/weight`, {
-      method: 'PUT',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weight: weightForm.value.newWeight })
-    })
-    if (res.ok) {
-      ElMessage.success('权重已调整')
-      showWeightDialog.value = false
-      loadCanaries()
-    } else {
-      ElMessage.error('调整失败')
-    }
+    await deploy.canary.updateWeight(currentCanary.value.id, { weight: weightForm.value.newWeight })
+    ElMessage.success('权重已调整')
+    showWeightDialog.value = false
+    loadCanaries()
   } catch (e) {
     ElMessage.error('调整失败')
   } finally {
@@ -322,23 +290,13 @@ const handleCreate = async () => {
 
   submitLoading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/deploy/canary', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(createForm.value)
-    })
-    if (res.ok) {
-      ElMessage.success('金丝雀发布已创建')
-      showCreateDialog.value = false
-      createForm.value = { app_name: '', stable_version: '', canary_version: '', weight: 10, description: '' }
-      loadCanaries()
-    } else {
-      const err = await res.json().catch(() => ({}))
-      ElMessage.error(err.message || '创建失败')
-    }
+    await deploy.canary.create(createForm.value)
+    ElMessage.success('金丝雀发布已创建')
+    showCreateDialog.value = false
+    createForm.value = { app_name: '', stable_version: '', canary_version: '', weight: 10, description: '' }
+    loadCanaries()
   } catch (e) {
-    ElMessage.error('创建失败')
+    // Error already handled by interceptor
   } finally {
     submitLoading.value = false
   }
@@ -348,21 +306,11 @@ const loadCanaries = async () => {
   if (!isActive.value) return
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams()
-    if (filterStatus.value) params.append('status', filterStatus.value)
+    const params = {}
+    if (filterStatus.value) params.status = filterStatus.value
 
-    const res = await fetch(`/api/v1/deploy/canary?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const data = await deploy.canary.getList(params)
 
-    if (!res.ok) {
-      canaries.value = generateMockCanaries()
-      updateStats()
-      return
-    }
-
-    const data = await res.json()
     if (Array.isArray(data)) {
       canaries.value = data
     } else if (data.items) {
@@ -389,14 +337,8 @@ const updateStats = () => {
 
 const loadVersions = async () => {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/deploy/versions?status=active', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
-      availableVersions.value = data.items || []
-    }
+    const data = await deploy.versions.getList({ status: 'active' })
+    availableVersions.value = data.items || []
   } catch (e) {
     availableVersions.value = []
   }

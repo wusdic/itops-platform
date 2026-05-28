@@ -151,6 +151,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { formatTime } from '@/utils/date'
+import { deploy } from '@/api'
 
 const versions = ref([])
 const loading = ref(false)
@@ -210,18 +211,9 @@ const deleteVersion = async (version) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/deploy/versions/${version.id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      ElMessage.success('版本已删除')
-      loadVersions()
-    } else {
-      const err = await res.json().catch(() => ({}))
-      ElMessage.error(err.message || '删除失败')
-    }
+    await deploy.versions.delete(version.id)
+    ElMessage.success('版本已删除')
+    loadVersions()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('删除失败')
   }
@@ -233,23 +225,13 @@ const handleCreate = async () => {
 
   submitLoading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/deploy/versions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(createForm.value)
-    })
-    if (res.ok) {
-      ElMessage.success('版本注册成功')
-      showCreateDialog.value = false
-      createForm.value = { app_name: '', version: '', environment: 'production', image: '', description: '' }
-      loadVersions()
-    } else {
-      const err = await res.json().catch(() => ({}))
-      ElMessage.error(err.message || '创建失败')
-    }
+    await deploy.versions.create(createForm.value)
+    ElMessage.success('版本注册成功')
+    showCreateDialog.value = false
+    createForm.value = { app_name: '', version: '', environment: 'production', image: '', description: '' }
+    loadVersions()
   } catch (e) {
-    ElMessage.error('创建失败')
+    // Error already handled by interceptor
   } finally {
     submitLoading.value = false
   }
@@ -258,25 +240,15 @@ const handleCreate = async () => {
 const loadVersions = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams()
-    params.append('page', page.value)
-    params.append('page_size', pageSize.value)
-    if (searchKeyword.value) params.append('search', searchKeyword.value)
-    if (filterStatus.value) params.append('status', filterStatus.value)
-
-    const res = await fetch(`/api/v1/deploy/versions?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
-    if (!res.ok) {
-      // 使用模拟数据
-      versions.value = generateMockVersions()
-      total.value = versions.value.length
-      return
+    const params = {
+      page: page.value,
+      page_size: pageSize.value
     }
+    if (searchKeyword.value) params.search = searchKeyword.value
+    if (filterStatus.value) params.status = filterStatus.value
 
-    const data = await res.json()
+    const data = await deploy.versions.getList(params)
+
     if (data.items) {
       versions.value = data.items
       total.value = data.total || versions.value.length

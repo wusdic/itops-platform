@@ -38,6 +38,8 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { CONFIG } from '@/config/constants'
+import { workorder } from '@/api/workorder'
+import { devices } from '@/api/monitoring'
 
 const router = useRouter()
 const submitting = ref(false)
@@ -75,14 +77,9 @@ const deviceOptions = ref([])
 
 async function loadDevices() {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/assets/device?page=1&page_size=' + CONFIG.MAX_PAGE_SIZE, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
-    deviceOptions.value = (data.items || []).map(d => ({
+    const res = await devices.getList({ page: 1, page_size: CONFIG.MAX_PAGE_SIZE || 200 })
+    const list = res?.items || res?.data || []
+    deviceOptions.value = list.map(d => ({
       label: `${d.name} (${d.ip_address || d.ip})`,
       value: d.id
     }))
@@ -102,7 +99,6 @@ async function submitForm() {
   }
 
   try {
-    const token = localStorage.getItem('token') || ''
     const payload = {
       title: form.title,
       description: form.description,
@@ -110,15 +106,7 @@ async function submitForm() {
       order_type: form.type,
       device_id: form.device_id
     }
-    const res = await fetch('/api/v1/workorders/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || `HTTP ${res.status}`)
-    }
+    await workorder.create(payload)
     ElMessage.success('工单提交成功')
     router.push('/workorder/my')
   } catch (e) {

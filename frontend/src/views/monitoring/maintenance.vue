@@ -99,7 +99,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Refresh } from '@element-plus/icons-vue'
-import { maintenanceWindows } from '@/api/monitoring'
+import { maintenanceWindows, devices } from '@/api/monitoring'
 import { formatTime } from '@/utils/date'
 
 const loading = ref(false)
@@ -145,14 +145,8 @@ onMounted(() => {
 
 const loadDevices = async () => {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/assets/device?page=1&page_size=100', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
-      deviceOptions.value = data.items || data.data?.items || []
-    }
+    const res = await devices.getList({ page: 1, page_size: 100 })
+    deviceOptions.value = res?.items || res?.data || []
   } catch (e) {
     ElMessage.error('加载设备列表失败')
   }

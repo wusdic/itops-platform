@@ -67,6 +67,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Edit, Check, Close } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
+import { config } from '@/api/system'
 
 const loading = ref(false)
 const configList = ref([])
@@ -107,12 +108,7 @@ const paginationConfig = reactive({
 const loadData = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/admin/config?page=${paginationConfig.currentPage}&page_size=${paginationConfig.pageSize}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error('请求失败')
-    const data = await res.json()
+    const data = await config.getList()
     configList.value = (data.items || []).map(c => ({ ...c, editing: false, editValue: c.value }))
   } catch (error) {
     ElMessage.error('加载配置失败')
@@ -133,16 +129,7 @@ const handleCancel = (row) => {
 
 const handleSave = async (row) => {
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/admin/config/${row.key}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ value: row.editValue })
-    })
-    if (!res.ok) throw new Error('更新失败')
+    await config.update(row.key, { value: row.editValue })
     row.value = row.editValue
     row.editing = false
     ElMessage.success('保存成功')

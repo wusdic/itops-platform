@@ -217,6 +217,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, SuccessFilled, CircleCloseFilled, QuestionFilled } from '@element-plus/icons-vue'
 import { formatTime } from '@/utils/date'
+import { deploy } from '@/api'
 
 const deployments = ref([])
 const history = ref([])
@@ -264,17 +265,9 @@ const restart = async (deployment) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/deploy/health/${deployment.id}/restart`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      ElMessage.success('重启请求已发送')
-      loadDeployments()
-    } else {
-      ElMessage.error('重启失败')
-    }
+    await deploy.health.restart(deployment.id)
+    ElMessage.success('重启请求已发送')
+    loadDeployments()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('操作失败')
   }
@@ -284,21 +277,11 @@ const loadDeployments = async () => {
   if (!isActive.value) return
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams()
-    if (filterHealth.value) params.append('health_status', filterHealth.value)
+    const params = {}
+    if (filterHealth.value) params.health_status = filterHealth.value
 
-    const res = await fetch(`/api/v1/deploy/health?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const data = await deploy.health.getStatus(params)
 
-    if (!res.ok) {
-      deployments.value = generateMockDeployments()
-      updateHealthStats()
-      return
-    }
-
-    const data = await res.json()
     deployments.value = Array.isArray(data) ? data : (data.items || [])
     updateHealthStats()
   } catch (e) {
@@ -312,22 +295,11 @@ const loadDeployments = async () => {
 const loadHistory = async () => {
   loadingHistory.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams()
-    params.append('page', historyPage.value)
-    params.append('page_size', historyPageSize.value)
-
-    const res = await fetch(`/api/v1/deploy/history?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+    const data = await deploy.history.getList({
+      page: historyPage.value,
+      page_size: historyPageSize.value
     })
 
-    if (!res.ok) {
-      history.value = generateMockHistory()
-      historyTotal.value = history.value.length
-      return
-    }
-
-    const data = await res.json()
     history.value = data.items || []
     historyTotal.value = data.total || history.value.length
   } catch (e) {

@@ -66,6 +66,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import { role } from '@/api'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -91,13 +92,7 @@ const rules = {
 async function loadData() {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/admin/roles?page=${pagination.page}&page_size=${pagination.pageSize}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
+    const data = await role.getList({ page: pagination.page, page_size: pagination.pageSize })
     roleList.value = data.items || data.data?.items || []
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
@@ -126,12 +121,7 @@ function handleDelete(row) {
   ElMessageBox.confirm(`确定删除角色"${row.name}"吗？`, '确认删除', { type: 'warning' })
     .then(async () => {
       try {
-        const token = localStorage.getItem('token') || ''
-        const res = await fetch(`/api/v1/admin/roles/${row.id}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        await role.delete(row.id)
         ElMessage.success('删除成功')
         loadData()
       } catch (e) {
@@ -147,15 +137,11 @@ async function submitForm() {
   }
   submitting.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const method = form.id ? 'PUT' : 'POST'
-    const url = form.id ? `/api/v1/admin/roles/${form.id}` : '/api/v1/admin/roles'
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ name: form.name, code: form.code, description: form.description })
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (form.id) {
+      await role.update(form.id, { name: form.name, code: form.code, description: form.description })
+    } else {
+      await role.create({ name: form.name, code: form.code, description: form.description })
+    }
     ElMessage.success(form.id ? '更新成功' : '创建成功')
     dialogVisible.value = false
     loadData()

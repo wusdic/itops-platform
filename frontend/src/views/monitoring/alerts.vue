@@ -135,6 +135,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Loading } from '@element-plus/icons-vue'
 import { formatDate, formatTime } from '@/utils/date'
+import * as monitoring from '@/api/monitoring'
 
 const alerts = ref([])
 const alertStats = ref({ critical: 0, warning: 0, info: 0, active: 0 })
@@ -202,15 +203,10 @@ const onFilterChange = () => {
 
 async function loadAlertStats() {
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams()
-    if (filterLevel.value) params.append('severity', filterLevel.value)
-    if (filterStatus.value) params.append('status', filterStatus.value)
-    const res = await fetch(`/api/v1/monitoring/alerts?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) return
-    const data = await res.json()
+    const params = {}
+    if (filterLevel.value) params.severity = filterLevel.value
+    if (filterStatus.value) params.status = filterStatus.value
+    const data = await monitoring.alerts.getList(params)
     let items = []
     if (Array.isArray(data)) {
       items = data
@@ -249,27 +245,12 @@ const handleAcknowledge = async (alert) => {
   }).then(async () => {
     actionLoading.value = true
     try {
-      const token = localStorage.getItem('token') || ''
-      const res = await fetch(`/api/v1/monitoring/alerts/${alert.id}/acknowledge`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      })
-      if (res.status === 401) {
-        ElMessage.warning('登录已过期，请重新登录')
-        localStorage.removeItem('token')
-        window.location.href = '/login'
-        return
-      }
-      if (res.ok) {
-        ElMessage.success('告警已确认')
-        showDrawer.value = false
-        loadAlerts()
-      } else {
-        const err = await res.json().catch(() => ({}))
-        ElMessage.error(err.message || '确认告警失败')
-      }
+      await monitoring.alerts.update(alert.id, { acknowledged: true })
+      ElMessage.success('告警已确认')
+      showDrawer.value = false
+      loadAlerts()
     } catch (e) {
-      ElMessage.error('确认告警失败')
+      ElMessage.error(e.message || '确认告警失败')
     } finally {
       actionLoading.value = false
     }
@@ -284,27 +265,12 @@ const handleResolve = async (alert) => {
   }).then(async () => {
     actionLoading.value = true
     try {
-      const token = localStorage.getItem('token') || ''
-      const res = await fetch(`/api/v1/monitoring/alerts/${alert.id}/resolve`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      })
-      if (res.status === 401) {
-        ElMessage.warning('登录已过期，请重新登录')
-        localStorage.removeItem('token')
-        window.location.href = '/login'
-        return
-      }
-      if (res.ok) {
-        ElMessage.success('告警已解决')
-        showDrawer.value = false
-        loadAlerts()
-      } else {
-        const err = await res.json().catch(() => ({}))
-        ElMessage.error(err.message || '解决告警失败')
-      }
+      await monitoring.alerts.update(alert.id, { resolved: true })
+      ElMessage.success('告警已解决')
+      showDrawer.value = false
+      loadAlerts()
     } catch (e) {
-      ElMessage.error('解决告警失败')
+      ElMessage.error(e.message || '解决告警失败')
     } finally {
       actionLoading.value = false
     }
@@ -315,30 +281,14 @@ const loadAlerts = async () => {
   if (!isActive.value) return
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams()
-    params.append('page', page.value)
-    params.append('page_size', pageSize.value)
-    if (filterLevel.value) params.append('severity', filterLevel.value)
-    if (filterStatus.value) params.append('status', filterStatus.value)
-
-    const res = await fetch(`/api/v1/monitoring/alerts?${params}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
-    if (res.status === 401) {
-      ElMessage.warning('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      window.location.href = '/login'
-      return
+    const params = {
+      page: page.value,
+      page_size: pageSize.value
     }
+    if (filterLevel.value) params.severity = filterLevel.value
+    if (filterStatus.value) params.status = filterStatus.value
 
-    if (!res.ok) {
-      ElMessage.error(`加载失败: HTTP ${res.status}`)
-      return
-    }
-
-    const data = await res.json()
+    const data = await monitoring.alerts.getList(params)
 
     if (!isActive.value) return
 

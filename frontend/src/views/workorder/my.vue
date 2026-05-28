@@ -74,6 +74,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
+import { workorder } from '@/api/workorder'
 
 const loading = ref(false)
 const workorderList = ref([])
@@ -117,25 +118,22 @@ const getStatusText = (s) => ({ pending: '待处理', processing: '处理中', r
 async function loadData() {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({ page: paginationConfig.currentPage, page_size: paginationConfig.pageSize })
-    if (filterStatus.value) params.append('status', filterStatus.value)
-    if (filterPriority.value) params.append('priority', filterPriority.value)
-    if (searchKeyword.value) params.append('search', searchKeyword.value)
-    const res = await fetch(`/api/v1/workorders/?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (res.status === 401) {
+    const params = { page: paginationConfig.currentPage, page_size: paginationConfig.pageSize }
+    if (filterStatus.value) params.status = filterStatus.value
+    if (filterPriority.value) params.priority = filterPriority.value
+    if (searchKeyword.value) params.search = searchKeyword.value
+
+    const res = await workorder.getList(params)
+    const data = res.data || res
+    workorderList.value = data.items || data.data?.items || []
+    paginationConfig.total = data.total || data.data?.total || 0
+  } catch (e) {
+    if (e.message && e.message.includes('401')) {
       ElMessage.warning('登录已过期，请重新登录')
       localStorage.removeItem('token')
       window.location.href = '/login'
       return
     }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    workorderList.value = data.items || data.data?.items || []
-    paginationConfig.total = data.total || data.data?.total || 0
-  } catch (e) {
     ElMessage.error(`加载工单失败: ${e.message}`)
     workorderList.value = []
   } finally {

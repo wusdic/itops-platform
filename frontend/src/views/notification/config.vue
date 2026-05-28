@@ -84,6 +84,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import { notification } from '@/api/notification'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -100,10 +101,7 @@ onMounted(() => { loadChannels(); loadTypes() })
 async function loadChannels() {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/notifications/channels', { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await notification.getChannels()
     channelList.value = data.items || []
   } catch (e) {
     ElMessage.error('加载渠道失败: ' + e.message)
@@ -115,10 +113,7 @@ async function loadChannels() {
 
 async function loadTypes() {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/notifications/types', { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await notification.getTypes()
     notificationTypes.value = data.types || []
   } catch (e) { ElMessage.error('加载通知类型失败') }
 }
@@ -143,11 +138,12 @@ async function handleSave() {
   if (!form.name || !form.type) { ElMessage.warning('请填写名称和类型'); return }
   saving.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const method = editingChannel.value ? 'PUT' : 'POST'
-    const url = editingChannel.value ? `/api/v1/notifications/channels/${editingChannel.value.id}` : '/api/v1/notifications/channels'
-    const res = await fetch(url, { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name, type: form.type, config: JSON.parse(form.config || '{}'), enabled: form.enabled }) })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const payload = { name: form.name, type: form.type, config: JSON.parse(form.config || '{}'), enabled: form.enabled }
+    if (editingChannel.value) {
+      await notification.updateChannel(editingChannel.value.id, payload)
+    } else {
+      await notification.createChannel(payload)
+    }
     ElMessage.success(editingChannel.value ? '更新成功' : '添加成功')
     drawerVisible.value = false
     loadChannels()
@@ -160,9 +156,7 @@ async function handleSave() {
 
 async function handleDelete(id) {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/notifications/channels/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    await notification.deleteChannel(id)
     ElMessage.success('删除成功')
     loadChannels()
   } catch (e) {

@@ -218,6 +218,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
+import request from '@/api/request'
 
 // ==================== 常量 ====================
 const categories = [
@@ -384,16 +385,15 @@ const itemColumns = computed(() => {
 })
 
 // ==================== API ====================
-const apiBase = '/api/v1/admin'
 
 async function fetchApi(path, opts = {}) {
-  const token = localStorage.getItem('token')
-  const res = await fetch(`${apiBase}${path}`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...opts.headers },
+  const method = opts.method || 'GET'
+  const res = await request({
+    url: path,
+    method,
     ...opts,
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`)
-  return res.json()
+  return res
 }
 
 // 加载统计数据

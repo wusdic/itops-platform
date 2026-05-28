@@ -241,6 +241,7 @@ import {
   VideoPlay,
   Refresh,
 } from '@element-plus/icons-vue'
+import reportAPI from '@/api/report'
 
 const message = ElMessage
 const dialog = ElMessageBox
@@ -369,14 +370,6 @@ const datePresets = [
   { label: '上月', getValue: () => { const now = new Date(); const s = new Date(now.getFullYear(), now.getMonth() - 1, 1); const e = new Date(now.getFullYear(), now.getMonth(), 0); return [s, e] } }
 ]
 
-// Helper functions
-function getHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${localStorage.getItem('token')}`
-  }
-}
-
 function applyDatePreset(preset) {
   const range = preset.getValue()
   if (range) {
@@ -412,12 +405,7 @@ function validateForm() {
 async function fetchTemplates() {
   templatesLoading.value = true
   try {
-    const response = await fetch('/api/v1/reports/template', {
-      method: 'GET',
-      headers: getHeaders()
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
+    const data = await reportAPI.getTemplates()
     templateList.value = data.items || data || []
   } catch (error) {
     message.error('加载模板失败')
@@ -444,14 +432,7 @@ async function fetchPreview() {
       alert_level: formData.alert_level
     }
     
-    const response = await fetch('/api/v1/reports/preview', {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(payload)
-    })
-    
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
+    const data = await reportAPI.preview(payload)
     previewContent.value = data.content || data.html || '<p>预览不可用</p>'
   } catch (error) {
     message.error('加载预览失败')
@@ -489,17 +470,10 @@ async function generateReport() {
       }
     }
     
-    const response = await fetch('/api/v1/reports/generate', {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(payload)
-    })
+    const data = await reportAPI.generate(payload)
     
     clearInterval(progressInterval)
     
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    
-    const data = await response.json()
     progressModal.percentage = 100
     progressModal.message = '报表生成成功！'
     message.success('报表生成成功')
@@ -532,13 +506,7 @@ async function saveAsTemplate() {
       active: true
     }
     
-    const response = await fetch('/api/v1/reports/template', {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(payload)
-    })
-    
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+    await reportAPI.createTemplate(payload)
     
     message.success('模板保存成功')
     saveTemplateModal.show = false

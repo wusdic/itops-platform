@@ -81,6 +81,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { notification } from '@/api/notification'
 
 const loading = ref(false)
 const filterRead = ref(null)
@@ -105,41 +106,28 @@ const formatTime = (time) => {
   return new Date(time).toLocaleString('zh-CN')
 }
 
-const fetchApi = async (url, options = {}) => {
-  const token = localStorage.getItem('token') || ''
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
-      ...options.headers
-    }
-  })
-  if (!res.ok) throw new Error(`HTTP error ${res.status}`)
-  return res.json()
-}
-
 const loadData = async () => {
   loading.value = true
   try {
-    const params = new URLSearchParams({
+    const params = {
       page: pagination.page,
       page_size: pagination.pageSize
-    })
+    }
     if (filterRead.value !== null && filterRead.value !== '') {
-      params.append('is_read', filterRead.value)
+      params.is_read = filterRead.value
     }
 
-    const res = await fetchApi(`/api/v1/notifications/messages?${params}`)
-    if (res.items) {
-      messages.value = res.items
-      pagination.total = res.total || 0
-    } else if (res.data && Array.isArray(res.data)) {
-      messages.value = res.data
-      pagination.total = res.total || 0
-    } else if (Array.isArray(res)) {
-      messages.value = res
-      pagination.total = res.length
+    const res = await notification.getHistory(params)
+    const data = res.data || res
+    if (data.items) {
+      messages.value = data.items
+      pagination.total = data.total || 0
+    } else if (data.data && Array.isArray(data.data)) {
+      messages.value = data.data
+      pagination.total = data.total || 0
+    } else if (Array.isArray(data)) {
+      messages.value = data
+      pagination.total = data.length
     } else {
       messages.value = []
       pagination.total = 0
@@ -172,7 +160,7 @@ const handleViewMessage = (msg) => {
 
 const handleMarkRead = async (msg) => {
   try {
-    await fetchApi(`/api/v1/notifications/messages/${msg.id}/read`, { method: 'PUT' })
+    await notification.markAllRead()
     msg.is_read = true
     ElMessage.success('已标为已读')
   } catch (e) { ElMessage.error('操作失败') }
@@ -180,7 +168,7 @@ const handleMarkRead = async (msg) => {
 
 const handleMarkAllRead = async () => {
   try {
-    await fetchApi('/api/v1/notifications/messages/read-all', { method: 'PUT' })
+    await notification.markAllRead()
     ElMessage.success('全部已标为已读')
     loadData()
   } catch (e) { ElMessage.error('操作失败') }

@@ -84,6 +84,7 @@ import { ref, reactive, onMounted, h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { CONFIG } from '@/config/constants'
+import { user, role } from '@/api'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -143,12 +144,7 @@ const roleOptions = ref([
 
 async function loadRoles() {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/admin/roles', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) return
-    const data = await res.json()
+    const data = await role.getList()
     const items = data.items || data.data?.items || []
     roleOptions.value = items.map(r => ({ label: r.name, value: r.code }))
   } catch (e) {
@@ -186,16 +182,10 @@ const columns = [
 async function loadData() {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({ page: pagination.page, page_size: pagination.pageSize })
-    if (filterStatus.value) params.append('is_active', filterStatus.value)
-    if (searchKeyword.value) params.append('keyword', searchKeyword.value)
-    const res = await fetch(`/api/v1/admin/users?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
+    const params = { page: pagination.page, page_size: pagination.pageSize }
+    if (filterStatus.value) params.is_active = filterStatus.value
+    if (searchKeyword.value) params.keyword = searchKeyword.value
+    const data = await user.getList(params)
     userList.value = data.items || data.data?.items || []
     pagination.total = data.total || data.data?.total || 0
   } catch (e) {
@@ -220,12 +210,7 @@ function handleEdit(row) {
 
 async function handleResetPwd(row) {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/admin/users/${row.id}/reset-password`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    await user.resetPassword(row.id)
     ElMessage.success('密码已重置，请查看系统通知或联系管理员')
   } catch (e) {
     ElMessage.error(`重置失败: ${e.message}`)
@@ -235,12 +220,7 @@ async function handleResetPwd(row) {
 async function handleDelete(row) {
   try {
     await ElMessageBox.confirm(`确定删除用户"${row.username}"吗？`, '删除确认', { type: 'warning' })
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/admin/users/${row.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    await user.delete(row.id)
     ElMessage.success('删除成功')
     loadData()
   } catch (e) {
@@ -264,17 +244,13 @@ async function submitForm() {
   if (submitting.value) return
   submitting.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const method = form.id ? 'PUT' : 'POST'
-    const url = form.id ? `/api/v1/admin/users/${form.id}` : '/api/v1/admin/users'
     const body = { username: form.username, full_name: form.full_name, email: form.email, phone: form.phone, role: form.role }
     if (form.password) body.password = form.password
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(body)
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (form.id) {
+      await user.update(form.id, body)
+    } else {
+      await user.create(body)
+    }
     ElMessage.success(form.id ? '更新成功' : '创建成功')
     dialogVisible.value = false
     loadData()

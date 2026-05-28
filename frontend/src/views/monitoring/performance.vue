@@ -130,6 +130,8 @@ import {
   Monitor, Folder, Cloudy, Refresh, Odometer
 } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
+import { devices } from '@/api/monitoring'
+import { performance } from '@/api/monitoring'
 
 const message = ElMessage
 
@@ -164,19 +166,7 @@ const loadDevices = async () => {
   if (loading.value) return
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/assets/device?page=1&page_size=100', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (res.status === 401) {
-      message.warning('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      window.location.href = '/login'
-      return
-    }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
+    const data = await devices.getList({ page: 1, page_size: 100 })
     const newDevices = data.items || data.data?.items || []
     deviceList.value = newDevices
     deviceOptions.value = deviceList.value.map(d => ({
@@ -209,30 +199,13 @@ const loadMetrics = async () => {
 
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
     const body = {
       device_id: selectedDeviceId.value,
       metrics: ['cpu', 'memory', 'disk', 'network'],
       start_time: timeRange.value ? timeRange.value[0] : Date.now() - 3600000,
       end_time: timeRange.value ? timeRange.value[1] : Date.now()
     }
-    const res = await fetch('/api/v1/monitoring/metrics/query', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    })
-    if (res.status === 401) {
-      message.warning('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      window.location.href = '/login'
-      return
-    }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
+    const data = await performance.query(body)
 
     metrics.cpu = data.cpu ?? 0
     metrics.memory = data.memory ?? 0
