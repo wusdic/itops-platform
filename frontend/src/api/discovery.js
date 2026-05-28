@@ -18,6 +18,7 @@ const discovery = {
     scan: (data) => request.post('/discovery/scan', data),
     scanAndImport: (data) => request.post('/discovery/scan-and-import', data),
     scanAndImportStream: (data) => request.post('/discovery/scan-and-import-stream', data),
+    getStreamProgress: (scanId) => request.get(`/discovery/scan-and-import-stream/${scanId}`),
     getHistory: (params) => request.get('/discovery/scan-history', { params }),
 
     scanIp: (data) => request.post('/discovery/ip/scan', data),

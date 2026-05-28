@@ -204,6 +204,7 @@
 import { ref, computed, h, onMounted, reactive } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { discovery } from '@/api'
 
 const message = ElMessage
 
@@ -355,32 +356,21 @@ async function startScan() {
   currentScanIp.value = ''
 
   try {
-    const token = localStorage.getItem('token')
-
     // Step 1: 启动扫描任务，获得 scan_id
-    const startRes = await fetch('/api/v1/discovery/scan-and-import-stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        cidr: normalizedCidr,
-        scan_ports: options.value.scanPorts,
-        grab_banners: options.value.grabBanners,
-      }),
+    const startRes = await discovery.scan.scanAndImportStream({
+      cidr: normalizedCidr,
+      scan_ports: options.value.scanPorts,
+      grab_banners: options.value.grabBanners,
     })
 
-    if (!startRes.ok) throw new Error(`启动扫描失败 HTTP ${startRes.status}`)
-    const { scan_id } = await startRes.json()
+    if (startRes.status !== 200 && startRes.status !== 201 && !startRes.scan_id) throw new Error(`启动扫描失败 HTTP ${startRes.status}`)
+    const scan_id = startRes.scan_id
 
     // Step 2: 每秒轮询进度
     while (true) {
       await new Promise(r => setTimeout(r, 1000))
 
-      const pollRes = await fetch(`/api/v1/discovery/scan-and-import-stream/${scan_id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!pollRes.ok) continue
-
-      const data = await pollRes.json()
+      const data = await discovery.scan.getStreamProgress(scan_id)
       const { status, progress, result, error } = data
 
       if (progress) {
@@ -444,46 +434,25 @@ async function quickScan(cidrValue) {
 
 async function importSelected() {
   if (!selectedHosts.value.length) return
-  const token = localStorage.getItem('token')
   try {
-    // 使用正确的 /import 端点，传入 IP 列表
-    const res = await fetch('/api/v1/discovery/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        ips: JSON.stringify(selectedHosts.value.map(h => h.ip)),
-        device_type: 'server',
-      }),
+    // 使用正确的 /devices/import 端点，传入 IP 列表
+    await discovery.import.importHosts({
+      ips: selectedHosts.value.map(h => h.ip),
+      device_type: 'server',
     })
-    if (res.ok) {
-      const data = await res.json()
-      message.success(`成功导入 ${selectedHosts.value.length} 台设备`)
-      scanResults.value = scanResults.value.filter(r => !selectedHosts.value.map(h => h.ip).includes(r.ip))
-      selectedHosts.value = []
-    } else {
-      const err = await res.json().catch(() => ({}))
-      message.error(`导入失败: ${err.message || res.status}`)
-    }
+    message.success(`成功导入 ${selectedHosts.value.length} 台设备`)
+    scanResults.value = scanResults.value.filter(r => !selectedHosts.value.map(h => h.ip).includes(r.ip))
+    selectedHosts.value = []
   } catch (e) {
     message.error(`导入失败: ${e.message}`)
   }
 }
 
 async function importSingle(row) {
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch('/api/v1/discovery/scan-and-import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ cidr: row.ip + '/32' }),
-    })
-    if (res.ok) {
-      message.success('设备导入成功')
-      scanResults.value = scanResults.value.filter(r => r.ip !== row.ip)
-    } else {
-      const err = await res.json().catch(() => ({}))
-      message.error(`导入失败: ${err.message || res.status}`)
-    }
+    await discovery.scan.scanAndImport({ cidr: row.ip + '/32' })
+    message.success('设备导入成功')
+    scanResults.value = scanResults.value.filter(r => r.ip !== row.ip)
   } catch (e) {
     message.error(`导入失败: ${e.message}`)
   }
@@ -512,45 +481,24 @@ async function saveNetwork() {
     return
   }
 
-  const token = localStorage.getItem('token')
   if (editingNetwork.value) {
     // 编辑现有
     try {
-      const res = await fetch(`/api/v1/discovery/networks/${editingNetwork.value.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(editForm.value),
-      })
-      if (res.ok) {
-        const updated = await res.json()
-        const idx = savedNetworks.value.findIndex(n => n.id === editingNetwork.value.id)
-        if (idx !== -1) savedNetworks.value[idx] = updated
-        message.success('网段已更新')
-      } else {
-        message.error('更新失败')
-      }
+      const updated = await discovery.networks.update(editingNetwork.value.id, editForm.value)
+      const idx = savedNetworks.value.findIndex(n => n.id === editingNetwork.value.id)
+      if (idx !== -1) savedNetworks.value[idx] = updated
+      message.success('网段已更新')
     } catch (e) {
       message.error(`更新失败: ${e.message}`)
     }
   } else {
     // 新增 — 保存到后端
     try {
-      const res = await fetch('/api/v1/discovery/networks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(editForm.value),
-      })
-      if (res.ok) {
-        const newNet = await res.json()
-        savedNetworks.value.push(newNet)
-        message.success('网段已保存')
-      } else {
-        // 如果后端没有此 API，退化为 localStorage
-        savedNetworks.value.push({ id: Date.now(), ...editForm.value })
-        localStorage.setItem('scan_networks', JSON.stringify(savedNetworks.value))
-        message.success('网段已保存（本地存储）')
-      }
+      const newNet = await discovery.networks.create(editForm.value)
+      savedNetworks.value.push(newNet)
+      message.success('网段已保存')
     } catch {
+      // 如果后端没有此 API，退化为 localStorage
       savedNetworks.value.push({ id: Date.now(), ...editForm.value })
       localStorage.setItem('scan_networks', JSON.stringify(savedNetworks.value))
       message.success('网段已保存（本地存储）')
@@ -561,14 +509,9 @@ async function saveNetwork() {
 
 async function deleteNetwork(id) {
   await ElMessageBox.confirm(`确定删除该网段吗？`, '删除确认', { type: 'warning' });
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch(`/api/v1/discovery/networks/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    await discovery.networks.delete(id)
     savedNetworks.value = savedNetworks.value.filter(n => n.id !== id)
-    if (!res.ok) throw new Error()
     message.success('网段已删除')
   } catch {
     savedNetworks.value = savedNetworks.value.filter(n => n.id !== id)
@@ -579,18 +522,10 @@ async function deleteNetwork(id) {
 
 // ── 扫描历史 ───────────────────────────────────────────────
 async function loadHistory() {
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch('/api/v1/discovery/networks', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) {
-      const data = await res.json()
-      scanHistory.value = Array.isArray(data) ? data : (data.items || [])
-      histTotal.value = scanHistory.value.length
-    } else {
-      throw new Error()
-    }
+    const data = await discovery.scan.getHistory({ page: histPage.value, page_size: histPageSize.value })
+    scanHistory.value = Array.isArray(data) ? data : (data.items || [])
+    histTotal.value = scanHistory.value.length
   } catch {
     // fallback: 从 localStorage
     const history = localStorage.getItem('scan_history')
@@ -605,20 +540,12 @@ async function loadHistory() {
 
 // 加载网段列表
 async function loadNetworks() {
-  const token = localStorage.getItem('token')
   try {
-    const res = await fetch('/api/v1/discovery/networks', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) {
-      const data = await res.json()
-      // 后端返回数组，不是 {items: [...]} 格式
-      savedNetworks.value = Array.isArray(data) ? data : (data.items || [])
-      // 同时备份到 localStorage
-      localStorage.setItem('scan_networks', JSON.stringify(savedNetworks.value))
-    } else {
-      throw new Error()
-    }
+    const data = await discovery.networks.getList()
+    // 后端返回数组，不是 {items: [...]} 格式
+    savedNetworks.value = Array.isArray(data) ? data : (data.items || [])
+    // 同时备份到 localStorage
+    localStorage.setItem('scan_networks', JSON.stringify(savedNetworks.value))
   } catch {
     const networks = localStorage.getItem('scan_networks')
     if (networks) savedNetworks.value = JSON.parse(networks)

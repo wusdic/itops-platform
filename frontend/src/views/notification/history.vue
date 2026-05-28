@@ -177,7 +177,7 @@ const toggleRead = async (row) => {
 
 const markAllRead = async () => {
   try {
-    await fetch('/api/v1/notifications/history/read-all', { method: 'PUT' })
+    await notification.markAllRead()
     ElMessage.success('已全部标记为已读')
     loadData()
   } catch (e) {

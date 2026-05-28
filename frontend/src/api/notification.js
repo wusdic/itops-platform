@@ -12,6 +12,7 @@ export const notification = {
   // 通知历史
   getHistory: (params) => request.get('/notifications/messages', { params }),
   deleteHistory: (id) => request.delete(`/notifications/messages/${id}`),
+  markAllRead: () => request.put('/notifications/messages/read-all'),
 
   // 通知类型
   getTypes: () => request.get('/notifications/types'),
