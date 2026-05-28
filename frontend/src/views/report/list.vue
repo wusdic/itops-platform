@@ -196,6 +196,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document, CircleCheck, CircleClose, RefreshRight, Refresh, Search, View, Download, Delete
 } from '@element-plus/icons-vue'
+import reportAPI from '@/api/report'
 
 const message = ElMessage
 const loading = ref(false)
@@ -283,22 +284,10 @@ function formatDateLocal(dateStr) {
   })
 }
 
-function getHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${localStorage.getItem('token')}`
-  }
-}
-
 // API Functions
 async function fetchStats() {
   try {
-    const response = await fetch('/api/v1/reports/stats', {
-      method: 'GET',
-      headers: getHeaders()
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
+    const data = await reportAPI.getStats()
     stats.value = data
   } catch (error) {
     message.error('加载统计数据失败')
@@ -309,25 +298,19 @@ async function fetchStats() {
 async function fetchReportList() {
   loading.value = true
   try {
-    const params = new URLSearchParams({
+    const params = {
       page: pagination.page,
       page_size: pagination.pageSize
-    })
+    }
     
-    if (filters.type) params.append('type', filters.type)
-    if (filters.status) params.append('status', filters.status)
+    if (filters.type) params.report_type = filters.type
+    if (filters.status) params.status = filters.status
     if (filters.dateRange && filters.dateRange[0]) {
-      params.append('start_date', new Date(filters.dateRange[0]).toISOString())
-      params.append('end_date', new Date(filters.dateRange[1]).toISOString())
+      params.start_date = new Date(filters.dateRange[0]).toISOString()
+      params.end_date = new Date(filters.dateRange[1]).toISOString()
     }
 
-    const response = await fetch(`/api/v1/reports/?${params}`, {
-      method: 'GET',
-      headers: getHeaders()
-    })
-    
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
+    const data = await reportAPI.getList(params)
     reportList.value = data.items || data
     pagination.total = data.total || reportList.value.length
   } catch (error) {
@@ -341,12 +324,7 @@ async function fetchReportList() {
 async function fetchReportPreview(id) {
   previewModal.loading = true
   try {
-    const response = await fetch(`/api/v1/reports/${id}/preview`, {
-      method: 'GET',
-      headers: getHeaders()
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    const data = await response.json()
+    const data = await reportAPI.preview({ report_id: id })
     previewModal.content = data.content || data.html || '<p>暂无预览</p>'
   } catch (error) {
     message.error('加载报表预览失败')
@@ -358,21 +336,7 @@ async function fetchReportPreview(id) {
 
 async function downloadReport(id) {
   try {
-    const response = await fetch(`/api/v1/reports/${id}/download`, {
-      method: 'GET',
-      headers: getHeaders()
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    
-    const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `report_${id}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    window.URL.revokeObjectURL(url)
-    document.body.removeChild(a)
+    await reportAPI.download(id)
     message.success('报表下载成功')
   } catch (error) {
     message.error('下载报表失败')
@@ -381,11 +345,7 @@ async function downloadReport(id) {
 
 async function deleteReport(id) {
   try {
-    const response = await fetch(`/api/v1/reports/${id}`, {
-      method: 'DELETE',
-      headers: getHeaders()
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+    await reportAPI.delete(id)
     message.success('报表删除成功')
     fetchReportList()
     fetchStats()

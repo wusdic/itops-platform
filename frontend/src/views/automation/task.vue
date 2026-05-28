@@ -34,7 +34,7 @@
               </template>
             </el-table-column>
           </el-table>
-        <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
+        <el-empty v-if="!historyLoading && historyList.length === 0" description="暂无数据" />
 
           <el-pagination
             v-model:current-page="historyPagination.page"
@@ -108,7 +108,7 @@ async function handleViewSnapshot(row) {
 async function loadHistory() {
   historyLoading.value = true
   try {
-    const res = await automation.rollbackHistory.getList({
+    const res = await automation.executions.getList({
       page: historyPagination.page,
       page_size: historyPagination.pageSize
     })

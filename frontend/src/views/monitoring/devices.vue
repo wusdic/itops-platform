@@ -54,18 +54,18 @@
       <el-table :data="hosts" v-loading="loading" stripe>
         <el-table-column prop="name" label="设备名称" min-width="180">
           <template #default="{ row }">
-            <div class="device-name">{{ row.name || row.ip }}</div>
-            <div class="device-ip">{{ row.ip }}</div>
+            <div class="device-name">{{ row.name || row.ip_address }}</div>
+            <div class="device-ip">{{ row.ip_address }}</div>
           </template>
         </el-table-column>
-        <el-table-column prop="type" label="类型" width="120">
+        <el-table-column prop="device_type" label="类型" width="120">
           <template #default="{ row }">
-            <el-tag size="small">{{ deviceTypeLabel(row.type) }}</el-tag>
+            <el-tag size="small">{{ deviceTypeLabel(row.device_type) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="last_collect" label="最后采集" width="180">
+        <el-table-column prop="last_collect_time" label="最后采集" width="180">
           <template #default="{ row }">
-            {{ formatTime(row.last_collect) }}
+            {{ formatTime(row.last_collect_time) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
@@ -85,7 +85,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { performance } from '@/api/monitoring'
+import { devices, performance } from '@/api/monitoring'
 
 const router = useRouter()
 const loading = ref(false)
@@ -121,14 +121,14 @@ const formatTime = (ts) => {
 async function loadHosts() {
   loading.value = true
   try {
-    const res = await performance.getHosts()
-    hosts.value = res.hosts || []
+    const res = await devices.getList({ page: 1, page_size: 200 })
+    const data = res.data || res.items || res
+    hosts.value = Array.isArray(data) ? data : (data.items || [])
     stats.total = hosts.value.length
-    // 在线判断：最后采集时间在10分钟内的视为在线
-    const tenMinAgo = Date.now() - 10 * 60 * 1000
-    stats.online = hosts.value.filter(h => h.last_collect && new Date(h.last_collect).getTime() > tenMinAgo).length
-    stats.offline = stats.total - stats.online
-    stats.error = 0
+    // 在线判断：使用后端 status 字段（ONLINE=在线，collecting=采集中，offline=离线，unknown=未知）
+    stats.online = hosts.value.filter(h => ['online', 'collecting'].includes(h.status)).length
+    stats.offline = hosts.value.filter(h => h.status === 'offline').length
+    stats.error = hosts.value.filter(h => h.status === 'unknown').length
   } catch (e) {
     ElMessage.error('加载监控设备失败')
   } finally {

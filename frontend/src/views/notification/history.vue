@@ -88,6 +88,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Check } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
+import { notification } from '@/api'
 
 const loading = ref(false)
 const list = ref([])
@@ -130,19 +131,14 @@ onMounted(() => { loadData() })
 const loadData = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({ page: paginationConfig.currentPage, page_size: paginationConfig.pageSize })
-    if (filterType.value) params.append('type', filterType.value)
-    if (filterChannel.value) params.append('channel', filterChannel.value)
-    if (filterRead.value !== null) params.append('read', filterRead.value)
-    const res = await fetch(`/api/v1/notifications/history?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
-    list.value = data.items || data.data?.items || []
-    paginationConfig.total = data.total || data.data?.total || 0
+    const params = { page: paginationConfig.currentPage, page_size: paginationConfig.pageSize }
+    if (filterType.value) params.type = filterType.value
+    if (filterChannel.value) params.channel = filterChannel.value
+    if (filterRead.value !== null) params.read = filterRead.value
+    const res = await notification.getHistory(params)
+    if (!res || typeof res !== 'object') throw new Error('响应格式异常')
+    list.value = res.items || res.data?.items || []
+    paginationConfig.total = res.total || res.data?.total || 0
   } catch (e) {
     ElMessage.error(`加载失败: ${e.message}`)
     list.value = []
@@ -158,12 +154,9 @@ const showDetail = (row) => { currentMessage.value = row; detailModalVisible.val
 const markAsRead = async () => {
   if (!currentMessage.value) return
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/notifications/history/${currentMessage.value.id}/read`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}` }
+    await fetch(`/api/v1/notifications/history/${currentMessage.value.id}/read`, {
+      method: 'PUT'
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
     currentMessage.value.read = true
     loadData()
     detailModalVisible.value = false
@@ -174,13 +167,8 @@ const markAsRead = async () => {
 
 const toggleRead = async (row) => {
   try {
-    const token = localStorage.getItem('token') || ''
     const method = row.read ? 'DELETE' : 'PUT'
-    const res = await fetch(`/api/v1/notifications/history/${row.id}/read`, {
-      method,
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    await fetch(`/api/v1/notifications/history/${row.id}/read`, { method })
     loadData()
   } catch (e) {
     ElMessage.error(`操作失败: ${e.message}`)
@@ -189,12 +177,7 @@ const toggleRead = async (row) => {
 
 const markAllRead = async () => {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/notifications/history/read-all', {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    await fetch('/api/v1/notifications/history/read-all', { method: 'PUT' })
     ElMessage.success('已全部标记为已读')
     loadData()
   } catch (e) {

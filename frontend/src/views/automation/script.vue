@@ -114,6 +114,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
+import { automation } from '@/api'
 
 const message = ElMessage
 const loading = ref(false)
@@ -148,18 +149,13 @@ const getTypeText = (t) => ({ threshold: '阈值触发', trend: '趋势触发', 
 async function loadData() {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({ page: pagination.page, page_size: pagination.pageSize })
-    if (filterType.value) params.append('type', filterType.value)
-    if (searchKeyword.value) params.append('search', searchKeyword.value)
-    const res = await fetch(`/api/v1/automation/trigger-rules?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    if (!data || typeof data !== 'object') throw new Error('响应格式异常')
-    ruleList.value = data.items || data.data?.items || []
-    pagination.total = data.total || data.data?.total || 0
+    const params = { page: pagination.page, page_size: pagination.pageSize }
+    if (filterType.value) params.type = filterType.value
+    if (searchKeyword.value) params.search = searchKeyword.value
+    const res = await automation.triggerRules.getList(params)
+    if (!res || typeof res !== 'object') throw new Error('响应格式异常')
+    ruleList.value = res.items || res.data?.items || []
+    pagination.total = res.total || res.data?.total || 0
   } catch (e) {
     message.error(`加载规则失败: ${e.message}`)
     ruleList.value = []
@@ -191,12 +187,7 @@ function handleEdit(row) {
 async function handleDelete(row) {
   await ElMessageBox.confirm(`确定删除触发规则「${row.name}」吗？`, '删除确认', { type: 'warning' })
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/automation/trigger-rules/${row.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    await automation.triggerRules.delete(row.id)
     message.success('删除成功')
     loadData()
   } catch (e) {
@@ -216,13 +207,7 @@ async function handleTest() {
   testing.value = true
   testResult.value = ''
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/automation/trigger-rules/${currentTestRule.value.id}/test`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await automation.triggerRules.test(currentTestRule.value.id)
     testResult.value = JSON.stringify(data, null, 2)
   } catch (e) {
     testResult.value = `测试失败: ${e.message}`
@@ -236,11 +221,7 @@ async function submitForm() {
   if (!form.name) { message.warning('请填写规则名称'); return }
   submitting.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const method = form.id ? 'PUT' : 'POST'
-    const url = form.id ? `/api/v1/automation/trigger-rules/${form.id}` : '/api/v1/automation/trigger-rules'
-    
-    let payload = { ...form }
+    const payload = { ...form }
     try {
       if (payload.conditions) {
         const parsed = JSON.parse(payload.conditions)
@@ -253,13 +234,12 @@ async function submitForm() {
         payload.actions = parsed
       }
     } catch { /* keep as string if not valid JSON */ }
-    
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+    if (form.id) {
+      await automation.triggerRules.update(form.id, payload)
+    } else {
+      await automation.triggerRules.create(payload)
+    }
     message.success(form.id ? '更新成功' : '创建成功')
     dialogVisible.value = false
     loadData()

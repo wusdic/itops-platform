@@ -11,13 +11,15 @@ export { default as tenants } from './tenants'
 export { default as apiKeys } from './apiKeys'
 export { default as sharding } from './sharding'
 export { default as watermark } from './watermark'
+export { default as vendorCredentials } from './vendor_credentials'
+export { default as report } from './report'
 
 // 监控相关
 export { devices, alerts, performance, dashboards, maintenanceWindows, triggerRules, metricConfigs } from './monitoring'
 
 // 系统相关
-import { auth, user, role, menu, dict, config, system } from './system'
-export { auth, user, role, menu, dict, config, system }
+import { auth, user, role, menu, dict, config, system, adapters } from './system'
+export { auth, user, role, menu, dict, config, system, adapters }
 
 // 资产
 import { assets } from './assets'
@@ -45,6 +47,7 @@ export const ai = {
   interpretReport: (data) => request.post('/ai/interpret/report', data),
   analyzeLogs: (data) => request.post('/ai/analyze/logs', data),
   qa: (data) => request.post('/ai/qa', data),
+  knowledgeQa: (data) => request.post('/ai/knowledge-qa', data),
   getStats: () => request.get('/ai/stats'),
   // 统一分析接口（新增）
   analyze: (data) => request.post('/ai/analyze', data),

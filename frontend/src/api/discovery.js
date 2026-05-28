@@ -30,6 +30,18 @@ const discovery = {
   // ========== 导入 ==========
   import: {
     importHosts: (data) => request.post('/discovery/devices/import', data)
+  },
+
+  // ========== 发现目标 ==========
+  targets: {
+    getList: (params) => request.get('/discovery/targets', { params }),
+    getById: (id) => request.get(`/discovery/targets/${id}`),
+    create: (data) => request.post('/discovery/targets', data),
+    update: (id, data) => request.put(`/discovery/targets/${id}`, data),
+    delete: (id) => request.delete(`/discovery/targets/${id}`),
+    batchDelete: (ids) => request.post('/discovery/targets/batch-delete', { ids }),
+    importTargets: (data) => request.post('/discovery/targets/import', data),
+    exportTargets: (params) => request.get('/discovery/targets/export', { params, responseType: 'blob' })
   }
 }
 

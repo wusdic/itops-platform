@@ -172,6 +172,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { formatDate, formatTime } from '@/utils/date'
+import { ai } from '@/api'
 
 const authStore = useAuthStore()
 
@@ -259,21 +260,8 @@ async function loadConversations() {
   conversationsLoading.value = true
   try {
     const username = authStore.userInfo?.username || localStorage.getItem('savedUsername') || 'unknown'
-    const res = await fetch('/api/v1/ai/conversations?user_id=' + encodeURIComponent(username), {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
-    })
-    if (res.status === 401) {
-      ElMessage.warning('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      window.location.href = '/login'
-      return
-    }
-    if (res.ok) {
-      const data = await res.json()
-      conversations.value = data.items || data || []
-    } else {
-      ElMessage.error('加载会话列表失败')
-    }
+    const data = await ai.getConversations({ user_id: username })
+    conversations.value = data.items || data || []
   } catch (e) {
     ElMessage.error('加载会话列表失败')
   } finally {
@@ -286,28 +274,14 @@ async function selectConversation(conv) {
   messages.value = []
   loading.value = true
   try {
-    const username = authStore.userInfo?.username || ''
-    const res = await fetch(`/api/v1/ai/conversations/${conv.conversation_id}?user_id=${encodeURIComponent(username)}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
-    })
-    if (res.status === 401) {
-      ElMessage.warning('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      window.location.href = '/login'
-      return
-    }
-    if (res.ok) {
-      const data = await res.json()
-      if (data.messages) {
-        messages.value = data.messages.map((m, i) => ({
-          id: i,
-          role: m.role === 'assistant' ? 'ai' : m.role,
-          content: m.content,
-          created_at: m.created_at || new Date().toISOString()
-        }))
-      }
-    } else {
-      ElMessage.error('加载会话失败')
+    const data = await ai.getConversation(conv.conversation_id)
+    if (data.messages) {
+      messages.value = data.messages.map((m, i) => ({
+        id: i,
+        role: m.role === 'assistant' ? 'ai' : m.role,
+        content: m.content,
+        created_at: m.created_at || new Date().toISOString()
+      }))
     }
     await nextTick()
     scrollToBottom()
@@ -349,74 +323,14 @@ async function sendMessage() {
       stream: false,
       conversation_id: currentConversation.value?.conversation_id || undefined
     }
-    const res = await fetch('/api/v1/ai/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-      },
-      body: JSON.stringify(payload)
-    })
-    if (res.status === 401) {
-      ElMessage.warning('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      window.location.href = '/login'
-      return
-    }
-    if (!res.ok) {
-      throw new Error('Send message failed')
-    }
+    const res = await ai.chat(payload)
+    const answer = res.message || res.content || ''
+    const aiMsg = { id: Date.now() + 1, role: 'ai', content: answer, created_at: new Date().toISOString() }
+    messages.value.push(aiMsg)
 
-    // 判断是否流式响应
-    const contentType = res.headers.get('content-type') || ''
-    if (contentType.includes('text/event-stream')) {
-      // 流式读取（解析 SSE 事件流）
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let fullContent = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        // 按行分割，处理 SSE 事件
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6).trim()
-            if (dataStr === '[DONE]') continue
-            if (!dataStr) continue
-            try {
-              const data = JSON.parse(dataStr)
-              if (data.type === 'content' && data.content) {
-                fullContent += data.content
-                streamingContent.value = fullContent
-                await nextTick()
-                scrollToBottom()
-              }
-            } catch (_) { ElMessage.error("操作失败"); }
-          }
-        }
-      }
-      const aiMsg = { id: Date.now() + 1, role: 'ai', content: fullContent, created_at: new Date().toISOString() }
-      messages.value.push(aiMsg)
-      streamingContent.value = ''
-    } else {
-      // 非流式：直接读取 JSON 响应
-      const data = await res.json()
-      const answer = data.message || data.content || ''
-      const aiMsg = { id: Date.now() + 1, role: 'ai', content: answer, created_at: new Date().toISOString() }
-      messages.value.push(aiMsg)
-    }
-
-    if (res.headers.get('X-Conversation-Id')) {
-      const convId = res.headers.get('X-Conversation-Id')
+    if (res.conversation_id) {
       if (!currentConversation.value.conversation_id) {
-        currentConversation.value.conversation_id = convId
+        currentConversation.value.conversation_id = res.conversation_id
         currentConversation.value.title = text.slice(0, 20)
       }
       await loadConversations()
@@ -440,16 +354,7 @@ function handleKeydown(e) {
 
 async function handleDelete(conversation_id) {
   try {
-    const res = await fetch(`/api/v1/ai/conversations/${conversation_id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
-    })
-    if (res.status === 401) {
-      ElMessage.warning('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      window.location.href = '/login'
-      return
-    }
+    await ai.deleteConversation(conversation_id)
     ElMessage.success('会话已删除')
     if (currentConversation.value?.conversation_id === conversation_id) {
       currentConversation.value = null
@@ -464,22 +369,7 @@ async function handleDelete(conversation_id) {
 async function handlePin(conv) {
   try {
     const isPinned = !conv.is_pinned
-    const username = authStore.userInfo?.username || ''
-    const res = await fetch(`/api/v1/ai/conversations/${conv.conversation_id}/pin?is_pinned=${isPinned}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-      },
-      body: JSON.stringify({ user_id: username })
-    })
-    if (res.status === 401) {
-      ElMessage.warning('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      window.location.href = '/login'
-      return
-    }
-    if (!res.ok) throw new Error('Pin failed')
+    await ai.pinConversation(conv.conversation_id, { is_pinned: isPinned })
     ElMessage.success(isPinned ? '已置顶' : '已取消置顶')
     await loadConversations()
   } catch (e) {

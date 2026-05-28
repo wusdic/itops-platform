@@ -314,7 +314,7 @@ def require_role(role: str, *additional_roles: str):
 class PaginationParams:
     """分页参数"""
     page: int = Query(1, ge=1, description="页码")
-    page_size: int = Query(20, ge=1, le=100, description="每页数量")
+    page_size: int = Query(20, ge=1, le=200, description="每页数量")
     
     @property
     def offset(self) -> int:

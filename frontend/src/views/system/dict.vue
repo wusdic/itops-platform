@@ -139,6 +139,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import { dict } from '@/api'
 
 const loading = ref(false)
 const itemsLoading = ref(false)
@@ -167,14 +168,7 @@ const rules = {
 const fetchData = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/admin/dict?page=${pagination.page}&page_size=${pagination.pageSize}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    if (!res.ok) throw new Error('请求失败')
-    const data = await res.json()
+    const data = await dict.getList({ page: pagination.page, page_size: pagination.pageSize })
     dictList.value = data.items || []
     pagination.total = data.total || 0
   } catch (error) {
@@ -207,13 +201,7 @@ const handleDelete = (row) => {
   ElMessageBox.confirm(`确定删除字典 "${row.name}" 吗?`, '提示', { type: 'warning' })
     .then(async () => {
       try {
-        const token = localStorage.getItem('token')
-        await fetch(`/api/v1/admin/dict/${row.id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        await dict.delete(row.id)
         ElMessage.success('删除成功')
         fetchData()
       } catch (error) {
@@ -228,12 +216,7 @@ const handleItems = async (row) => {
   itemsDialogVisible.value = true
   itemsLoading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/admin/dict/all-items?type_id=${row.id}&page=1&page_size=100`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error('请求失败')
-    const data = await res.json()
+    const data = await dict.getItems(row.id)
     dictItems.value = (data.items || []).map(item => ({
       ...item,
       status: item.status === 'active' ? '1' : '0'
@@ -260,12 +243,7 @@ const handleDeleteItem = (row) => {
   ElMessageBox.confirm(`确定删除字典项「${row.label}」吗?`, '提示', { type: 'warning' })
     .then(async () => {
       try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(`/api/v1/admin/dict/items/${row.id}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (!res.ok) throw new Error('删除失败')
+        await dict.deleteItem(row.id)
         ElMessage.success('删除成功')
         handleItems({ id: currentDictId.value })
       } catch (error) {
@@ -283,7 +261,6 @@ const submitItemForm = async () => {
     return
   }
   try {
-    const token = localStorage.getItem('token')
     const payload = {
       type_id: currentDictId.value,
       label: currentEditingItem.value.label,
@@ -291,16 +268,11 @@ const submitItemForm = async () => {
       sort_order: currentEditingItem.value.sort || 0,
       status: currentEditingItem.value.status === '1' ? 'active' : 'inactive'
     }
-    const url = currentEditingItem.value.id
-      ? `/api/v1/admin/dict/items/${currentEditingItem.value.id}`
-      : '/api/v1/admin/dict/all-items'
-    const method = currentEditingItem.value.id ? 'PUT' : 'POST'
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error('操作失败')
+    if (currentEditingItem.value.id) {
+      await dict.updateItem(currentEditingItem.value.id, payload)
+    } else {
+      await dict.createItem(payload)
+    }
     ElMessage.success(currentEditingItem.value.id ? '更新成功' : '创建成功')
     itemDialogVisible.value = false
     handleItems({ id: currentDictId.value })
@@ -314,20 +286,11 @@ const submitForm = async () => {
     const valid = await formRef.value.validate()
     if (!valid) return
 
-    const token = localStorage.getItem('token')
-    const url = form.id ? `/api/v1/admin/dict/${form.id}` : '/api/v1/admin/dict'
-    const method = form.id ? 'PUT' : 'POST'
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(form)
-    })
-
-    if (!res.ok) throw new Error('请求失败')
+    if (form.id) {
+      await dict.update(form.id, form)
+    } else {
+      await dict.create(form)
+    }
 
     ElMessage.success(form.id ? '更新成功' : '创建成功')
     dialogVisible.value = false

@@ -48,7 +48,20 @@
               size="small"
               style="width: 100%"
             >
-              <el-table-column v-for="col in networkColumns" :key="col.key" :="col" />
+              <el-table-column prop="cidr" label="网段" width="180" />
+              <el-table-column prop="description" label="描述" show-overflow-tooltip />
+              <el-table-column label="自动" width="70">
+                <template #default="{ row }">{{ row.auto_scan ? '是' : '否' }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="150">
+                <template #default="{ row }">
+                  <el-space :size="8">
+                    <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
+                    <el-button size="small" @click="quickScan(row.cidr)">扫描</el-button>
+                    <el-button size="small" type="danger" @click="deleteNetwork(row.id)">删除</el-button>
+                  </el-space>
+                </template>
+              </el-table-column>
             </el-table>
             <el-empty v-else description="暂无已配置的网段，点击上方添加" />
           </el-card>
@@ -77,7 +90,35 @@
           @selection-change="onSelectionChange"
           style="width: 100%"
         >
-          <el-table-column v-for="col in resultColumns" :key="col.key" :="col" />
+          <el-table-column type="selection" width="50" />
+          <el-table-column prop="ip" label="IP地址" width="150" />
+          <el-table-column label="主机名" width="150">
+            <template #default="{ row }">{{ row.hostname || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="os_type" label="操作系统" width="120">
+            <template #default="{ row }">{{ row.os_type || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="category" label="设备类型" width="100">
+            <template #default="{ row }">{{ row.category || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="vendor" label="厂商" width="120">
+            <template #default="{ row }">{{ row.vendor || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="80">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 'up' ? 'success' : 'info'" size="small">
+                {{ row.status === 'up' ? '在线' : '离线' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="开放端口" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.ports ? row.ports.join(', ') : '-' }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="100">
+            <template #default="{ row }">
+              <el-button size="small" type="primary" @click="importSingle(row)">导入</el-button>
+            </template>
+          </el-table-column>
         </el-table>
 
         <!-- 结果统计 -->
@@ -117,7 +158,18 @@
           row-key="id"
           style="width: 100%"
         >
-          <el-table-column v-for="col in historyColumns" :key="col.key" :="col" />
+          <el-table-column prop="cidr" label="网段" width="180" />
+          <el-table-column prop="created_at" label="创建时间" width="180">
+            <template #default="{ row }">{{ row.created_at ? row.created_at.replace('T',' ').slice(0,19) : '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">{{ row.status }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="自动扫描" width="90">
+            <template #default="{ row }">{{ row.auto_scan ? '是' : '否' }}</template>
+          </el-table-column>
         </el-table>
       </el-card>
     </el-space>
@@ -323,7 +375,7 @@ async function startScan() {
     while (true) {
       await new Promise(r => setTimeout(r, 1000))
 
-      const pollRes = await fetch(`/api/v1/discovery/scan/${scan_id}/status`, {
+      const pollRes = await fetch(`/api/v1/discovery/scan-and-import-stream/${scan_id}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!pollRes.ok) continue
@@ -529,17 +581,13 @@ async function deleteNetwork(id) {
 async function loadHistory() {
   const token = localStorage.getItem('token')
   try {
-    const params = new URLSearchParams({
-      page: histPage.value,
-      page_size: histPageSize.value,
-    })
-    const res = await fetch(`/api/v1/discovery/scan-history?${params}`, {
+    const res = await fetch('/api/v1/discovery/networks', {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (res.ok) {
       const data = await res.json()
-      scanHistory.value = data.items || []
-      histTotal.value = data.total || scanHistory.value.length
+      scanHistory.value = Array.isArray(data) ? data : (data.items || [])
+      histTotal.value = scanHistory.value.length
     } else {
       throw new Error()
     }

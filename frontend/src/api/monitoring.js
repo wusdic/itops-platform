@@ -84,7 +84,6 @@ export const dashboards = {
   getList: (params) => request.get('/monitoring/dashboards', { params }),
   getById: (id) => request.get(`/monitoring/dashboards/${id}`),
   getLayout: (layoutId) => request.get('/monitoring/dashboard/layout', { params: layoutId ? { layout_id: layoutId } : {} }),
-  getDashboardLayout: (layoutId) => request.get('/monitoring/dashboard/layout', { params: layoutId ? { layout_id: layoutId } : {} }),
   saveLayout: (data) => request.put('/monitoring/dashboard/layout', data),
   listLayouts: () => request.get('/monitoring/dashboard/layouts'),
   deleteLayout: (layoutId) => request.delete(`/monitoring/dashboard/layout/${layoutId}`),

@@ -201,6 +201,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
+import { knowledge } from '@/api'
 
 const loading = ref(false)
 const list = ref([])
@@ -239,22 +240,17 @@ onMounted(() => {
 const loadData = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const params = new URLSearchParams({
+    const params = {
       page: pagination.page,
       page_size: pagination.pageSize
-    })
-    if (searchKeyword.value) params.append('keyword', searchKeyword.value)
-    if (filterStatus.value) params.append('status', filterStatus.value)
-    if (filterCategory.value) params.append('category_id', filterCategory.value)
+    }
+    if (searchKeyword.value) params.keyword = searchKeyword.value
+    if (filterStatus.value) params.status = filterStatus.value
+    if (filterCategory.value) params.category_id = filterCategory.value
 
-    const res = await fetch(`/api/v1/knowledge/sop?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    list.value = data.items || data.data?.items || []
-    pagination.total = data.total || data.data?.total || 0
+    const res = await knowledge.sop.getList(params)
+    list.value = res.items || res.data?.items || []
+    pagination.total = res.total || res.data?.total || 0
   } catch (e) {
     ElMessage.error(`加载失败: ${e.message}`)
     list.value = []
@@ -265,12 +261,7 @@ const loadData = async () => {
 
 const loadCategories = async () => {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/knowledge/category', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await knowledge.category.getList({ page: 1, page_size: 100 })
     categoryOptions.value = (data.items || []).map(c => ({ label: c.name, value: c.id }))
   } catch (_) { ElMessage.error("操作失败"); }
 }
@@ -292,12 +283,7 @@ const openEditModal = async (row) => {
   formModalVisible.value = true
   formLoading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/knowledge/sop/${row.id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await knowledge.sop.getById(row.id)
     formData.title = data.title || ''
     formData.category_id = data.category_id || null
     formData.content = data.content || ''
@@ -322,7 +308,6 @@ const submitForm = async () => {
   }
   formLoading.value = true
   try {
-    const token = localStorage.getItem('token') || ''
     const tags = formData.tags_input ? formData.tags_input.split(',').map(t => t.trim()).filter(t => t) : []
     const payload = {
       title: formData.title,
@@ -331,17 +316,11 @@ const submitForm = async () => {
       tags,
       status: formData.status
     }
-    const url = isEditing.value ? `/api/v1/knowledge/sop/${editingId.value}` : '/api/v1/knowledge/sop'
-    const method = isEditing.value ? 'PUT' : 'POST'
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (isEditing.value) {
+      await knowledge.sop.update(editingId.value, payload)
+    } else {
+      await knowledge.sop.create(payload)
+    }
     ElMessage.success(isEditing.value ? '文档更新成功' : '文档创建成功')
     formModalVisible.value = false
     loadData()
@@ -359,12 +338,7 @@ const handleDelete = (row) => {
     type: 'warning'
   }).then(async () => {
     try {
-      const token = localStorage.getItem('token') || ''
-      const res = await fetch(`/api/v1/knowledge/sop/${row.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await knowledge.sop.delete(row.id)
       ElMessage.success('删除成功')
       loadData()
     } catch (e) {
@@ -380,12 +354,7 @@ const submitReview = (row) => {
     type: 'info'
   }).then(async () => {
     try {
-      const token = localStorage.getItem('token') || ''
-      const res = await fetch(`/api/v1/knowledge/sop/${row.id}/review`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await knowledge.sop.submitReview(row.id)
       ElMessage.success('提交审核成功')
       loadData()
     } catch (e) {
@@ -401,12 +370,7 @@ const approve = (row) => {
     type: 'success'
   }).then(async () => {
     try {
-      const token = localStorage.getItem('token') || ''
-      const res = await fetch(`/api/v1/knowledge/sop/${row.id}/approve`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await knowledge.sop.approve(row.id)
       ElMessage.success('审核通过')
       loadData()
     } catch (e) {

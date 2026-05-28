@@ -1504,7 +1504,7 @@ async def convert_alert_to_workorder(
         raise HTTPException(status_code=404, detail=f"告警 {request.alert_id} 不存在")
 
     # 自动生成标题
-    title = request.title or f"[告警转工单] {alert.name or '未知告警'} (ID:{alert.id})"
+    title = request.title or f"[告警转工单] {alert.title or '未知告警'} (ID:{alert.id})"
 
     # 根据告警级别映射优先级
     priority_map = {"critical": "P1", "high": "P1", "medium": "P2", "low": "P3", "info": "P4"}
@@ -1515,7 +1515,7 @@ async def convert_alert_to_workorder(
     description = (
         f"## 来源告警信息\n"
         f"- 告警ID: {alert.id}\n"
-        f"- 告警名称: {alert.name or '未知'}\n"
+        f"- 告警名称: {alert.title or '未知'}\n"
         f"- 告警级别: {alert_level_str}\n"
         f"- 告警状态: {alert.status or '未知'}\n"
         f"- 告警时间: {alert.created_at or '未知'}\n"
@@ -1533,7 +1533,15 @@ async def convert_alert_to_workorder(
         device_ip=getattr(alert, 'device_ip', None),
     )
 
-    wo = _build_workorder_core(db).create(wo_create, current_user.username)
+    wo = _build_workorder_core(db).create(
+        title=title,
+        order_type=_map_order_type(request.order_type or "fault"),
+        creator=current_user.username,
+        description=description,
+        priority=_map_priority(priority),
+        device_name=getattr(alert, 'device_name', None),
+        device_ip=getattr(alert, 'device_ip', None),
+    )
 
     # 将告警状态更新为已转工单
     try:

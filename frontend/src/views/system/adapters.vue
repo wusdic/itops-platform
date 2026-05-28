@@ -199,6 +199,7 @@
 import { ref, reactive, onMounted, h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
+import { adapters, request } from '@/api'
 
 const activeTab = ref('adapters')
 const adapterLoading = ref(false)
@@ -255,12 +256,7 @@ const form = reactive(emptyForm())
 const loadAdapters = async () => {
   adapterLoading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/admin/adapters', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error('加载失败')
-    const data = await res.json()
+    const data = await adapters.getTemplates({ page_size: 100 })
     adapterList.value = data.items || []
   } catch (e) {
     ElMessage.error('加载适配器失败: ' + e.message)
@@ -294,30 +290,17 @@ const saveAdapter = async () => {
   }
   saving.value = true
   try {
-    const token = localStorage.getItem('token')
-    const url = editingId.value
-      ? `/api/v1/admin/adapters/${editingId.value}`
-      : '/api/v1/admin/adapters'
-    const method = editingId.value ? 'PUT' : 'POST'
-
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ...form }),
-    })
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.detail || '保存失败')
+    if (editingId.value) {
+      await adapters.updateTemplate(editingId.value, { ...form })
+    } else {
+      await adapters.createTemplate({ ...form })
     }
     ElMessage.success('保存成功')
     showAddModal.value = false
     editingId.value = null
     loadAdapters()
   } catch (e) {
-    ElMessage.error(e.message)
+    ElMessage.error(e.message || '保存失败')
   } finally {
     saving.value = false
   }
@@ -334,12 +317,7 @@ const deleteAdapter = async (row) => {
         type: 'warning',
       }
     )
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/admin/adapters/${row.id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-    if (!res.ok) throw new Error('删除失败')
+    await adapters.deleteTemplate(row.id)
     ElMessage.success('删除成功')
     loadAdapters()
   } catch (e) {
@@ -401,12 +379,7 @@ const adapterColumns = [
 // ==================== 设备协议配置 ====================
 const loadDevices = async () => {
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/assets/device?page_size=100', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) return
-    const data = await res.json()
+    const data = await request.get('/assets/device', { params: { page_size: 100 } })
     deviceOptions.value = (data.items || []).map(d => ({
       label: d.name + ' (' + d.ip_address + ')',
       value: d.id,
@@ -428,12 +401,7 @@ const loadDeviceProtocols = async () => {
   }
   protocolLoading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/admin/adapters/device/' + selectedDeviceId.value + '/protocols', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error()
-    const data = await res.json()
+    const data = await adapters.getDeviceProtocols(selectedDeviceId.value)
     deviceProtocols.value = data.items || []
   } catch (e) {
     ElMessage.error('加载设备协议失败')
@@ -449,19 +417,14 @@ const testDeviceProtocol = async () => {
   }
   testing.value = true
   try {
-    const token = localStorage.getItem('token')
     const configured = deviceProtocols.value.find(p => p.enabled && p.adapter_template_id)
     const protocolType = configured ? configured.protocol_type : 'snmp'
 
-    const res = await fetch('/api/v1/admin/adapters/device/' + selectedDeviceId.value + '/protocols/' + protocolType + '/test', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-    })
-    const data = await res.json()
-    if (data.success) {
-      ElMessage.success('连接成功: ' + data.message)
+    const data = await adapters.testDeviceProtocol(selectedDeviceId.value, protocolType)
+    if (data.success !== false) {
+      ElMessage.success('连接成功: ' + (data.message || ''))
     } else {
-      ElMessage.warning('连接失败: ' + data.message)
+      ElMessage.warning('连接失败: ' + (data.message || ''))
     }
   } catch (e) {
     ElMessage.error('测试失败')
@@ -473,7 +436,6 @@ const testDeviceProtocol = async () => {
 const updateDeviceProtocol = async (row, field, value) => {
   row[field] = value
   try {
-    const token = localStorage.getItem('token')
     const payload = {
       device_id: selectedDeviceId.value,
       protocol_type: row.protocol_type,
@@ -482,15 +444,7 @@ const updateDeviceProtocol = async (row, field, value) => {
       enabled: row.enabled,
     }
 
-    const res = await fetch('/api/v1/admin/adapters/device/' + selectedDeviceId.value + '/protocols', {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([payload]),
-    })
-    if (!res.ok) throw new Error()
+    await adapters.saveDeviceProtocols(selectedDeviceId.value, [payload])
     ElMessage.success('保存成功')
   } catch (e) {
     ElMessage.error('保存失败')

@@ -18,7 +18,7 @@
     </div>
 
     <!-- Loading State -->
-    <div v-loading="loading" class="loading-container" :element-loading-text="'加载数据中...'">
+    <div v-loading="loading" class="loading-container" element-loading-text="加载数据中...">
 
       <!-- 统计卡片（始终显示） -->
       <el-row :gutter="16" class="stats-grid">
@@ -76,7 +76,7 @@
         </div>
       </div>
 
-      <!-- 图表区域 -->
+      <!-- 图表区域：直接用 class 标记类型，不依赖 Vue ref -->
       <el-row :gutter="16" class="chart-grid">
         <el-col :xs="24" :md="12" v-for="item in chartWidgets" :key="item.item_id">
           <div v-if="showCustomize" class="widget-control inline">
@@ -102,8 +102,8 @@
               </el-space>
             </div>
             <div class="card-body">
-              <div v-if="item.widget?.widget_type === 'alert_chart'" ref="alertChartRef" class="chart-container"></div>
-              <div v-else-if="item.widget?.widget_type === 'device_status_chart'" ref="deviceChartRef" class="chart-container"></div>
+              <!-- 用唯一的 class 标记图表类型，initCharts() 用 querySelector 查找 -->
+              <div class="chart-container" :class="'chart-' + item.widget?.widget_type"></div>
             </div>
           </div>
         </el-col>
@@ -126,10 +126,28 @@
             </div>
             <div class="card-body">
               <el-table v-if="item.widget?.widget_type === 'recent_alerts_table'" :data="recentAlerts" :border="false" size="small" v-loading="alertsLoading">
-                <el-table-column v-for="col in alertColumns" :key="col.key" :="col" />
+                <el-table-column title="级别" key="level" width="80">
+                  <template #default="{ row }">
+                    <el-tag :type="severityTypeMap[row.level] || 'info'" size="small">{{ severityTextMap[row.level] || row.level || '未知' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column title="告警信息" key="message" showOverflowTooltip prop="message" />
+                <el-table-column title="时间" key="created_at" width="160" prop="created_at" :formatter="(row) => row.created_at ? formatDate(new Date(row.created_at)) : '-'" />
               </el-table>
               <el-table v-else-if="item.widget?.widget_type === 'pending_workorders_table'" :data="pendingOrders" :border="false" size="small" v-loading="workordersLoading">
-                <el-table-column v-for="col in workorderColumns" :key="col.key" :="col" />
+                <el-table-column title="优先级" key="priority" width="80">
+                  <template #default="{ row }">
+                    <el-tag :type="priorityTypeMap[row.priority] || 'info'" size="small">{{ priorityTextMap[row.priority] || row.priority || '普通' }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column title="工单标题" key="title" showOverflowTooltip prop="title" />
+                <el-table-column title="状态" key="status" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="{ pending: 'warning', processing: 'info', resolved: 'success', closed: 'info' }[row.status] || 'info'" size="small">
+                      {{ { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' }[row.status] || row.status || '-' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
               </el-table>
               <el-empty v-if="((item.widget?.widget_type === 'recent_alerts_table' && !alertsLoading && recentAlerts.length === 0) || (item.widget?.widget_type === 'pending_workorders_table' && !workordersLoading && pendingOrders.length === 0))" description="暂无数据" />
             </div>
@@ -152,22 +170,9 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, h, computed, nextTick } from 'vue'
-import * as echarts from 'echarts'
 import {
-  Monitor,
-  Warning,
-  Ticket,
-  CircleCheck,
-  CloseBold,
-  WarningFilled,
-  Setting,
-  RefreshRight,
-  Check,
-  Loading,
-  View,
-  Hide,
-  DArrowLeft,
-  DArrowRight
+  Monitor, Warning, Ticket, CircleCheck, CloseBold, WarningFilled,
+  Setting, RefreshRight, Check, Loading, View, Hide, DArrowLeft, DArrowRight
 } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/date'
 import { devices, alerts, workorder } from '@/api'
@@ -175,10 +180,6 @@ import { performance as monitorApi } from '@/api/monitoring'
 import { ElMessage } from 'element-plus'
 
 const message = ElMessage
-const alertChartRef = ref(null)
-const deviceChartRef = ref(null)
-let alertChart = null
-let deviceChart = null
 
 // Loading states
 const loading = ref(false)
@@ -202,20 +203,16 @@ const statIcons = [Monitor, CircleCheck, Warning, Ticket]
 const statLabels = ['设备总数', '在线设备', '告警数量', '待办工单']
 const statCardValues = ref([0, 0, 0, 0])
 
-// Alert statistics
+// Alert/Device/Health stats
 const alertStats = reactive({ critical: 0, warning: 0, info: 0 })
-
-// Device statistics
 const deviceStats = reactive({ online: 0, offline: 0, warning: 0 })
-
-// System health
 const systemHealth = ref({ cpu: 0, memory: 0, disk: 0 })
 
 // Tables data
 const recentAlerts = ref([])
 const pendingOrders = ref([])
 
-// Widget collections from layout API
+// Widget collections
 const allItems = ref([])
 
 const statWidgets = computed(() => allItems.value.filter(i => i.widget?.widget_type?.startsWith('stat_')))
@@ -223,68 +220,41 @@ const healthWidget = computed(() => allItems.value.find(i => i.widget?.widget_ty
 const chartWidgets = computed(() => allItems.value.filter(i => ['alert_chart', 'device_status_chart'].includes(i.widget?.widget_type)))
 const tableWidgets = computed(() => allItems.value.filter(i => ['recent_alerts_table', 'pending_workorders_table'].includes(i.widget?.widget_type)))
 
-// Alert severity type map
+// Alert severity
 const severityTypeMap = { critical: 'danger', high: 'danger', medium: 'warning', low: 'info', info: 'info' }
 const severityTextMap = { critical: '严重', high: '高', medium: '中', low: '低', info: '提示' }
-const severityOrder = ['critical', 'high', 'medium', 'low', 'info']
 
-// Workorder priority type map
+// Workorder priority
 const priorityTypeMap = { urgent: 'danger', high: 'warning', medium: 'info', low: 'info' }
 const priorityTextMap = { urgent: '紧急', high: '高', medium: '中', low: '低' }
 
 const alertColumns = [
-  {
-    title: '级别',
-    key: 'severity',
-    width: 80,
-    render(row) {
-      const type = severityTypeMap[row.severity] || 'info'
-      const text = severityTextMap[row.severity] || row.severity || '未知'
-      return h(ElTag, { type, size: 'small' }, () => text)
-    }
-  },
+  { title: '级别', key: 'level', width: 80, render(row) {
+    const type = severityTypeMap[row.level] || 'info'
+    const text = severityTextMap[row.level] || row.level || '未知'
+    return h(ElTag, { type, size: 'small' }, () => text)
+  }},
   { title: '告警信息', key: 'message', showOverflowTooltip: true },
-  {
-    title: '时间',
-    key: 'created_at',
-    width: 160,
-    render(row) {
-      if (!row.created_at) return '-'
-      return formatDate(new Date(row.created_at))
-    }
-  }
+  { title: '时间', key: 'created_at', width: 160, render(row) {
+    if (!row.created_at) return '-'
+    return formatDate(new Date(row.created_at))
+  }}
 ]
 
 const workorderColumns = [
-  {
-    title: '优先级',
-    key: 'priority',
-    width: 80,
-    render(row) {
-      const type = priorityTypeMap[row.priority] || 'info'
-      const text = priorityTextMap[row.priority] || row.priority || '普通'
-      return h(ElTag, { type, size: 'small' }, () => text)
-    }
-  },
+  { title: '优先级', key: 'priority', width: 80, render(row) {
+    const type = priorityTypeMap[row.priority] || 'info'
+    const text = priorityTextMap[row.priority] || row.priority || '普通'
+    return h(ElTag, { type, size: 'small' }, () => text)
+  }},
   { title: '工单标题', key: 'title', showOverflowTooltip: true },
-  {
-    title: '状态',
-    key: 'status',
-    width: 100,
-    render(row) {
-      const statusMap = {
-        pending: { type: 'warning', text: '待处理' },
-        processing: { type: 'info', text: '处理中' },
-        resolved: { type: 'success', text: '已解决' },
-        closed: { type: 'info', text: '已关闭' }
-      }
-      const status = statusMap[row.status] || { type: 'info', text: row.status || '-' }
-      return h(ElTag, { type: status.type, size: 'small' }, () => status.text)
-    }
-  }
+  { title: '状态', key: 'status', width: 100, render(row) {
+    const statusMap = { pending: { type: 'warning', text: '待处理' }, processing: { type: 'info', text: '处理中' }, resolved: { type: 'success', text: '已解决' }, closed: { type: 'info', text: '已关闭' } }
+    const status = statusMap[row.status] || { type: 'info', text: row.status || '-' }
+    return h(ElTag, { type: status.type, size: 'small' }, () => status.text)
+  }}
 ]
 
-// Health status helpers
 const getProgressStatus = (value) => {
   if (value >= 90) return 'exception'
   if (value >= 70) return 'warning'
@@ -310,8 +280,7 @@ const healthText = computed(() => {
 // API call with 3-level error handling
 const fetchWithErrorHandling = async (apiCall, fallback = null, showError = true) => {
   try {
-    const result = await apiCall()
-    return result
+    return await apiCall()
   } catch (err) {
     if (err.response) {
       const status = err.response.status
@@ -329,9 +298,7 @@ const fetchWithErrorHandling = async (apiCall, fallback = null, showError = true
         message.error(err.response.data.msg)
       }
     } else if (err.request) {
-      if (showError) {
-        message.error('网络连接失败，请检查网络')
-      }
+      if (showError) message.error('网络连接失败，请检查网络')
     }
     return fallback
   }
@@ -343,11 +310,11 @@ const loadDashboard = async () => {
   error.value = null
 
   try {
-    // Step 1: Load layout from API (MON-032)
+    // Step 1: Load layout from API
     try {
       const layoutRes = await monitorApi.getDashboardLayout()
-      if (layoutRes && layoutRes.items) {
-        const layout = layoutRes
+      const layout = layoutRes?.data || layoutRes
+      if (layout && layout.items) {
         currentLayout.value = layout
         layoutId.value = layout.layout_id
         allItems.value = (layout.items || []).map(item => ({
@@ -376,7 +343,7 @@ const loadDashboard = async () => {
         statCardValues.value = [
           data.total,
           data.online || 0,
-          statCardValues.value[2], // will update below from alerts
+          statCardValues.value[2],
           data.pending_orders || 0
         ]
         deviceStats.online = data.online || 0
@@ -389,9 +356,9 @@ const loadDashboard = async () => {
       const data = alertRes.value
       const items = Array.isArray(data) ? data : (data.items || [])
       recentAlerts.value = items.slice(0, 10)
-      alertStats.critical = items.filter(a => ['critical', 'high'].includes(a.severity)).length
-      alertStats.warning = items.filter(a => ['medium', 'warning'].includes(a.severity)).length
-      alertStats.info = items.filter(a => ['low', 'info'].includes(a.severity)).length
+      alertStats.critical = items.filter(a => ['critical', 'high'].includes(a.level)).length
+      alertStats.warning = items.filter(a => ['medium', 'warning'].includes(a.level)).length
+      alertStats.info = items.filter(a => ['low', 'info'].includes(a.level)).length
       statCardValues.value[2] = items.length
       deviceStats.warning = items.length
     } else {
@@ -415,76 +382,80 @@ const loadDashboard = async () => {
         if (data.cpu !== undefined) {
           systemHealth.value = { cpu: data.cpu || 0, memory: data.memory || 0, disk: data.disk || 0 }
         } else if (data.metrics) {
-          systemHealth.value = {
-            cpu: data.metrics.cpu || 0,
-            memory: data.metrics.memory || 0,
-            disk: data.metrics.disk || 0
-          }
+          systemHealth.value = { cpu: data.metrics.cpu || 0, memory: data.metrics.memory || 0, disk: data.metrics.disk || 0 }
         }
       }
     }
 
     layoutModified.value = false
 
-    // Initialize charts after data is loaded
+    // Initialize charts after DOM is rendered
     await nextTick()
     initCharts()
 
   } catch (err) {
-    error.value = '加载仪表盘数据失败，请稍后重试'
+    console.error('Dashboard load error:', err)
+    error.value = err.message || '加载仪表盘数据失败，请稍后重试'
     message.error('加载仪表盘数据失败')
   } finally {
     loading.value = false
   }
 }
 
+// ========== 核心修复：用 document.querySelector 直接查找 DOM，不依赖 Vue ref ==========
 const initCharts = () => {
-  if (alertChartRef.value) {
-    if (!alertChart) alertChart = echarts.init(alertChartRef.value)
-    const alertData = generateTrendData(recentAlerts.value, 'created_at')
-    alertChart.setOption({
-      tooltip: { trigger: 'axis' },
-      grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
-      xAxis: {
-        type: 'category',
-        boundaryGap: false,
-        data: alertData.dates
-      },
-      yAxis: { type: 'value', minInterval: 1 },
-      series: [{
-        type: 'line',
-        smooth: true,
-        areaStyle: { opacity: 0.3 },
-        data: alertData.values,
-        lineStyle: { color: '#ff7d00' },
-        itemStyle: { color: '#ff7d00' }
-      }]
-    })
+  if (typeof window.echarts === 'undefined') {
+    console.warn('ECharts not loaded, skipping chart init')
+    return
   }
 
-  if (deviceChartRef.value) {
-    if (!deviceChart) deviceChart = echarts.init(deviceChartRef.value)
-    deviceChart.setOption({
-      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-      legend: { bottom: '5%', left: 'center' },
-      series: [{
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
-        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
-        label: { show: false },
-        emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
-        data: [
-          { value: deviceStats.online, name: '在线', itemStyle: { color: '#00b42a' } },
-          { value: deviceStats.offline, name: '离线', itemStyle: { color: '#8c8c8c' } },
-          { value: deviceStats.warning, name: '告警', itemStyle: { color: '#ff7d00' } }
-        ].filter(d => d.value > 0)
-      }]
-    })
+  // 告警趋势图
+  const alertContainer = document.querySelector('.chart-alert_chart')
+  if (alertContainer) {
+    const w = alertContainer.clientWidth
+    if (w > 0) {
+      const chart = window.echarts.init(alertContainer)
+      const alertData = generateTrendData(recentAlerts.value, 'created_at')
+      chart.setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
+        xAxis: { type: 'category', boundaryGap: false, data: alertData.dates },
+        yAxis: { type: 'value', minInterval: 1 },
+        series: [{
+          type: 'line', smooth: true, areaStyle: { opacity: 0.3 },
+          data: alertData.values, lineStyle: { color: '#ff7d00' }, itemStyle: { color: '#ff7d00' }
+        }]
+      })
+      window._dashboardAlertChart = chart
+    }
+  }
+
+  // 设备状态饼图
+  const deviceContainer = document.querySelector('.chart-device_status_chart')
+  if (deviceContainer) {
+    const w = deviceContainer.clientWidth
+    if (w > 0) {
+      const chart = window.echarts.init(deviceContainer)
+      chart.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { bottom: '5%', left: 'center' },
+        series: [{
+          type: 'pie', radius: ['40%', '70%'], avoidLabelOverlap: false,
+          itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+          label: { show: false },
+          emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+          data: [
+            { value: deviceStats.online, name: '在线', itemStyle: { color: '#00b42a' } },
+            { value: deviceStats.offline, name: '离线', itemStyle: { color: '#8c8c8c' } },
+            { value: deviceStats.warning, name: '告警', itemStyle: { color: '#ff7d00' } }
+          ].filter(d => d.value > 0)
+        }]
+      })
+      window._dashboardDeviceChart = chart
+    }
   }
 }
 
-// Generate trend data from items
 const generateTrendData = (items, dateField) => {
   const now = new Date()
   const dates = []
@@ -493,11 +464,12 @@ const generateTrendData = (items, dateField) => {
   for (let i = 6; i >= 0; i--) {
     const date = new Date(now)
     date.setDate(date.getDate() - i)
-    const dateStr = `${date.getMonth() + 1}/${date.getDate()}`
-    dates.push(dateStr)
+    dates.push(`${date.getMonth() + 1}/${date.getDate()}`)
 
-    const dayStart = new Date(date.setHours(0, 0, 0, 0))
-    const dayEnd = new Date(date.setHours(23, 59, 59, 999))
+    const dayStart = new Date(date)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(date)
+    dayEnd.setHours(23, 59, 59, 999)
 
     const count = items.filter(item => {
       if (!item[dateField]) return false
@@ -512,8 +484,8 @@ const generateTrendData = (items, dateField) => {
 }
 
 const handleResize = () => {
-  alertChart?.resize()
-  deviceChart?.resize()
+  window._dashboardAlertChart?.resize()
+  window._dashboardDeviceChart?.resize()
 }
 
 function handleStatClick(key) {
@@ -523,7 +495,6 @@ function handleStatClick(key) {
   if (route) window.location.hash = route
 }
 
-// Layout customization functions
 function toggleVisibility(item) {
   item.visibility = item.visibility === false ? true : false
   layoutModified.value = true
@@ -578,21 +549,15 @@ function resetLayout() {
   layoutModified.value = true
 }
 
-// Dashboard polling timer
 let pollTimer = null
 
 function startPoll() {
   stopPoll()
-  pollTimer = setInterval(() => {
-    loadDashboard()
-  }, 30000)
+  pollTimer = setInterval(() => { loadDashboard() }, 30000)
 }
 
 function stopPoll() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
 onMounted(async () => {
@@ -604,165 +569,64 @@ onMounted(async () => {
 onUnmounted(() => {
   stopPoll()
   window.removeEventListener('resize', handleResize)
-  alertChart?.dispose()
-  deviceChart?.dispose()
+  window._dashboardAlertChart?.dispose()
+  window._dashboardDeviceChart?.dispose()
 })
 </script>
 
 <style scoped>
-.page-container {
-  padding: 20px;
-  min-height: calc(100vh - 40px);
-}
-.loading-container {
-  width: 100%;
-  min-height: 400px;
-}
+.page-container { padding: 20px; min-height: calc(100vh - 40px); }
+.loading-container { width: 100%; min-height: 400px; }
 .dashboard-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px; padding: 12px 16px; background: #f5f7fa; border-radius: 8px;
 }
-.widget-control {
-  margin-bottom: 6px;
-}
-.widget-control.inline {
-  display: inline-block;
-  margin-left: 8px;
-}
-.stats-grid {
-  margin-bottom: 20px;
-}
+.widget-control { margin-bottom: 6px; }
+.widget-control.inline { display: inline-block; margin-left: 8px; }
+.stats-grid { margin-bottom: 20px; }
 .stat-card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  cursor: pointer;
+  background: #fff; border-radius: 8px; padding: 20px;
+  display: flex; align-items: center; gap: 16px; cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border-left: 4px solid;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-left: 4px solid;
 }
-.stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.1);
-}
+.stat-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
 .stat-icon-wrap {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  width: 48px; height: 48px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.stat-content {
-  flex: 1;
-  min-width: 0;
-}
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1d2129;
-  line-height: 1;
-}
-.stat-label {
-  font-size: 13px;
-  color: #86909c;
-  margin-top: 4px;
-}
-.stat-card.collapsed {
-  padding: 12px 16px;
-  justify-content: flex-start;
-}
-.collapsed-hint {
-  font-size: 12px;
-  color: #86909c;
-}
+.stat-content { flex: 1; min-width: 0; }
+.stat-value { font-size: 24px; font-weight: 700; color: #1d2129; line-height: 1; }
+.stat-label { font-size: 13px; color: #86909c; margin-top: 4px; }
+.stat-card.collapsed { padding: 12px 16px; justify-content: flex-start; }
+.collapsed-hint { font-size: 12px; color: #86909c; }
 .health-card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
+  background: #fff; border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;
 }
 .health-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid #f0f0f0;
+  display: flex; justify-content: space-between; align-items: center;
 }
-.card-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: #1d2129;
-}
-.health-body {
-  padding: 16px 20px;
-}
-.health-item {
-  flex: 1;
-  padding: 0 12px;
-}
-.health-label {
-  display: block;
-  font-size: 13px;
-  color: #86909c;
-  margin-bottom: 8px;
-}
-.chart-grid,
-.table-grid {
-  margin-bottom: 20px;
-}
-.card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
+.card-title { font-size: 16px; font-weight: 500; color: #1d2129; }
+.health-body { padding: 16px 20px; }
+.health-item { flex: 1; padding: 0 12px; }
+.health-label { display: block; font-size: 13px; color: #86909c; margin-bottom: 8px; }
+.chart-grid, .table-grid { margin-bottom: 20px; }
+.card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .card-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid #f0f0f0;
+  display: flex; justify-content: space-between; align-items: center;
 }
-.card-body {
-  padding: 16px 20px;
-  min-height: 200px;
-}
-.chart-container {
-  width: 100%;
-  height: 280px;
-}
-.error-state {
-  padding: 60px 20px;
-  text-align: center;
-}
+.card-body { padding: 16px 20px; min-height: 200px; }
+.chart-container { width: 100%; height: 280px; }
+.error-state { padding: 60px 20px; text-align: center; }
 @media (max-width: 768px) {
-  .page-container {
-    padding: 12px;
-  }
-  .stat-card {
-    padding: 16px;
-  }
-  .stat-icon-wrap {
-    width: 40px;
-    height: 40px;
-  }
-  .stat-value {
-    font-size: 20px;
-  }
-  .health-body {
-    flex-direction: column;
-  }
-  .health-item {
-    padding: 8px 0;
-  }
+  .page-container { padding: 12px; }
+  .stat-card { padding: 16px; }
+  .stat-icon-wrap { width: 40px; height: 40px; }
+  .stat-value { font-size: 20px; }
+  .health-body { flex-direction: column; }
+  .health-item { padding: 8px 0; }
 }
 </style>

@@ -238,6 +238,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import vendorCredentials from '@/api/vendor_credentials'
 
 const message = ElMessage
 
@@ -339,8 +340,7 @@ function fpTypeColor(type) {
 
 async function loadVendors() {
   try {
-    const res = await fetch('/api/v1/credentials/vendors')
-    const data = await res.json()
+    const data = await vendorCredentials.vendors.getList()
     vendors.value = data.items || []
   } catch (e) {
     message.error('加载厂商列表失败: ' + e.message)
@@ -349,9 +349,7 @@ async function loadVendors() {
 
 async function loadCategories() {
   try {
-    const res = await fetch('/api/v1/credentials/vendors/categories')
-    const data = await res.json()
-    // categories already loaded
+    await vendorCredentials.vendors.getCategories()
   } catch (e) {
     // load categories failed silently
   }
@@ -359,9 +357,8 @@ async function loadCategories() {
 
 async function selectVendor(vendor) {
   try {
-    const res = await fetch(`/api/v1/credentials/vendors/${encodeURIComponent(vendor.name)}`)
-    if (!res.ok) throw new Error('加载失败')
-    selectedVendor.value = await res.json()
+    const data = await vendorCredentials.vendors.getByName(vendor.name)
+    selectedVendor.value = data
     editMode.value = false
     addingNew.value = false
     // 初始化编辑表单
@@ -389,20 +386,12 @@ async function handleAdd() {
   }
   saving.value = true
   try {
-    const res = await fetch('/api/v1/credentials/vendors', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(addForm.value),
-    })
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.detail || '创建失败')
-    }
+    await vendorCredentials.vendors.create(addForm.value)
     message.success('创建成功')
     addingNew.value = false
     await loadVendors()
   } catch (e) {
-    message.error('创建失败: ' + e.message)
+    message.error('创建失败: ' + (e.message || e))
   } finally {
     saving.value = false
   }
@@ -411,21 +400,13 @@ async function handleAdd() {
 async function handleSave() {
   saving.value = true
   try {
-    const res = await fetch(`/api/v1/credentials/vendors/${encodeURIComponent(selectedVendor.value.name)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editForm.value),
-    })
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.detail || '保存失败')
-    }
+    await vendorCredentials.vendors.update(selectedVendor.value.name, editForm.value)
     message.success('保存成功')
     editMode.value = false
     await loadVendors()
     await selectVendor({ name: editForm.value.name })
   } catch (e) {
-    message.error('保存失败: ' + e.message)
+    message.error('保存失败: ' + (e.message || e))
   } finally {
     saving.value = false
   }
@@ -443,20 +424,14 @@ function handleDelete() {
     }
   ).then(async () => {
     try {
-      const res = await fetch(`/api/v1/credentials/vendors/${encodeURIComponent(selectedVendor.value.name)}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || '删除失败')
-      }
+      await vendorCredentials.vendors.delete(selectedVendor.value.name)
       message.success('删除成功')
       selectedVendor.value = null
       await loadVendors()
     } catch (e) {
-      message.error('删除失败: ' + e.message)
+      message.error('删除失败: ' + (e.message || e))
     }
-    }).catch(e => message.error('删除失败: ' + (e.message || e)))
+  }).catch(e => message.error('删除失败: ' + (e.message || e)))
 }
 
 onMounted(() => {

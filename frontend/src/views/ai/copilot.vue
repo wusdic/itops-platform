@@ -137,6 +137,8 @@ import { ref, computed, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search, Document, MagicStick, Promotion } from '@element-plus/icons-vue'
 import { CONFIG } from '@/config/constants'
+import { knowledge } from '@/api'
+import { ai } from '@/api'
 
 const message = ElMessage
 
@@ -189,29 +191,21 @@ function renderMarkdown(text) {
 
 async function loadCategories() {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/knowledge/category', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    categories.value = data.items || data.data?.items || []
+    const res = await knowledge.category.getList()
+    categories.value = res.items || []
   } catch (e) {
     categories.value = []
+    message.error('加载分类失败')
   }
 }
 
 async function loadKnowledge(categoryId) {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch(`/api/v1/knowledge/sop?category_id=${categoryId}&page_size=${CONFIG.MAX_PAGE_SIZE}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error()
-    const data = await res.json()
-    knowledgeItems.value = data.items || data.data?.items || []
+    const res = await knowledge.sop.getList({ category_id: categoryId, page_size: CONFIG.MAX_PAGE_SIZE })
+    knowledgeItems.value = res.items || []
   } catch {
     knowledgeItems.value = []
+    message.error('加载知识库内容失败')
   }
 }
 
@@ -234,22 +228,12 @@ async function askQuestion() {
   scrollToBottom()
 
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await fetch('/api/v1/ai/knowledge-qa', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        question: text,
-        category_id: selectedCategory.value.id,
-        knowledge_items: knowledgeItems.value.slice(0, 50)
-      })
+    const res = await ai.knowledgeQa({
+      question: text,
+      category_id: selectedCategory.value.id,
+      knowledge_items: knowledgeItems.value.slice(0, 50)
     })
-    if (!res.ok) throw new Error('请求失败')
-    const data = await res.json()
-    const answer = data.answer || data.result || data.response || '抱歉，暂未找到相关知识库内容，请尝试其他问题。'
+    const answer = res.answer || res.result || res.response || '抱歉，暂未找到相关知识库内容，请尝试其他问题。'
     const msg = qaHistory.value.find(m => m.id === questionId)
     if (msg) msg.answer = answer
   } catch (e) {
@@ -281,7 +265,7 @@ function createCategory() {
   dialogVisible.value = true
 }
 
-function submitCategory() {
+async function submitCategory() {
   if (!form.name || !form.code) {
     message.warning('请填写必填项')
     return
@@ -291,24 +275,22 @@ function submitCategory() {
     message.warning('分类编码已存在')
     return
   }
-  const method = form.id ? 'PUT' : 'POST'
-  const url = form.id ? `/api/v1/knowledge/category/${form.id}` : '/api/v1/knowledge/category'
-  const token = localStorage.getItem('token') || ''
   submitting.value = true
-  fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(form)
-  }).then(res => {
-    if (!res.ok) throw new Error()
-    message.success(form.id ? '更新成功' : '创建成功')
+  try {
+    if (form.id) {
+      await knowledge.category.update(form.id, form)
+      message.success('更新成功')
+    } else {
+      await knowledge.category.create(form)
+      message.success('创建成功')
+    }
     dialogVisible.value = false
-    return loadCategories()
-  }).catch(() => {
+    await loadCategories()
+  } catch {
     message.error('操作失败')
-  }).finally(() => {
+  } finally {
     submitting.value = false
-  })
+  }
 }
 
 function handleEditCategory(cat) {

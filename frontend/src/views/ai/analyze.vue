@@ -65,6 +65,7 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ai } from '@/api'
 
 const analyzeType = ref('log')
 const content = ref('')
@@ -78,20 +79,6 @@ const typeOptions = [
   { label: '安全分析', value: 'security' }
 ]
 
-const fetchApi = async (url, options = {}) => {
-  const token = localStorage.getItem('token') || ''
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      ...(options.headers || {})
-    }
-  })
-  if (!res.ok) throw new Error(`HTTP error ${res.status}`)
-  return res.json()
-}
-
 const handleAnalyze = async () => {
   if (!content.value.trim()) {
     ElMessage.warning('请输入分析内容')
@@ -100,21 +87,18 @@ const handleAnalyze = async () => {
 
   analyzing.value = true
   try {
-    const res = await fetchApi('/api/v1/ai/troubleshoot', {
-      method: 'POST',
-      body: JSON.stringify({ query: content.value })
+    const res = await ai.analyze({
+      type: analyzeType.value,
+      content: content.value
     })
-    if (res.data) {
-      result.value = typeof res.data === 'string' ? res.data : JSON.stringify(res.data, null, 2)
-    } else if (typeof res === 'string') {
-      result.value = res
-    } else {
-      result.value = JSON.stringify(res, null, 2)
+    if (res) {
+      result.value = typeof res === 'string' ? res : JSON.stringify(res, null, 2)
     }
     ElMessage.success('分析完成')
   } catch (error) {
-    ElMessage.error('分析失败，请重试')
-    result.value = '分析失败: ' + error.message
+    console.error('分析失败:', error)
+    ElMessage.error(error.message || '分析失败，请重试')
+    result.value = '分析失败: ' + (error.message || '未知错误')
   } finally {
     analyzing.value = false
   }
