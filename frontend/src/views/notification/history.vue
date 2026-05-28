@@ -57,7 +57,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!loading && messageList.length === 0" description="暂无数据" />
+      <el-empty v-if="!loading && list.length === 0" description="暂无数据" />
     </el-card>
 
     <el-dialog v-model="detailModalVisible" title="消息详情" width="500px" destroy-on-close>

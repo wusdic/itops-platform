@@ -83,7 +83,7 @@
         </template>
 
         <el-table
-          v-model:selected="selectedHosts"
+          v-model:selection="selectedHosts"
           :data="scanResults"
           row-key="ip"
           :pagination="false"
