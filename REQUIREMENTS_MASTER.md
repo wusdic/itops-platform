@@ -1,11 +1,12 @@
-# ITOps Platform 需求全景清单（融合版）
+# ITOps Platform 需求全景清单（历史参考）
+
+> ⚠️ **已废弃**：本文档内容已迁移至 `IMPLEMENTATION_STATUS.md`（实现状态）和 `DESIGN.md`（功能模块设计）。
+> 本文档保留作为历史参考，不另行维护。
 
 **项目**：IT运维智能平台  
 **仓库**：https://github.com/wusdic/itops_platform  
-**生成日期**：2026-05-12  
-**数据来源**：
-- `GAP_ANALYSIS.md` — 源码深度分析版（本次生成）
-- `GAP_ANALYSIS_v2.md` — 历史分析参考版
+**原生成日期**：2026-05-12  
+**迁移日期**：2026-05-28
 
 ---
 
