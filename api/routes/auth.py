@@ -440,10 +440,89 @@ async def login(login_data: LoginRequest):
 
     - **username**: 用户名
     - **password**: 密码
+    
+    支持LDAP SSO认证：
+    - 如果LDAP已启用，优先尝试LDAP认证
+    - LDAP认证失败则回退到本地数据库认证
+    - LDAP用户首次登录时自动在本地创建用户记录
     """
     settings = get_settings()
-
-    # 验证用户凭证
+    
+    # 检查LDAP配置是否启用
+    ldap_cfg = _get_ldap_config()
+    ldap_user = None
+    
+    if ldap_cfg:
+        # LDAP已启用，尝试LDAP认证
+        try:
+            from modules.foundation.auth_manager.ldap_client import LDAPClient, LDAPConfig
+            
+            ldap_config = LDAPConfig(
+                server=ldap_cfg.get('server', ''),
+                port=ldap_cfg.get('port', 389),
+                use_ssl=ldap_cfg.get('use_ssl', False),
+                start_tls=ldap_cfg.get('start_tls', False),
+                bind_dn=ldap_cfg.get('bind_dn', ''),
+                bind_password=ldap_cfg.get('bind_password', ''),
+                base_dn=ldap_cfg.get('base_dn', ''),
+                user_filter=ldap_cfg.get('user_filter', '(objectClass=user)'),
+                group_filter=ldap_cfg.get('group_filter', '(objectClass=group)'),
+                user_search_base=ldap_cfg.get('user_search_base', ''),
+                group_search_base=ldap_cfg.get('group_search_base', ''),
+                username_attr=ldap_cfg.get('username_attr', 'sAMAccountName'),
+                email_attr=ldap_cfg.get('email_attr', 'mail'),
+                display_name_attr=ldap_cfg.get('display_name_attr', 'displayName'),
+                group_member_attr=ldap_cfg.get('group_member_attr', 'member'),
+            )
+            
+            ldap_client = LDAPClient(ldap_config)
+            ok, msg, ldap_user = ldap_client.authenticate(login_data.username, login_data.password)
+            
+            if ok and ldap_user:
+                # LDAP认证成功：查找或创建本地用户
+                local_user = _user_store.get_user(login_data.username)
+                if not local_user:
+                    # LDAP用户首次登录，自动在本地创建用户记录
+                    local_user = _user_store.create_user(
+                        username=ldap_user.username,
+                        password=login_data.password,  # 占位密码，LDAP用户通过LDAP认证
+                        email=ldap_user.email or "",
+                        full_name=ldap_user.display_name or ldap_user.username,
+                        roles=["viewer"],  # LDAP用户默认viewer角色
+                    )
+                    
+                # 创建访问令牌
+                access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+                access_token = create_access_token(
+                    data={
+                        "sub": local_user["username"],
+                        "user_id": local_user["user_id"],
+                        "roles": local_user["roles"]
+                    },
+                    expires_delta=access_token_expires,
+                )
+                
+                return {
+                    "access_token": access_token,
+                    "token": access_token,
+                    "token_type": "bearer",
+                    "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                    "user": {
+                        "user_id": local_user["user_id"],
+                        "username": local_user["username"],
+                        "email": local_user.get("email"),
+                        "roles": local_user["roles"],
+                    },
+                    "auth_source": "ldap",  # 标识认证来源
+                }
+        except ImportError:
+            # LDAP模块未安装，继续使用本地认证
+            ldap_user = None
+        except Exception as e:
+            # LDAP认证异常，记录日志并继续本地认证
+            ldap_user = None
+    
+    # 本地数据库认证（也处理LDAP认证失败的情况）
     user = _user_store.authenticate(login_data.username, login_data.password)
 
     if not user:
@@ -475,6 +554,7 @@ async def login(login_data: LoginRequest):
             "email": user.get("email"),
             "roles": user["roles"],
         },
+        "auth_source": "local",
     }
 
 
