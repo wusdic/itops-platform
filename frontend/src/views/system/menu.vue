@@ -151,7 +151,7 @@ function getMenuLabelByKey(key) {
 async function loadMenus() {
   try {
     const data = await menuApi.getList()
-    const list = Array.isArray(data) ? data : (data.data || [])
+    const list = Array.isArray(data) ? data : (data.items || [])
     const map = {}
     list.forEach(item => { map[item.key] = { ...item, children: [] } })
     list.forEach(item => {

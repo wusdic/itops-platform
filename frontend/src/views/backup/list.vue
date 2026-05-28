@@ -69,7 +69,7 @@
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!loading && tableData.length === 0" description="暂无数据" />
+      <el-empty v-if="!loading && backupList.length === 0" description="暂无数据" />
       <div class="pagination">
         <el-pagination
           v-model:current-page="pagination.page"
