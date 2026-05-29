@@ -209,3 +209,34 @@ def match_policies(trigger_type: str, asset_id: Optional[str] = Query(None)):
     """匹配适用的策略"""
     policies = PolicyService.match_policies(trigger_type, asset_id)
     return {"code": 0, "message": "success", "data": policies}
+
+
+@router.post("/match/{trigger_type}/explain", summary="策略命中解释")
+def explain_policy_match(
+    trigger_type: str,
+    event_data: Dict[str, Any],
+):
+    """
+    Phase 7-5: 策略命中解释。
+
+    给定触发类型和事件数据，返回命中的策略及其命中原因、影响资产、动作计划和验证方案。
+    用于用户在策略触发后，看到"为什么触发这个策略"的解释。
+    """
+    # 匹配所有 published 策略
+    matched = PolicyService.match_policies(trigger_type=trigger_type, asset_id=event_data.get("asset_id"))
+
+    explanations = []
+    for policy in matched:
+        explanation = PolicyService.explain_match(policy, event_data)
+        explanations.append(explanation)
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "trigger_type": trigger_type,
+            "event_data": event_data,
+            "matched_count": len(explanations),
+            "explanations": explanations,
+        }
+    }
