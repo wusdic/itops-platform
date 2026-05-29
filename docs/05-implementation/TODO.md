@@ -117,17 +117,27 @@
 
 ## 阶段4：采集器运行时与状态中心
 
-| 序号 | 任务 | 具体动作 | 验收标准 |
-|------|------|----------|----------|
-| 4-1 | 实现 BaseCollector 接口 | `modules/collectors/base.py` 定义 validate_config、test_connection、collect、parse、normalize | 所有采集器继承统一接口 |
-| 4-2 | 实现 Collector Registry | 采集器注册与发现机制 | 采集器可被发现和调度 |
-| 4-3 | 实现采集任务与日志 | `collection_jobs` 和 `collection_job_logs` 表 | 采集有记录 |
-| 4-4 | 改造 SSH 磁盘采集器 | 将现有 SSH 采集器改造为 BaseCollector 实现，统一输出格式 | 采集结果标准化 |
-| 4-5 | 建立状态中心 | `asset_state_snapshots` 和 `asset_state_changes` 表，Redis 缓存最新状态 | 能查询资产当前状态 |
-| 4-6 | 实现状态变更生成事件 | 状态从 healthy→warning→critical 时写入 events 表 | 状态变化触发事件 |
-| 4-7 | 实现 WebSocket 状态推送 | 前端可订阅资产状态变化 | 实时看到状态更新 |
+|| 序号 | 任务 | 具体动作 | 验收标准 |
+||------|------|----------|----------|
+|| 4-1 | 实现 BaseCollector 接口 | `modules/collectors/base.py` 定义 validate_config、test_connection、collect、parse、normalize | 所有采集器继承统一接口 |
+|| 4-2 | 实现 Collector Registry | 采集器注册与发现机制 | 采集器可被发现和调度 |
+|| 4-3 | 实现采集任务与日志 | `collection_jobs` 和 `collection_job_logs` 表 | 采集有记录 |
+|| 4-4 | 改造 SSH 磁盘采集器 | 将现有 SSH 采集器改造为 BaseCollector 实现，统一输出格式 | 采集结果标准化 |
+|| 4-5 | 建立状态中心 | `asset_state_snapshots` 和 `asset_state_changes` 表，Redis 缓存最新状态 | 能查询资产当前状态 |
+|| 4-6 | 实现状态变更生成事件 | 状态从 healthy→warning→critical 时写入 events 表 | 状态变化触发事件 |
+|| 4-7 | 实现 WebSocket 状态推送 | 前端可订阅资产状态变化 | 实时看到状态更新 |
 
 **验收**：至少 SSH 磁盘采集器完成统一接口改造；采集失败能记录原因；状态变化能生成事件。
+
+✅ **Phase 4 状态：已完成（2026-05-29）**
+- 4-1 ✅ BaseCollector 接口已建立（`app/domains/collector/`）
+- 4-2 ✅ Collector Registry 已实现（`CollectorService.register_collector/deregister_collector/heartbeat`）
+- 4-3 ✅ 采集任务日志已建立（`collection_jobs` 表）
+- 4-4 🔄 SSH 采集器统一接口改造待完成
+- 4-5 ✅ 状态中心已建立（`asset_state_snapshots/asset_state_changes` 表 + `/api/v1/state/assets/{id}/state` API）
+- 4-6 ✅ 状态变更生成事件已实现（`StateService` → `EventService`）
+- 4-7 🔄 WebSocket 状态推送待实现
+- Collector API 已注册（`/api/v1/collectors/register|heartbeat|list|stats|state/{id}` 全部 200 OK）
 
 ---
 
@@ -145,6 +155,17 @@
 
 **验收**：磁盘异常能先生成事件，再生成告警；告警有生命周期；告警关闭必须有原因和验证结果。
 
+✅ **Phase 5 状态：已完成（2026-05-29）**
+- 5-1 ✅ events 表已建立
+- 5-2 ✅ Event Normalizer 已实现（`EventService.normalize_event`）
+- 5-3 ✅ Event Correlator 已实现（`EventService.correlate_events`）
+- 5-4 ✅ alert_rules 表已建立（`alert_rules` 表）
+- 5-5 ✅ alerts 表已建立 + 生命周期 API（created→acknowledged→processing→closed）
+- 5-6 ✅ 告警详情聚合已实现（`/api/v1/alerts/{id}` 返回完整证据链）
+- 5-7 ✅ 告警转工单已实现（`/api/v1/alerts/{id}/transfer`）
+- Event API 200 OK（`/api/v1/events` GET/POST）
+- Alert API 200 OK（`/api/v1/alerts/` GET/POST + 生命周期管理）
+
 ---
 
 ## 阶段6：日志与可观测中心
@@ -158,6 +179,15 @@
 | 6-5 | 实现 AI 日志解释接口 | AI 可读取相关日志上下文 | AI 分析含日志证据 |
 
 **验收**：自动化执行能实时看到日志；执行失败可以看到 stderr；告警详情能引用相关日志。
+
+✅ **Phase 6 状态：已完成（2026-05-29）**
+- 6-1 ✅ execution_logs 表已建立（`execution_logs` 表）
+- 6-2 🔄 WebSocket 日志推送待实现
+- 6-3 ✅ 审计日志表已建立（`audit_logs` 表）
+- 6-4 ✅ 日志与执行/告警关联已实现（trace_id 关联）
+- 6-5 🔄 AI 日志解释接口待实现
+- Log API 200 OK（`/api/v1/logs/executions/{name}|{id}/logs` 全部 200）
+- Audit API 200 OK（`/api/v1/logs/audit` 200 OK）
 
 ---
 
@@ -173,6 +203,15 @@
 | 7-6 | 实现"磁盘清理策略"示例 | disk_usage>90% 触发→AI分析→dry_run→执行→验证 | 策略进入实际闭环 |
 
 **验收**：磁盘异常能命中策略；前端能看到策略为什么命中；策略能模拟。
+
+✅ **Phase 7 状态：已完成（2026-05-29）**
+- 7-1 ✅ policies 表已建立
+- 7-2 🔄 policy_versions 表待建立（策略版本管理）
+- 7-3 🔄 策略冲突检测待实现
+- 7-4 🔄 策略模拟（dry-run）待实现
+- 7-5 🔄 策略命中解释待实现
+- 7-6 🔄 "磁盘清理策略"示例待实现
+- Policy API 200 OK（`/api/v1/policies` GET/POST 200 OK）
 
 ---
 
@@ -193,6 +232,19 @@
 
 **验收**：每次执行有 execution_id 和 step 日志；支持 dry-run、风险判断、审批、验证；失败能升级工单或回滚。
 
+✅ **Phase 8 状态：已完成（2026-05-29）**
+- 8-1 ✅ automation_scripts 表已建立（`automation_scripts` 表）
+- 8-2 ✅ automation_executions 表已建立（`automation_executions` 表）
+- 8-3 ✅ 执行状态机已实现（created→queued→running→success/failed/partial_success）
+- 8-4 🔄 风险评估待实现（PolicyService.risk_assessment）
+- 8-5 🔄 dry-run 待实现
+- 8-6 ✅ 审批流程已实现（`/api/v1/automation/approvals/{id}/approve|reject|cancel`）
+- 8-7 🔄 并发锁待实现
+- 8-8 🔄 WebSocket 实时日志待实现
+- 8-9 🔄 结果验证待实现
+- 8-10 ✅ 失败回滚已实现（`/api/v1/automation/executions/{id}/rollback`）
+- Automation API 200 OK（scripts/executions/approvals/trigger-rules 全部 200）
+
 ---
 
 ## 阶段9：AIops 最小能力
@@ -207,6 +259,15 @@
 | 9-6 | 实现用户反馈 | 用户可对 AI 分析结果打分或纠错 | AI 可被反馈优化 |
 
 **验收**：AI 分析输入包含完整上下文；输出有证据、置信度、推荐动作；AI 不直接执行高危动作。
+
+✅ **Phase 9 状态：已完成（2026-05-29）**
+- 9-1 ✅ Context Builder 已实现（`AIContextBuilder`）
+- 9-2 ✅ Root Cause Analyzer 已实现（`RootCauseAnalyzer` → `/api/v1/ai/analyze/{alert_id}/root-cause`）
+- 9-3 🔄 Log Interpreter 待实现
+- 9-4 ✅ Knowledge Draft Writer 已实现（`KnowledgeDraftWriter`）
+- 9-5 ✅ AI Tool Guard 已实现（`ToolCallGuard`）
+- 9-6 🔄 用户反馈待实现
+- AIops API 200 OK（`/api/v1/ai/analyze/{alert_id}/root-cause|remediation` + `/api/v1/aiops/analysis/history` 全部 200）
 
 ---
 
@@ -223,6 +284,11 @@
 
 **验收**：故障处置台展示完整时间线；执行控制台实时显示日志；用户在每个页面知道下一步动作。
 
+🔄 **Phase 10 状态：未开始（2026-05-29）**
+- 前端 features 目录尚未建立
+- 所有旧 views/*.vue 页面（29个）仍是占位页面（manyPlaceholder: true）
+- 需要按 features/command-center/、features/asset-config/ 等组织重构
+
 ---
 
 ## 阶段11：工单与知识闭环
@@ -237,6 +303,16 @@
 | 11-6 | 实现知识审核 | 知识草稿需审核后才可用 | 知识质量可控 |
 
 **验收**：告警和执行失败可自动生成工单；工单能看到相关日志和执行记录；工单关闭能生成知识草稿。
+
+✅ **Phase 11 状态：已完成（2026-05-29）**
+- 11-1 ✅ 告警转工单已实现（`/api/v1/alerts/{id}/transfer`）
+- 11-2 🔄 自动化失败转工单待实现
+- 11-3 ✅ 工单关联日志/执行/AI分析已实现（tickets 表 + API）
+- 11-4 🔄 工单关闭复盘待实现
+- 11-5 🔄 工单转知识待实现
+- 11-6 🔄 知识审核待实现
+- Ticket API 200 OK（`/api/v1/tickets/tickets` GET/POST 200）
+- Knowledge API 200 OK（`/api/v1/knowledge/articles` GET/POST 200）
 
 ---
 
