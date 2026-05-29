@@ -209,7 +209,7 @@
 - 7-2 🔄 policy_versions 表待建立（策略版本管理）
 - 7-3 ✅ 策略冲突检测已实现（`POST /api/v1/policies/check-conflicts`）
 - 7-4 ✅ 策略模拟已实现（`POST /api/v1/policies/simulate`）
-- 7-5 🔄 策略命中解释待实现
+- 7-5 ✅ 策略命中解释已实现（`POST /api/v1/policies/match/{trigger_type}/explain`）
 - 7-6 🔄 "磁盘清理策略"示例待实现
 - Policy API 200 OK（`/api/v1/policies` GET/POST 200 OK）
 
@@ -241,7 +241,7 @@
 - 8-6 ✅ 审批流程已实现（`/api/v1/automation/approvals/{id}/approve|reject|cancel`）
 - 8-7 ✅ 并发锁已实现（RedisLock 防止同一设备并发执行，409 冲突响应）
 - 8-8 ✅ SSE 实时日志已实现（`GET /api/v1/automation/executions/{id}/stream`）
-- 8-9 🔄 结果验证待实现
+- 8-9 ✅ 结果验证已实现（`GET /api/v1/automation/executions/{id}/verify`）
 - 8-10 ✅ 失败回滚已实现（`/api/v1/automation/executions/{id}/rollback`）
 - Automation API 200 OK（scripts/executions/approvals/trigger-rules 全部 200）
 

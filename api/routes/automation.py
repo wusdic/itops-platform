@@ -694,6 +694,27 @@ async def get_execution(
     return {"code": 0, "message": "success", "data": _execution_to_dict(e, task.name if task else None, script.name if script else None)}
 
 
+@router.get("/executions/{execution_id}/verify", summary="Phase 8-9 验证执行结果")
+async def verify_execution_result(
+    execution_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Phase 8-9: 执行结果验证。
+
+    执行成功后，验证预期效果是否达成：
+    1. 查询执行记录确认状态
+    2. 重新采集目标设备指标
+    3. 对比执行前后指标变化
+    4. 返回验证结论（passed / failed / inconclusive）
+    """
+    from modules.business.automation.execution_service import ExecutionService
+    svc = ExecutionService(db)
+    result = svc.verify_execution(execution_id)
+    return {"code": 0, "message": "success", "data": result}
+
+
 @router.get("/executions/{execution_id}/logs", summary="获取执行日志")
 async def get_execution_logs(
     execution_id: str,

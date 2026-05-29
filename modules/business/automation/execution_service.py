@@ -843,3 +843,155 @@ class ExecutionService:
             "avg_duration_ms": int(avg_duration),
             "period_days": days,
         }
+
+    # ==================== Phase 8-9: 结果验证 ====================
+
+    def verify_execution(self, execution_id: str) -> Dict[str, Any]:
+        """
+        Phase 8-9: 执行结果验证。
+
+        执行成功后，验证预期效果是否达成：
+        1. 查询执行记录确认状态
+        2. 重新采集目标设备指标
+        3. 对比执行前后指标变化
+        4. 返回验证结论
+
+        Returns:
+            verification_result: passed / failed / inconclusive
+        """
+        from datetime import timedelta
+
+        execution = self.db.query(AutomationExecution).filter(
+            AutomationExecution.id == execution_id
+        ).first()
+
+        if not execution:
+            return {"status": "error", "message": f"执行记录 {execution_id} 不存在"}
+
+        # 确认执行状态
+        if execution.status != ExecutionStatus.SUCCESS.value:
+            return {
+                "status": "skipped",
+                "message": f"执行状态为 {execution.status}，无需验证",
+                "execution_id": execution_id,
+            }
+
+        target_device_ids = []
+        if execution.target_devices:
+            try:
+                target_device_ids = execution.target_devices.get("device_ids", [])
+            except Exception:
+                target_device_ids = []
+
+        if not target_device_ids:
+            return {
+                "status": "inconclusive",
+                "message": "无目标设备信息，无法验证",
+                "execution_id": execution_id,
+            }
+
+        # 采集目标设备当前指标
+        verification_items = []
+        for device_id in target_device_ids[:3]:  # 最多验证3台
+            try:
+                from modules.business.monitoring.collectors.device_metrics import DeviceMetricsCollector
+                collector = DeviceMetricsCollector()
+                metrics = collector.collect(device_id)
+                verification_items.append({
+                    "device_id": device_id,
+                    "status": "collected",
+                    "metrics": metrics,
+                    "timestamp": datetime.now().isoformat(),
+                })
+            except Exception as e:
+                verification_items.append({
+                    "device_id": device_id,
+                    "status": "error",
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat(),
+                })
+
+        # 从执行参数中提取预期指标（如果有）
+        execution_params = {}
+        if execution.parameters:
+            try:
+                execution_params = execution.parameters
+            except Exception:
+                execution_params = {}
+
+        expected_metric = execution_params.get("expected_metric")
+        expected_operator = execution_params.get("expected_operator", "lt")
+        expected_value = execution_params.get("expected_value")
+
+        verification_details = []
+        overall_passed = True
+
+        for item in verification_items:
+            if item["status"] != "collected":
+                verification_details.append({
+                    "device_id": item["device_id"],
+                    "result": "unknown",
+                    "reason": item.get("error", "采集失败"),
+                })
+                overall_passed = False
+                continue
+
+            metrics = item.get("metrics", {})
+            if expected_metric and expected_value is not None:
+                actual_value = metrics.get(expected_metric)
+                if actual_value is None:
+                    verification_details.append({
+                        "device_id": item["device_id"],
+                        "result": "inconclusive",
+                        "reason": f"指标 {expected_metric} 不存在",
+                    })
+                    overall_passed = False
+                else:
+                    passed = self._compare_metric(
+                        actual_value, expected_operator, expected_value
+                    )
+                    verification_details.append({
+                        "device_id": item["device_id"],
+                        "result": "passed" if passed else "failed",
+                        "metric": expected_metric,
+                        "expected": f"{expected_operator} {expected_value}",
+                        "actual": actual_value,
+                    })
+                    if not passed:
+                        overall_passed = False
+            else:
+                verification_details.append({
+                    "device_id": item["device_id"],
+                    "result": "no_baseline",
+                    "reason": "无预期指标基准，跳过指标对比",
+                })
+
+        final_status = "passed" if overall_passed else "failed"
+        if any(d["result"] == "inconclusive" for d in verification_details):
+            final_status = "inconclusive"
+
+        return {
+            "status": final_status,
+            "execution_id": execution_id,
+            "execution_status": execution.status,
+            "verification_details": verification_details,
+            "verified_at": datetime.now().isoformat(),
+            "message": "验证通过" if final_status == "passed" else (
+                "验证失败，请检查执行效果" if final_status == "failed" else "部分设备无法验证"
+            ),
+        }
+
+    @staticmethod
+    def _compare_metric(actual: float, operator: str, expected: float) -> bool:
+        """比较指标值"""
+        if operator == "lt":
+            return actual < expected
+        elif operator == "lte":
+            return actual <= expected
+        elif operator == "gt":
+            return actual > expected
+        elif operator == "gte":
+            return actual >= expected
+        elif operator == "eq":
+            return actual == expected
+        return False
