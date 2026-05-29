@@ -198,7 +198,10 @@ async def publish_config(
     x_tenant_id: Optional[str] = Header(None),
 ):
     """发布配置"""
-    body = await request.json() if request.method == "POST" else {}
+    try:
+        body = await request.json() if request.method == "POST" else {}
+    except Exception:
+        body = {}
     with get_db_session() as db:
         svc = ConfigService(db)
         try:
@@ -225,7 +228,10 @@ async def rollback_config(
     x_tenant_id: Optional[str] = Header(None),
 ):
     """回滚配置"""
-    body = await request.json() if request.method == "POST" else {}
+    try:
+        body = await request.json() if request.method == "POST" else {}
+    except Exception:
+        body = {}
     target_version = body.get("target_version")
     with get_db_session() as db:
         svc = ConfigService(db)

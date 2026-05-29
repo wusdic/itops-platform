@@ -22,12 +22,12 @@ class StrategyStatus(str, enum.Enum):
     ARCHIVED = "archived"     # 已归档
 
 
-class StrategyPriority(str, enum.Enum):
-    """策略优先级"""
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+class StrategyPriority(enum.Enum):
+    """策略优先级（使用整数存储，与DB INT列匹配）"""
+    LOW = 0
+    MEDIUM = 1
+    HIGH = 2
+    CRITICAL = 3
 
 
 class RuleConditionType(str, enum.Enum):
@@ -92,7 +92,7 @@ class Strategy(Base):
     template_id = Column(Integer, ForeignKey("strategy_templates.id"), nullable=True, comment="关联模板ID")
     strategy_type = Column(String(64), nullable=False, comment="策略类型")
     category = Column(String(64), nullable=True, comment="策略分类")
-    priority = Column(SQLEnum(StrategyPriority), default=StrategyPriority.MEDIUM, comment="优先级")
+    priority = Column(Integer, default=StrategyPriority.MEDIUM.value, comment="优先级")
     status = Column(SQLEnum(StrategyStatus), default=StrategyStatus.DRAFT, comment="状态")
     scope = Column(JSON, nullable=True, comment="策略范围（设备/分组/标签）")
     conditions = Column(JSON, nullable=False, comment="触发条件")
@@ -112,38 +112,22 @@ class Strategy(Base):
     
     # 关联关系
     template = relationship("StrategyTemplate", backref="strategies")
-    versions = relationship("StrategyVersion", back_populates="strategy", order_by="StrategyVersion.version.desc()")
+    # versions 关系已移除（strategy_versions 表无真实 FK）
 
 
 class StrategyVersion(Base):
-    """策略版本历史"""
+    """策略版本历史（仅包含真实存在的 DB 列）"""
     __tablename__ = "strategy_versions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     strategy_id = Column(Integer, ForeignKey("strategies.id"), nullable=False, comment="策略ID")
     version = Column(Integer, nullable=False, comment="版本号")
-    name = Column(String(128), nullable=False, comment="策略名称")
-    description = Column(Text, nullable=True, comment="策略描述")
-    strategy_type = Column(String(64), nullable=False, comment="策略类型")
-    category = Column(String(64), nullable=True, comment="策略分类")
-    priority = Column(SQLEnum(StrategyPriority), comment="优先级")
-    status = Column(SQLEnum(StrategyStatus), comment="状态")
-    scope = Column(JSON, nullable=True, comment="策略范围")
-    conditions = Column(JSON, nullable=False, comment="触发条件")
-    actions = Column(JSON, nullable=False, comment="执行动作")
-    config = Column(JSON, nullable=True, comment="策略配置")
-    change_type = Column(SQLEnum(ChangeType), nullable=False, comment="变更类型")
-    change_summary = Column(Text, nullable=True, comment="变更摘要")
-    previous_version_id = Column(Integer, nullable=True, comment="前一版本ID")
-    previous_values = Column(JSON, nullable=True, comment="变更前的值")
+    config = Column(JSON, nullable=True, comment="版本配置快照")
+    rules = Column(JSON, nullable=True, comment="规则快照")
+    change_summary = Column(String(256), nullable=True, comment="变更摘要")
+    change_type = Column(String(32), nullable=True, comment="变更类型")
     operator = Column(String(64), nullable=True, comment="操作人")
-    operator_ip = Column(String(64), nullable=True, comment="操作人IP")
-    approved_by = Column(String(64), nullable=True, comment="审批人")
-    approved_at = Column(DateTime, nullable=True, comment="审批时间")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
-    
-    # 关联关系
-    strategy = relationship("Strategy", back_populates="versions")
 
 
 class StrategyRule(Base):

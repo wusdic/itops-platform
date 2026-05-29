@@ -31,6 +31,25 @@ class TriggerRuleCreateRequest(BaseModel):
     trigger_interval: int = Field(60, description="触发间隔(秒)")
 
 
+class CreateAlertRequest(BaseModel):
+    """创建告警请求（body 方式，REST 语义正确）"""
+    title: str = Field(..., description="告警标题")
+    level: str = Field(..., description="告警级别: critical, high, medium, low, info")
+    message: str = Field("", description="告警消息")
+    device_id: Optional[int] = Field(None, description="设备ID")
+    device_name: Optional[str] = Field(None, description="设备名称")
+    device_ip: Optional[str] = Field(None, description="设备IP")
+    metric_name: Optional[str] = Field(None, description="指标名称")
+    metric_value: Optional[float] = Field(None, description="指标值")
+    threshold: Optional[float] = Field(None, description="阈值")
+    category: Optional[str] = Field(None, description="分类")
+
+
+class ResolveAlertRequest(BaseModel):
+    """解决告警请求"""
+    resolution: str = Field("", description="解决方案")
+
+
 # ============== 告警基础接口 ==============
 
 @router.get("/", summary="获取告警列表")
@@ -119,18 +138,7 @@ async def get_alert(alert_id: int):
 
 
 @router.post("/", summary="创建告警")
-async def create_alert(
-    title: str = Query(..., description="告警标题"),
-    level: str = Query(..., description="告警级别: critical, high, medium, low, info"),
-    message: str = Query("", description="告警消息"),
-    device_id: Optional[int] = Query(None, description="设备ID"),
-    device_name: Optional[str] = Query(None, description="设备名称"),
-    device_ip: Optional[str] = Query(None, description="设备IP"),
-    metric_name: Optional[str] = Query(None, description="指标名称"),
-    metric_value: Optional[float] = Query(None, description="指标值"),
-    threshold: Optional[float] = Query(None, description="阈值"),
-    category: Optional[str] = Query(None, description="分类"),
-):
+async def create_alert(body: CreateAlertRequest):
     """创建新告警"""
     with get_db_session() as db:
         from modules.foundation.db_models.alert import AlertLevel, AlertCategory
@@ -140,28 +148,28 @@ async def create_alert(
         
         # 转换级别
         try:
-            alert_level = AlertLevel(level)
+            alert_level = AlertLevel(body.level)
         except ValueError:
             alert_level = AlertLevel.INFO
         
         # 转换分类
         alert_category = None
-        if category:
+        if body.category:
             try:
-                alert_category = AlertCategory(category)
+                alert_category = AlertCategory(body.category)
             except ValueError:
                 alert_category = AlertCategory.OTHER
         
         alert = svc.create_alert(
-            title=title,
+            title=body.title,
             level=alert_level,
-            message=message,
-            device_id=device_id,
-            device_name=device_name,
-            device_ip=device_ip,
-            metric_name=metric_name,
-            metric_value=metric_value,
-            threshold=threshold,
+            message=body.message,
+            device_id=body.device_id,
+            device_name=body.device_name,
+            device_ip=body.device_ip,
+            metric_name=body.metric_name,
+            metric_value=body.metric_value,
+            threshold=body.threshold,
             category=alert_category,
         )
         
@@ -196,10 +204,7 @@ async def acknowledge_alert(alert_id: int):
 
 
 @router.put("/{alert_id}/resolve", summary="解决告警")
-async def resolve_alert(
-    alert_id: int,
-    resolution: str = Query("", description="解决方案"),
-):
+async def resolve_alert(alert_id: int, body: ResolveAlertRequest):
     """解决告警"""
     with get_db_session() as db:
         from modules.business.monitoring.alert_service import AlertService
@@ -208,7 +213,7 @@ async def resolve_alert(
         svc = AlertService(db)
         username = get_username() or "system"
         
-        if not svc.resolve_alert(alert_id, username, resolution):
+        if not svc.resolve_alert(alert_id, username, body.resolution):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Alert not found",

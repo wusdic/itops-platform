@@ -205,7 +205,16 @@ class StrategyService:
 
     def create_strategy(self, req: CreateStrategyRequest, operator: str = None, tenant_id: Optional[str] = None) -> object:
         """创建策略"""
-        from app.domains.strategy.models import Strategy, StrategyVersion, ChangeType
+        from app.domains.strategy.models import Strategy, StrategyVersion, ChangeType, StrategyPriority
+
+        # 将字符串 "high"/"medium" 转换为整数 enum（DB 是 INT 列）
+        _priority_map = {
+            "low": StrategyPriority.LOW.value,
+            "medium": StrategyPriority.MEDIUM.value,
+            "high": StrategyPriority.HIGH.value,
+            "critical": StrategyPriority.CRITICAL.value,
+        }
+        _priority = _priority_map.get(req.priority.lower() if req.priority else "medium", StrategyPriority.MEDIUM.value)
 
         strategy = Strategy(
             name=req.name,
@@ -213,7 +222,7 @@ class StrategyService:
             template_id=req.template_id,
             strategy_type=req.strategy_type,
             category=req.category,
-            priority=req.priority,
+            priority=_priority,
             status="draft",
             scope=json.dumps(req.scope) if req.scope else None,
             conditions=json.dumps([c.model_dump() for c in req.conditions]),
@@ -226,23 +235,25 @@ class StrategyService:
         self.db.add(strategy)
         self.db.flush()
 
-        # 创建初始版本记录
+        # 创建初始版本记录（使用真实 DB 列）
         version = StrategyVersion(
             strategy_id=strategy.id,
             version=1,
-            name=strategy.name,
-            description=strategy.description,
-            strategy_type=strategy.strategy_type,
-            category=strategy.category,
-            priority=strategy.priority,
-            status=strategy.status,
-            scope=strategy.scope,
-            conditions=strategy.conditions,
-            actions=strategy.actions,
-            config=strategy.config,
-            change_type=ChangeType.CREATE,
+            config=json.dumps({
+                "name": strategy.name,
+                "description": strategy.description,
+                "strategy_type": strategy.strategy_type,
+                "category": strategy.category,
+                "priority": _priority,
+                "status": "draft",
+                "scope": strategy.scope,
+                "conditions": strategy.conditions,
+                "actions": strategy.actions,
+            }),
+            rules=json.dumps([]),
             change_summary="Initial creation",
-            previous_values={},
+            change_type="CREATE",
+
             operator=operator,
         )
         self.db.add(version)
@@ -312,25 +323,25 @@ class StrategyService:
         strategy.version += 1
         strategy.updated_at = datetime.now()
 
-        # 创建版本记录
+        # 创建版本记录（仅使用真实存在的 DB 列）
         version = StrategyVersion(
             strategy_id=strategy.id,
             version=strategy.version,
-            name=strategy.name,
-            description=strategy.description,
-            strategy_type=strategy.strategy_type,
-            category=strategy.category,
-            priority=strategy.priority,
-            status=strategy.status,
-            scope=strategy.scope,
-            conditions=strategy.conditions,
-            actions=strategy.actions,
-            config=strategy.config,
-            change_type=ChangeType.UPDATE,
+            config=json.dumps({
+                "name": strategy.name,
+                "description": strategy.description,
+                "strategy_type": strategy.strategy_type,
+                "category": strategy.category,
+                "priority": strategy.priority,
+                "status": strategy.status,
+                "scope": strategy.scope,
+                "conditions": strategy.conditions,
+                "actions": strategy.actions,
+            }),
+            rules=json.dumps([]),
+            change_type="UPDATE",
             change_summary=req.change_summary or f"Updated to version {strategy.version}",
-            previous_values=old_values,
             operator=operator,
-            operator_ip=operator_ip,
         )
         self.db.add(version)
         self.db.commit()
@@ -378,25 +389,25 @@ class StrategyService:
         strategy.published_by = operator
         strategy.version += 1
 
-        # 创建版本记录
+        # 创建版本记录（仅使用真实存在的 DB 列）
         version = StrategyVersion(
             strategy_id=strategy.id,
             version=strategy.version,
-            name=strategy.name,
-            description=strategy.description,
-            strategy_type=strategy.strategy_type,
-            category=strategy.category,
-            priority=strategy.priority,
-            status=strategy.status,
-            scope=strategy.scope,
-            conditions=strategy.conditions,
-            actions=strategy.actions,
-            config=strategy.config,
-            change_type=ChangeType.PUBLISH,
+            config=json.dumps({
+                "name": strategy.name,
+                "description": strategy.description,
+                "strategy_type": strategy.strategy_type,
+                "category": strategy.category,
+                "priority": strategy.priority,
+                "status": strategy.status,
+                "scope": strategy.scope,
+                "conditions": strategy.conditions,
+                "actions": strategy.actions,
+            }),
+            rules=json.dumps([]),
+            change_type="PUBLISH",
             change_summary=f"Published version {strategy.version}",
-            previous_values={"status": old_status},
             operator=operator,
-            operator_ip=operator_ip,
         )
         self.db.add(version)
         self.db.commit()
@@ -424,25 +435,25 @@ class StrategyService:
         strategy.status = "suspended"
         strategy.version += 1
 
-        # 创建版本记录
+        # 创建版本记录（仅使用真实存在的 DB 列）
         version = StrategyVersion(
             strategy_id=strategy.id,
             version=strategy.version,
-            name=strategy.name,
-            description=strategy.description,
-            strategy_type=strategy.strategy_type,
-            category=strategy.category,
-            priority=strategy.priority,
-            status=strategy.status,
-            scope=strategy.scope,
-            conditions=strategy.conditions,
-            actions=strategy.actions,
-            config=strategy.config,
-            change_type=ChangeType.SUSPEND,
+            config=json.dumps({
+                "name": strategy.name,
+                "description": strategy.description,
+                "strategy_type": strategy.strategy_type,
+                "category": strategy.category,
+                "priority": strategy.priority,
+                "status": strategy.status,
+                "scope": strategy.scope,
+                "conditions": strategy.conditions,
+                "actions": strategy.actions,
+            }),
+            rules=json.dumps([]),
+            change_type="SUSPEND",
             change_summary="Strategy suspended",
-            previous_values={"status": old_status},
             operator=operator,
-            operator_ip=operator_ip,
         )
         self.db.add(version)
         self.db.commit()
@@ -470,25 +481,25 @@ class StrategyService:
         strategy.status = "active"
         strategy.version += 1
 
-        # 创建版本记录
+        # 创建版本记录（仅使用真实存在的 DB 列）
         version = StrategyVersion(
             strategy_id=strategy.id,
             version=strategy.version,
-            name=strategy.name,
-            description=strategy.description,
-            strategy_type=strategy.strategy_type,
-            category=strategy.category,
-            priority=strategy.priority,
-            status=strategy.status,
-            scope=strategy.scope,
-            conditions=strategy.conditions,
-            actions=strategy.actions,
-            config=strategy.config,
-            change_type=ChangeType.ACTIVATE,
+            config=json.dumps({
+                "name": strategy.name,
+                "description": strategy.description,
+                "strategy_type": strategy.strategy_type,
+                "category": strategy.category,
+                "priority": strategy.priority,
+                "status": strategy.status,
+                "scope": strategy.scope,
+                "conditions": strategy.conditions,
+                "actions": strategy.actions,
+            }),
+            rules=json.dumps([]),
+            change_type="ACTIVATE",
             change_summary="Strategy activated",
-            previous_values={"status": old_status},
             operator=operator,
-            operator_ip=operator_ip,
         )
         self.db.add(version)
         self.db.commit()
@@ -530,49 +541,44 @@ class StrategyService:
         if not target:
             raise ValueError(f"Target version {target_version} not found")
 
-        # 记录当前值
-        old_values = {
-            "name": strategy.name,
-            "description": strategy.description,
-            "priority": strategy.priority,
-            "scope": strategy.scope,
-            "conditions": strategy.conditions,
-            "actions": strategy.actions,
-            "config": strategy.config,
-        }
+        # 解析目标版本的配置快照
+        import json as _json
+        try:
+            target_config = _json.loads(target.config) if target.config else {}
+        except:
+            target_config = {}
 
-        # 执行回滚
-        strategy.name = target.name
-        strategy.description = target.description
-        strategy.priority = target.priority
-        strategy.scope = target.scope
-        strategy.conditions = target.conditions
-        strategy.actions = target.actions
-        strategy.config = target.config
+        # 执行回滚（从 config JSON 中提取）
+        strategy.name = target_config.get("name", strategy.name)
+        strategy.description = target_config.get("description", strategy.description)
+        strategy.priority = target_config.get("priority", strategy.priority)
+        strategy.scope = target_config.get("scope", strategy.scope)
+        strategy.conditions = target_config.get("conditions", strategy.conditions)
+        strategy.actions = target_config.get("actions", strategy.actions)
+        strategy.config = target_config.get("config", strategy.config)
         strategy.version += 1
 
-        # 创建回滚版本记录
+        # 创建回滚版本记录（仅使用真实存在的 DB 列）
         version = StrategyVersion(
             strategy_id=strategy.id,
             version=strategy.version,
-            name=strategy.name,
-            description=strategy.description,
-            strategy_type=strategy.strategy_type,
-            category=strategy.category,
-            priority=strategy.priority,
-            status=strategy.status,
-            scope=strategy.scope,
-            conditions=strategy.conditions,
-            actions=strategy.actions,
-            config=strategy.config,
-            change_type=ChangeType.ROLLBACK,
+            config=json.dumps({
+                "name": strategy.name,
+                "description": strategy.description,
+                "strategy_type": strategy.strategy_type,
+                "category": strategy.category,
+                "priority": strategy.priority,
+                "status": strategy.status,
+                "scope": strategy.scope,
+                "conditions": strategy.conditions,
+                "actions": strategy.actions,
+            }),
+            rules=json.dumps([]),
+            change_type="ROLLBACK",
             change_summary=f"Rolled back to version {target.version}",
-            previous_values=old_values,
             operator=operator,
-            operator_ip=operator_ip,
         )
         self.db.add(version)
-        self.db.commit()
         self.db.refresh(strategy)
         return strategy
 
@@ -672,7 +678,7 @@ class StrategyService:
             config=cloned.config,
             change_type=ChangeType.CLONE,
             change_summary=f"Cloned from strategy {strategy_id}",
-            previous_values={},
+
             operator=operator,
         )
         self.db.add(version)

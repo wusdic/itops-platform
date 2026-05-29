@@ -12,6 +12,15 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Header, status
 
+
+async def safe_json_body(request: Request) -> dict:
+    """安全解析 JSON body，空 body 返回空字典而不抛 StopIteration 异常"""
+    try:
+        body = await request.json()
+        return body if isinstance(body, dict) else {}
+    except Exception:
+        return {}
+
 from app.common import (
     success_response,
     error_response,
@@ -116,7 +125,7 @@ async def get_template(request: Request, template_id: int):
 async def create_template(request: Request):
     """创建策略模板"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         req = CreateTemplateRequest(**body)
         operator = get_username()
         svc = StrategyTemplateService(db)
@@ -134,7 +143,7 @@ async def create_template(request: Request):
 async def update_template(request: Request, template_id: int):
     """更新策略模板"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         req = UpdateTemplateRequest(**body)
         svc = StrategyTemplateService(db)
         template = svc.update_template(template_id, req)
@@ -161,7 +170,7 @@ async def delete_template(request: Request, template_id: int):
 async def clone_template(request: Request, template_id: int):
     """克隆策略模板"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         new_name = body.get("new_name")
         if not new_name:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="new_name is required")
@@ -271,7 +280,7 @@ async def create_strategy(
 ):
     """创建策略"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         req = CreateStrategyRequest(**body)
         operator = get_username()
         svc = StrategyService(db)
@@ -293,7 +302,7 @@ async def update_strategy(
 ):
     """更新策略"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         req = UpdateStrategyRequest(**body)
         operator = get_username()
         operator_ip = request.client.host if request.client else None
@@ -339,7 +348,7 @@ async def publish_strategy(
     x_tenant_id: Optional[str] = Header(None),
 ):
     """发布策略"""
-    body = await request.json() if request.method == "POST" else {}
+    body = await safe_json_body(request) if request.method == "POST" else {}
     req = PublishStrategyRequest(**body) if body else PublishStrategyRequest()
     operator = get_username()
     operator_ip = request.client.host if request.client else None
@@ -419,7 +428,7 @@ async def rollback_strategy(
     x_tenant_id: Optional[str] = Header(None),
 ):
     """回滚策略"""
-    body = await request.json() if request.method == "POST" else {}
+    body = await safe_json_body(request) if request.method == "POST" else {}
     target_version = body.get("target_version")
     operator = get_username()
     operator_ip = request.client.host if request.client else None
@@ -457,25 +466,31 @@ async def get_strategy_versions(
         if not strategy:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
         items, total = svc.get_strategy_versions(strategy_id, page=page, page_size=page_size)
+        import json as _json
+        def _parse_version(v):
+            cfg = {}
+            try:
+                if v.config:
+                    cfg = _json.loads(v.config) if isinstance(v.config, str) else v.config
+            except Exception:
+                pass
+            return {
+                "id": v.id,
+                "strategy_id": v.strategy_id,
+                "version": v.version,
+                "name": cfg.get("name"),
+                "description": cfg.get("description"),
+                "strategy_type": cfg.get("strategy_type"),
+                "category": cfg.get("category"),
+                "priority": cfg.get("priority"),
+                "status": cfg.get("status"),
+                "change_type": v.change_type,
+                "change_summary": v.change_summary,
+                "operator": v.operator,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+            }
         return paginated_response(
-            items=[{
-                "id": i.id,
-                "strategy_id": i.strategy_id,
-                "version": i.version,
-                "name": i.name,
-                "description": i.description,
-                "strategy_type": i.strategy_type,
-                "category": i.category,
-                "priority": i.priority,
-                "status": i.status,
-                "change_type": i.change_type,
-                "change_summary": i.change_summary,
-                "operator": i.operator,
-                "operator_ip": i.operator_ip,
-                "approved_by": i.approved_by,
-                "approved_at": i.approved_at.isoformat() if i.approved_at else None,
-                "created_at": i.created_at.isoformat() if i.created_at else None,
-            } for i in items],
+            items=[_parse_version(i) for i in items],
             total=total,
             page=page,
             page_size=page_size,
@@ -529,7 +544,7 @@ async def clone_strategy(
     x_tenant_id: Optional[str] = Header(None),
 ):
     """克隆策略"""
-    body = await request.json()
+    body = await safe_json_body(request)
     req = CloneStrategyRequest(**body)
     operator = get_username()
     with get_db_session() as db:
@@ -636,7 +651,7 @@ async def get_rule(request: Request, rule_id: int):
 async def create_rule(request: Request):
     """创建规则"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         req = CreateRuleRequest(**body)
         operator = get_username()
         svc = StrategyRuleService(db)
@@ -654,7 +669,7 @@ async def create_rule(request: Request):
 async def update_rule(request: Request, rule_id: int):
     """更新规则"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         req = UpdateRuleRequest(**body)
         svc = StrategyRuleService(db)
         rule = svc.update_rule(rule_id, req)
@@ -678,7 +693,7 @@ async def delete_rule(request: Request, rule_id: int):
 async def test_rule(request: Request, rule_id: int):
     """测试规则"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         test_context = body.get("context", {})
         svc = StrategyRuleService(db)
         result = svc.test_rule(rule_id, test_context)
@@ -691,7 +706,7 @@ async def test_rule(request: Request, rule_id: int):
 async def evaluate_strategy(request: Request):
     """评估策略"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         req = EvaluateRequest(**body)
         operator = get_username()
         evaluator = EvaluationEngine(db)
@@ -703,7 +718,7 @@ async def evaluate_strategy(request: Request):
 async def simulate_strategy(request: Request):
     """模拟评估策略（不实际执行动作）"""
     with get_db_session() as db:
-        body = await request.json()
+        body = await safe_json_body(request)
         req = EvaluateRequest(**body, simulate=True)
         operator = get_username()
         evaluator = EvaluationEngine(db)
