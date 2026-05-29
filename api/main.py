@@ -35,6 +35,7 @@ from api.routes import (
     log_service_router,
     report_singular_alias_router,
     backup_router,
+    ldap_router,
 )
 from app.domains.collector.router import router as collector_router
 from app.domains.config.router import router as config_router
@@ -295,6 +296,12 @@ def create_app() -> FastAPI:
         strategy_router,
         prefix="/api/v1",
         tags=["策略中心"],
+    )
+
+    app.include_router(
+        ldap_router,
+        prefix="/api/v1",
+        tags=["LDAP管理"],
     )
 
     # 前端静态文件服务 - 使用中间件方式避免路由冲突

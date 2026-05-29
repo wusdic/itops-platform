@@ -94,6 +94,7 @@ class AssetBase(BaseModel):
 
 class CreateAssetRequest(AssetBase):
     """创建资产请求"""
+    created_by: Optional[str] = Field(None, max_length=64, description="创建人")
     model_config = ConfigDict(str_strip_whitespace=True)
 
 

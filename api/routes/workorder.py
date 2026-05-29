@@ -25,7 +25,7 @@ router = APIRouter()
 
 class WorkOrderCreate(BaseModel):
     """创建工单请求"""
-    order_type: str = Field(..., description="工单类型: fault, change, inspection, security, demand, question")
+    order_type: str = Field("fault", description="工单类型: fault, change, inspection, security, demand, question")
     title: str = Field(..., max_length=256, description="工单标题")
     description: Optional[str] = Field(None, description="工单描述")
     priority: str = Field("P3", description="优先级: P1, P2, P3, P4")

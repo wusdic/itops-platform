@@ -165,6 +165,17 @@ class Asset(Base):
             'created_by': self.created_by,
             'updated_by': self.updated_by,
             'tenant_id': self.tenant_id,
+            # New fields added in migration 013
+            'hostname': self.hostname,
+            'ip_address': self.ip_address,
+            'mac_address': self.mac_address,
+            'location': self.location,
+            'owner': self.owner,
+            'owner_email': self.owner_email,
+            'ssh_password_fingerprint': self.ssh_password_fingerprint,
+            'remark': self.remark,
+            'web_username': self.web_username,
+            'web_password_fingerprint': self.web_password_fingerprint,
         }
 
 

@@ -680,6 +680,8 @@ async def create_alert(
     }
 
 
+# ============== 告警详情（必须在 /stats 之前） ==============
+
 @router.get("/alerts/{alert_id}", summary="获取告警详情")
 async def get_alert(
     alert_id: int,

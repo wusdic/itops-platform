@@ -62,6 +62,12 @@ const routes = [
         component: () => import('@/views/management/VendorCredentials.vue'),
         meta: { title: '厂商账密', parent: '系统管理' }
       },
+      {
+        path: 'management/ldap',
+        name: 'LDAPConfig',
+        component: () => import('@/views/ldap/index.vue'),
+        meta: { title: 'LDAP集成', parent: '系统管理' }
+      },
       // 设备发现
       {
         path: 'discovery',

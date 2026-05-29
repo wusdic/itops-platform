@@ -29,6 +29,7 @@ from .api_keys import router as api_keys_router
 from .log_service import router as log_service_router
 from .report_singular_alias import router as report_singular_alias_router
 from .backup import router as backup_router
+from .ldap import router as ldap_router
 
 __all__ = [
     "monitoring_router",

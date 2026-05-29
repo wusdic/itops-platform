@@ -164,7 +164,7 @@ class DictService:
         query = self.db.query(DictType)
         if status:
             query = query.filter(DictType.status == status)
-        items = query.order_by(DictType.sort_order.asc(), DictType.id.asc()).all()
+        items = query.order_by(DictType.id.asc()).all()
         return [self._type_to_dict(t) for t in items]
 
     def get_type_by_id(self, type_id: int) -> Optional[DictType]:
