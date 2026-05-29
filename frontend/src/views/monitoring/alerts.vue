@@ -203,24 +203,13 @@ const onFilterChange = () => {
 
 async function loadAlertStats() {
   try {
-    const params = {}
-    if (filterLevel.value) params.severity = filterLevel.value
-    if (filterStatus.value) params.status = filterStatus.value
-    const data = await monitoring.alerts.getList(params)
-    let items = []
-    if (Array.isArray(data)) {
-      items = data
-    } else if (data.items) {
-      items = data.items || []
+    const data = await monitoring.alerts.getStatistics()
+    alertStats.value = {
+      critical: data?.critical || 0,
+      warning: data?.warning || 0,
+      info: data?.info || 0,
+      active: data?.active || 0
     }
-    const stats = { critical: 0, warning: 0, info: 0, active: 0 }
-    for (const alert of items) {
-      if (alert.level === 'critical' || alert.level === 'high') stats.critical++
-      else if (alert.level === 'medium') stats.warning++
-      else if (alert.level === 'info' || alert.level === 'low') stats.info++
-      if (alert.status === 'active' || alert.status === 'acknowledged') stats.active++
-    }
-    alertStats.value = stats
   } catch (e) { /* silent */ }
 }
 
@@ -245,7 +234,7 @@ const handleAcknowledge = async (alert) => {
   }).then(async () => {
     actionLoading.value = true
     try {
-      await monitoring.alerts.update(alert.id, { acknowledged: true })
+      await monitoring.alerts.acknowledge(alert.id, {})
       ElMessage.success('告警已确认')
       showDrawer.value = false
       loadAlerts()
@@ -265,7 +254,7 @@ const handleResolve = async (alert) => {
   }).then(async () => {
     actionLoading.value = true
     try {
-      await monitoring.alerts.update(alert.id, { resolved: true })
+      await monitoring.alerts.resolve(alert.id, {})
       ElMessage.success('告警已解决')
       showDrawer.value = false
       loadAlerts()
