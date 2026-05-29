@@ -53,6 +53,13 @@
 
 **验收**：新领域目录建立完成；新 API 返回统一响应；每次请求有 trace_id。
 
+✅ **Phase 1 状态：已完成（2026-05-29）**
+- 13个领域目录全部建立（asset/config/collector/state/event/alert/log/policy/automation/aiops/ticket/knowledge/governance）
+- app/common/ 基础设施全部就位（response/error_codes/context/audit/permissions/database/redis_client/queue/background_task）
+- 8个新域完整实现（models/schemas/service/router）
+- MySQL 新表已创建（asset_state_snapshots/events/execution_logs/audit_logs/policies/ai_analysis_records/tickets/knowledge_articles/user_roles/permission_records）
+- 所有新域路由验证通过（curl 200 OK）
+
 ---
 
 ## 阶段2：资产中心重构
