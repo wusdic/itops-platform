@@ -105,6 +105,14 @@
 
 **验收**：凭证不得明文存储；配置变更有版本；配置发布可回滚。
 
+✅ **Phase 3 状态：核心完成（2026-05-29）**
+- 3-1~3-4 ✅ config_definitions/config_releases/config_bindings/credential_bindings 表已建立
+- 3-5 ✅ credentials 表含 `credential_value_encrypted` 字段，AES-256 加密存储
+- 3-6 ✅ credential_bindings 表已建立
+- 3-7~3-8 ✅ 配置差异和回滚 API 已实现（`/configs/{id}/rollback`）
+- 3-9 🔄 vendor_credentials.py 尚未迁移到 domains/config/credential_service.py
+- 3-10 🔄 前端凭证页面尚未对接新 API
+
 ---
 
 ## 阶段4：采集器运行时与状态中心
