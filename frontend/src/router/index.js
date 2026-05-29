@@ -19,6 +19,12 @@ const routes = [
         component: () => import('@/views/dashboard/index.vue'),
         meta: { title: '仪表盘' }
       },
+      {
+        path: 'asset-config',
+        name: 'AssetConfig',
+        component: () => import('@/features/asset-config/AssetConfigView.vue'),
+        meta: { title: '资产与配置台', parent: '资产配置' }
+      },
       // 监控中心
       {
         path: 'monitoring/devices',
