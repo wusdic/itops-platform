@@ -11,7 +11,7 @@ import logging
 from typing import Optional, List
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks, Body
+from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks, Body, File, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -1169,3 +1169,258 @@ async def delete_network(network_id: int):
         db.delete(record)
         db.commit()
     return {"message": "删除成功"}
+
+
+# ============================================================
+# 扫描目标管理 (Scan Targets) - 前端 discovery.js targets.* 调用
+# ============================================================
+
+class ScanTargetCreate(BaseModel):
+    name: str = Field(..., description="目标名称")
+    ip_range: str = Field(..., description="IP范围，CIDR格式或逗号分隔的IP")
+    scan_type: str = Field(default="tcp", description="扫描类型: tcp/udp/icmp/snmp")
+    port_list: Optional[str] = Field(default="22,23,80,443,445,3389", description="端口列表")
+    status: str = Field(default="active", description="状态: active/inactive")
+    description: Optional[str] = Field(default=None, description="描述")
+
+
+class ScanTargetUpdate(BaseModel):
+    name: Optional[str] = None
+    ip_range: Optional[str] = None
+    scan_type: Optional[str] = None
+    port_list: Optional[str] = None
+    status: Optional[str] = None
+    description: Optional[str] = None
+
+
+class ScanTargetResponse(BaseModel):
+    id: int
+    name: str
+    ip_range: str
+    scan_type: str
+    port_list: Optional[str]
+    status: str
+    description: Optional[str]
+    created_at: Optional[str] = None
+
+
+@router.get("/targets", summary="获取扫描目标列表")
+async def list_targets(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+    status: Optional[str] = None,
+    scan_type: Optional[str] = None,
+):
+    """获取扫描目标列表，支持分页和过滤"""
+    with _db_manager.session_scope() as db:
+        query = db.query(NetworkScanConfig)
+        if status:
+            query = query.filter(NetworkScanConfig.status == status)
+        if scan_type:
+            query = query.filter(NetworkScanConfig.scan_type == scan_type)
+        total = query.count()
+        records = query.order_by(NetworkScanConfig.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+        items = []
+        for r in records:
+            items.append({
+                "id": r.id,
+                "name": r.name,
+                "ip_range": r.ip_range,
+                "scan_type": r.scan_type or "tcp",
+                "port_list": r.port_list,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            })
+        return {"code": 0, "message": "success", "data": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/targets/{target_id}", summary="获取单个扫描目标")
+async def get_target(target_id: int):
+    """获取指定扫描目标"""
+    with _db_manager.session_scope() as db:
+        record = db.query(NetworkScanConfig).filter(NetworkScanConfig.id == target_id).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="扫描目标不存在")
+        return {
+            "code": 0,
+            "message": "success",
+            "data": {
+                "id": record.id,
+                "name": record.name,
+                "ip_range": record.ip_range,
+                "scan_type": record.scan_type or "tcp",
+                "port_list": record.port_list,
+                "status": record.status,
+                "created_at": record.created_at.isoformat() if record.created_at else None,
+            }
+        }
+
+
+@router.post("/targets", summary="创建扫描目标")
+async def create_target(target: ScanTargetCreate):
+    """创建新的扫描目标"""
+    with _db_manager.session_scope() as db:
+        record = NetworkScanConfig(
+            name=target.name,
+            ip_range=target.ip_range,
+            scan_type=target.scan_type,
+            port_list=target.port_list,
+            status=target.status,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return {
+            "code": 0,
+            "message": "创建成功",
+            "data": {
+                "id": record.id,
+                "name": record.name,
+                "ip_range": record.ip_range,
+                "scan_type": record.scan_type or "tcp",
+                "port_list": record.port_list,
+                "status": record.status,
+            }
+        }
+
+
+@router.put("/targets/{target_id}", summary="更新扫描目标")
+async def update_target(target_id: int, target: ScanTargetUpdate):
+    """更新指定扫描目标"""
+    with _db_manager.session_scope() as db:
+        record = db.query(NetworkScanConfig).filter(NetworkScanConfig.id == target_id).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="扫描目标不存在")
+        if target.name is not None:
+            record.name = target.name
+        if target.ip_range is not None:
+            record.ip_range = target.ip_range
+        if target.scan_type is not None:
+            record.scan_type = target.scan_type
+        if target.port_list is not None:
+            record.port_list = target.port_list
+        if target.status is not None:
+            record.status = target.status
+        db.commit()
+        return {
+            "code": 0,
+            "message": "更新成功",
+            "data": {
+                "id": record.id,
+                "name": record.name,
+                "ip_range": record.ip_range,
+                "scan_type": record.scan_type or "tcp",
+                "port_list": record.port_list,
+                "status": record.status,
+            }
+        }
+
+
+@router.delete("/targets/{target_id}", summary="删除扫描目标")
+async def delete_target(target_id: int):
+    """删除指定扫描目标"""
+    with _db_manager.session_scope() as db:
+        record = db.query(NetworkScanConfig).filter(NetworkScanConfig.id == target_id).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="扫描目标不存在")
+        db.delete(record)
+        db.commit()
+    return {"code": 0, "message": "删除成功"}
+
+
+@router.post("/targets/batch-delete", summary="批量删除扫描目标")
+async def batch_delete_targets(ids: List[int] = Body(..., description="目标ID列表")):
+    """批量删除扫描目标"""
+    if not ids:
+        raise HTTPException(status_code=400, detail="ID列表不能为空")
+    with _db_manager.session_scope() as db:
+        db.query(NetworkScanConfig).filter(NetworkScanConfig.id.in_(ids)).delete(synchronize_session=False)
+        db.commit()
+    return {"code": 0, "message": f"成功删除 {len(ids)} 个目标"}
+
+
+@router.post("/targets/import", summary="导入扫描目标")
+async def import_targets(
+    file: UploadFile = File(...),
+):
+    """从 CSV/JSON 文件导入扫描目标"""
+    content = await file.read()
+    imported = 0
+    errors = []
+    try:
+        # Try CSV
+        if file.filename and file.filename.endswith('.csv'):
+            import csv, io
+            reader = csv.DictReader(io.StringIO(content.decode('utf-8')))
+            with _db_manager.session_scope() as db:
+                for row_num, row in enumerate(reader, start=1):
+                    try:
+                        record = NetworkScanConfig(
+                            name=row.get('name', row.get('ip_range', f'target_{row_num}')),
+                            ip_range=row['ip_range'],
+                            scan_type=row.get('scan_type', 'tcp'),
+                            port_list=row.get('port_list', '22,23,80,443,445,3389'),
+                            status=row.get('status', 'active'),
+                            description=row.get('description', ''),
+                        )
+                        db.add(record)
+                        imported += 1
+                    except Exception as e:
+                        errors.append(f"行{row_num}: {str(e)}")
+        else:
+            # Try JSON
+            import json
+            targets_data = json.loads(content.decode('utf-8'))
+            if isinstance(targets_data, dict):
+                targets_data = targets_data.get('data', targets_data.get('targets', [targets_data]))
+            with _db_manager.session_scope() as db:
+                for idx, item in enumerate(targets_data):
+                    try:
+                        record = NetworkScanConfig(
+                            name=item.get('name', item.get('ip_range', f'target_{idx}')),
+                            ip_range=item['ip_range'],
+                            scan_type=item.get('scan_type', 'tcp'),
+                            port_list=item.get('port_list', '22,23,80,443,445,3389'),
+                            status=item.get('status', 'active'),
+                            description=item.get('description', ''),
+                        )
+                        db.add(record)
+                        imported += 1
+                    except Exception as e:
+                        errors.append(f"第{idx+1}条: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"解析文件失败: {str(e)}")
+    return {
+        "code": 0,
+        "message": f"成功导入 {imported} 个目标",
+        "imported": imported,
+        "errors": errors[:50]  # Limit error list
+    }
+
+
+@router.get("/targets/export", summary="导出扫描目标")
+async def export_targets(
+    status: Optional[str] = None,
+    scan_type: Optional[str] = None,
+):
+    """导出扫描目标为 CSV"""
+    import csv, io
+    with _db_manager.session_scope() as db:
+        query = db.query(NetworkScanConfig)
+        if status:
+            query = query.filter(NetworkScanConfig.status == status)
+        if scan_type:
+            query = query.filter(NetworkScanConfig.scan_type == scan_type)
+        records = query.order_by(NetworkScanConfig.id).all()
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['name', 'ip_range', 'scan_type', 'port_list', 'status', 'description'])
+        for r in records:
+            writer.writerow([r.name, r.ip_range, r.scan_type or 'tcp', r.port_list or '', r.status, r.description or ''])
+        csv_content = output.getvalue()
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        io.BytesIO(csv_content.encode('utf-8')),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=scan_targets.csv"}
+    )

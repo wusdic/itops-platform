@@ -173,8 +173,10 @@ def _format_dict_item(i) -> dict:
 
 
 def _format_menu(m) -> dict:
-    """菜单转字典"""
-    return {
+    """菜单转字典，支持 dict 或 Menu ORM 对象"""
+    if isinstance(m, dict):
+        return m
+    result = {
         "id": m.id,
         "name": m.name,
         "code": m.code,
@@ -194,11 +196,17 @@ def _format_menu(m) -> dict:
         "created_at": m.created_at.isoformat() if m.created_at else None,
         "updated_at": m.updated_at.isoformat() if m.updated_at else None,
     }
+    # Preserve children set by _build_tree
+    if hasattr(m, "children"):
+        result["children"] = m.children
+    return result
 
 
-def _frontend_menu(m: dict) -> dict:
-    """后端菜单格式转前端 key/label 格式"""
-    return {
+def _frontend_menu(m) -> dict:
+    """后端菜单格式转前端 key/label 格式，支持 dict 或 Menu ORM 对象"""
+    if not isinstance(m, dict):
+        m = _format_menu(m)
+    result = {
         "key": str(m.get("id", "")),
         "label": m.get("name", ""),
         "path": m.get("path") or "",
@@ -213,6 +221,10 @@ def _frontend_menu(m: dict) -> dict:
         "component": m.get("component"),
         "description": m.get("description"),
     }
+    # Include children if present (set by _build_tree on Menu objects)
+    if isinstance(m, dict) and m.get("children"):
+        result["children"] = [_frontend_menu(c) for c in m["children"]]
+    return result
 
 
 # ============== 字典管理 =============

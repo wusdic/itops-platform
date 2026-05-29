@@ -198,7 +198,7 @@ def create_app() -> FastAPI:
         tags=["采集精细化开关"],
     )
 
-    app.include_router(device_import_router, prefix="/api/v1", tags=["设备批量导入"])
+    app.include_router(device_import_router, prefix="/api/v1/devices/import", tags=["设备批量导入"])
 
     app.include_router(
         auth_router,

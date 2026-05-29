@@ -15,7 +15,7 @@ class MenuService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_tree(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_tree(self, status: Optional[str] = None) -> List[Menu]:
         """
         获取菜单树形列表
 
@@ -23,7 +23,7 @@ class MenuService:
             status: 状态过滤 (active/inactive)
 
         Returns:
-            树形结构的菜单列表
+            树形结构的菜单列表（Menu 对象，包含 children 属性）
         """
         query = self.db.query(Menu)
         if status:
@@ -32,16 +32,15 @@ class MenuService:
         all_menus = query.order_by(Menu.sort_order.asc(), Menu.id.asc()).all()
         return self._build_tree(all_menus, parent_id=None)
 
-    def _build_tree(self, menus: List[Menu], parent_id: Optional[int]) -> List[Dict[str, Any]]:
-        """递归构建树形结构"""
+    def _build_tree(self, menus: List[Menu], parent_id: Optional[int]) -> List[Menu]:
+        """递归构建树形结构，返回 Menu 对象列表"""
         tree = []
         for menu in menus:
             if menu.parent_id == parent_id:
-                node = self._to_dict(menu)
                 children = self._build_tree(menus, menu.id)
                 if children:
-                    node["children"] = children
-                tree.append(node)
+                    menu.children = children  # type: ignore[attr-defined]
+                tree.append(menu)
         return tree
 
     def get_by_id(self, menu_id: int) -> Optional[Menu]:

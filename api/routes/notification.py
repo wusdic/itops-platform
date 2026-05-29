@@ -288,7 +288,7 @@ async def get_notification_types():
     }
 
 
-@router.post("/test/{channel_id}", summary="测试通知渠道")
+@router.post("/channels/{channel_id}/test", summary="测试通知渠道")
 async def test_channel(channel_id: str):
     """测试通知渠道配置"""
     manager = get_notification_manager()
