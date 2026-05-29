@@ -308,12 +308,12 @@
 **验收**：告警和执行失败可自动生成工单；工单能看到相关日志和执行记录；工单关闭能生成知识草稿。
 
 🔄 **Phase 11 状态：部分完成（2026-05-29）**
-- 11-1 ✅ 告警转工单已实现（`/api/v1/alerts/{id}/transfer`）
+- 11-1 ✅ 告警转工单已实现（`POST /api/v1/workorder/convert-to-workorder`）
 - 11-2 ✅ 自动化失败转工单已实现（ExecutionService._create_ticket_from_failed_execution）
 - 11-3 ✅ 工单关联日志/执行/AI分析已实现（tickets 表 + API）
-- 11-4 🔄 工单关闭复盘待实现
-- 11-5 🔄 工单转知识待实现
-- 11-6 🔄 知识审核待实现
+- 11-4 ✅ 工单关闭复盘已实现（resolve 接口强制填 resolution，可选 root_cause/improvement）
+- 11-5 ✅ 工单转知识已实现（`POST /api/v1/workorder/tickets/{id}/generate-knowledge`）
+- 11-6 ✅ 知识审核已实现（SOP submit_review/approve/reject + `/reviews/` 系列端点）
 - Ticket API 200 OK（`/api/v1/tickets/tickets` GET/POST 200）
 - Knowledge API 200 OK（`/api/v1/knowledge/articles` GET/POST 200）
 
