@@ -13,6 +13,7 @@ from .scenarios import (
     get_ai_copilot_service
 )
 from .root_cause import RootCauseAnalyzer, RootCauseResult, get_root_cause_analyzer, init_root_cause_analyzer
+from .log_interpreter import LogInterpreter, LogInterpretationResult, LogPattern, get_log_interpreter, init_log_interpreter
 
 __all__ = [
     # LLM Client
@@ -52,6 +53,13 @@ __all__ = [
     "RootCauseResult",
     "get_root_cause_analyzer",
     "init_root_cause_analyzer",
+
+    # Log Interpreter
+    "LogInterpreter",
+    "LogInterpretationResult",
+    "LogPattern",
+    "get_log_interpreter",
+    "init_log_interpreter",
 ]
 
 __version__ = "1.0.0"

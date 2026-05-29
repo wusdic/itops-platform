@@ -3,7 +3,7 @@ AI Assistant API Router
 Provides intelligent Q&A, fault diagnosis, and suggestion generation
 """
 
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 import json
@@ -1755,4 +1755,114 @@ async def get_analyze_history(
         "page_size": pagination.page_size,
         "total_pages": 0,
     }
+
+
+# ============== Log Interpreter API =============
+
+class LogInterpretRequest(BaseModel):
+    """日志解释请求"""
+    logs: List[Dict[str, Any]] = Field(..., description="日志列表，每项包含 content/timestamp/stream 字段")
+    use_llm: bool = Field(False, description="是否使用LLM深度解释")
+    max_lines: int = Field(500, ge=1, le=2000, description="最大处理行数")
+
+
+class LogPatternItem(BaseModel):
+    """日志模式项"""
+    pattern_type: str
+    pattern_name: str
+    description: str
+    matched_lines: List[str] = Field(default_factory=list)
+    confidence: float
+
+
+class LogInterpretResponse(BaseModel):
+    """日志解释响应"""
+    success: bool
+    summary: str
+    total_lines: int
+    line_count: int
+    error_count: int
+    warning_count: int
+    info_count: int
+    debug_count: int
+    patterns: List[LogPatternItem]
+    inferred_problems: List[Dict[str, Any]]
+    recommended_actions: List[str]
+    time_range_start: str
+    time_range_end: str
+    top_keywords: List[Dict[str, Any]]
+    error_details: List[Dict[str, Any]]
+    llm_explanation: str
+    metadata: Dict[str, Any]
+    error_msg: str
+
+
+@router.post(
+    "/interpret-log",
+    summary="AI日志解释",
+    response_model=LogInterpretResponse,
+)
+async def interpret_log(
+    request: LogInterpretRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    解释日志内容，识别日志模式，推断问题根因并生成建议。
+
+    支持:
+    - 基于规则的模式识别（无需LLM，任何时候可用）
+    - 基于LLM的深度解释（可选，需配置Ollama）
+    - 关键字统计和排序
+    - 错误聚合和分类
+    """
+    from modules.business.ai_copilot.log_interpreter import get_log_interpreter
+
+    interpreter = get_log_interpreter()
+
+    # 尝试获取LLM客户端
+    if request.use_llm:
+        try:
+            from api.start import get_llm_client
+            llm_client = get_llm_client()
+            if llm_client:
+                interpreter.set_llm_client(llm_client)
+        except Exception:
+            pass  # LLM不可用，继续无LLM模式
+
+    result = interpreter.interpret(
+        logs=request.logs,
+        use_llm=request.use_llm,
+        max_lines=request.max_lines,
+    )
+
+    return LogInterpretResponse(
+        success=result.success,
+        summary=result.summary,
+        total_lines=result.total_lines,
+        line_count=result.line_count,
+        error_count=result.error_count,
+        warning_count=result.warning_count,
+        info_count=result.info_count,
+        debug_count=result.debug_count,
+        patterns=[
+            LogPatternItem(
+                pattern_type=p.pattern_type,
+                pattern_name=p.pattern_name,
+                description=p.description,
+                matched_lines=p.matched_lines,
+                confidence=p.confidence,
+            )
+            for p in result.patterns
+        ],
+        inferred_problems=result.inferred_problems,
+        recommended_actions=result.recommended_actions,
+        time_range_start=result.time_range_start,
+        time_range_end=result.time_range_end,
+        top_keywords=result.top_keywords,
+        error_details=result.error_details,
+        llm_explanation=result.llm_explanation,
+        metadata=result.metadata,
+        error_msg=result.error_msg,
+    )
 
