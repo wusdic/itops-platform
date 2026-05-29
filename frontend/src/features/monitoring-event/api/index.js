@@ -15,19 +15,18 @@ export const monitoringEvent = {
     getRules: () => request.get('/monitoring/rules'),
   },
 
-  // 事件
+  // 事件（来自 app/domains/event/router，路径 /api/v1/events）
   events: {
     getList: (params) => request.get('/events', { params }),
     getById: (id) => request.get(`/events/${id}`),
     create: (data) => request.post('/events', data),
-    getStats: () => request.get('/events/stats'),
   },
 
-  // 设备指标
+  // 设备指标（来自 app/domains/monitoring/router，路径 /api/v1/monitoring/metrics/*）
   metrics: {
     getLatest: (deviceName) => request.get(`/devices/${deviceName}/metrics`),
-    getHistory: (deviceName, params) => request.get(`/metrics/history`, { params: { device_name: deviceName, ...params } }),
-    getTop: (type, params) => request.get(`/metrics/top/${type}`, { params }),
+    getHistory: (deviceName, params) => request.get(`/monitoring/metrics/history`, { params: { device_name: deviceName, ...params } }),
+    getTop: (type, params) => request.get(`/monitoring/metrics/top/${type}`, { params }),
   },
 
   // 设备

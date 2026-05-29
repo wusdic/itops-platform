@@ -25,6 +25,12 @@ const routes = [
         component: () => import('@/features/asset-config/AssetConfigView.vue'),
         meta: { title: '资产与配置台', parent: '资产配置' }
       },
+      {
+        path: 'monitoring-event',
+        name: 'MonitoringEvent',
+        component: () => import('@/features/monitoring-event/MonitoringEventView.vue'),
+        meta: { title: '监控与事件台', parent: '监控中心' }
+      },
       // 监控中心
       {
         path: 'monitoring/devices',

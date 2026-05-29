@@ -38,16 +38,12 @@ request.interceptors.response.use(
     }
     // 兼容直接返回 {items, total} 格式（如 /assets/device）
     // 和 {code, data} 包装格式
-    if (res.code === 200 || res.code === 0) {
-      return res.data || res
-    }
-    // 如果既无 code 也无 access_token，但有 items 字段（列表 API 格式），直接返回
     if (res.items !== undefined && res.total !== undefined) {
-      return res
+      return { data: res }  // 保持 {data: {items, total}} 结构，兼容 .data 取值
     }
     // 如果是数组（某些列表接口直接返回数组）
     if (Array.isArray(res)) {
-      return { items: res, total: res.length }
+      return { data: { items: res, total: res.length } }
     }
     // 有 msg 或 detail 字段通常是后端错误响应
     if (res.msg) {
