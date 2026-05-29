@@ -185,7 +185,7 @@
 - 6-2 ✅ SSE 日志推送已实现（`GET /api/v1/automation/executions/{id}/stream`）
 - 6-3 ✅ 审计日志表已建立（`audit_logs` 表）
 - 6-4 ✅ 日志与执行/告警关联已实现（trace_id 关联）
-- 6-5 🔄 AI 日志解释接口待实现
+- 6-5 ✅ AI 日志解释接口已实现（`POST /api/v1/ai/interpret-log` + `LogInterpreter`，支持12种错误模式）
 - Log API 200 OK（`/api/v1/logs/executions/{name}|{id}/logs` 全部 200）
 - Audit API 200 OK（`/api/v1/logs/audit` 200 OK）
 
@@ -206,7 +206,7 @@
 
 ✅ **Phase 7 状态：已完成（2026-05-29）**
 - 7-1 ✅ policies 表已建立
-- 7-2 🔄 policy_versions 表待建立（策略版本管理）
+- 7-2 ✅ policy_versions 表已建立（表 + `create_version`/`list_versions`/`get_version`/`rollback_version`）
 - 7-3 ✅ 策略冲突检测已实现（`POST /api/v1/policies/check-conflicts`）
 - 7-4 ✅ 策略模拟已实现（`POST /api/v1/policies/simulate`）
 - 7-5 ✅ 策略命中解释已实现（`POST /api/v1/policies/match/{trigger_type}/explain`）

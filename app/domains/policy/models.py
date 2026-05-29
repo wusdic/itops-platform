@@ -1,5 +1,5 @@
 """策略中心数据模型"""
-from sqlalchemy import Column, Integer, String, DateTime, Text, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, Index, Boolean, ForeignKey
 from sqlalchemy.sql import func
 from modules.foundation.db_models.base import Base
 
@@ -27,4 +27,23 @@ class Policy(Base):
 
     __table_args__ = (
         Index("idx_policy_trigger", "trigger_source", "trigger_type"),
+    )
+
+
+class PolicyVersion(Base):
+    """策略版本表"""
+    __tablename__ = "policy_versions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    version_id = Column(String(64), unique=True, nullable=False, index=True)
+    policy_id = Column(String(64), nullable=False, index=True)
+    version = Column(Integer, nullable=False, default=1)
+    content_snapshot = Column(Text, nullable=False)  # JSON 完整策略快照
+    change_summary = Column(Text)  # 版本变更说明
+    created_by = Column(String(64))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_active = Column(Boolean, default=False)  # 是否为当前激活版本
+
+    __table_args__ = (
+        Index("idx_policy_version_policy", "policy_id", "version"),
     )

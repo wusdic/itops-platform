@@ -174,3 +174,177 @@ class PolicyService:
             "verification_plan": verification_plan,
             "require_approval": bool(policy.get("require_approval")),
         }
+
+    # ==================== Phase 7-2: 策略版本管理 ====================
+
+    @staticmethod
+    def _policy_to_dict(p: "Policy") -> Dict[str, Any]:
+        """将 Policy 模型转为字典"""
+        return {
+            "id": p.id,
+            "policy_id": p.policy_id,
+            "name": p.name,
+            "description": p.description,
+            "trigger_source": p.trigger_source,
+            "trigger_type": p.trigger_type,
+            "condition": json.loads(p.condition) if p.condition else None,
+            "scope": json.loads(p.scope) if p.scope else None,
+            "risk_level": p.risk_level,
+            "require_approval": p.require_approval,
+            "actions": json.loads(p.actions) if p.actions else [],
+            "verification": json.loads(p.verification) if p.verification else None,
+            "version": p.version,
+            "status": p.status,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+            "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+        }
+
+    @staticmethod
+    def create_version(policy_id: str, change_summary: str = "", created_by: str = "system") -> Optional[str]:
+        """
+        Phase 7-2: 为策略创建一个新版本快照。
+
+        发布策略时自动创建版本快照，保存完整策略内容。
+        """
+        with get_db_session() as db:
+            from app.domains.policy.models import Policy, PolicyVersion
+
+            policy = db.query(Policy).filter(Policy.policy_id == policy_id).first()
+            if not policy:
+                return None
+
+            # 获取当前最新版本号
+            latest = db.query(PolicyVersion).filter(
+                PolicyVersion.policy_id == policy_id
+            ).order_by(PolicyVersion.version.desc()).first()
+            next_version = (latest.version + 1) if latest else 1
+
+            version_id = f"pv-{uuid.uuid4().hex[:16]}"
+            version = PolicyVersion(
+                version_id=version_id,
+                policy_id=policy_id,
+                version=next_version,
+                content_snapshot=json.dumps(PolicyService._policy_to_dict(policy)),
+                change_summary=change_summary or f"版本 {next_version} 发布",
+                created_by=created_by,
+                is_active=False,
+            )
+            db.add(version)
+
+            # 将之前的版本标记为非激活
+            db.query(PolicyVersion).filter(
+                PolicyVersion.policy_id == policy_id,
+                PolicyVersion.version < next_version,
+            ).update({"is_active": False})
+
+            db.commit()
+            return version_id
+
+    @staticmethod
+    def list_versions(policy_id: str) -> List[Dict[str, Any]]:
+        """Phase 7-2: 列出策略的所有版本"""
+        with get_db_session() as db:
+            from app.domains.policy.models import PolicyVersion
+            records = db.query(PolicyVersion).filter(
+                PolicyVersion.policy_id == policy_id
+            ).order_by(PolicyVersion.version.desc()).all()
+            return [
+                {
+                    "version_id": r.version_id,
+                    "policy_id": r.policy_id,
+                    "version": r.version,
+                    "change_summary": r.change_summary,
+                    "created_by": r.created_by,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "is_active": r.is_active,
+                }
+                for r in records
+            ]
+
+    @staticmethod
+    def get_version(version_id: str) -> Optional[Dict[str, Any]]:
+        """Phase 7-2: 获取指定版本的完整快照"""
+        with get_db_session() as db:
+            from app.domains.policy.models import PolicyVersion
+            record = db.query(PolicyVersion).filter(
+                PolicyVersion.version_id == version_id
+            ).first()
+            if not record:
+                return None
+            return {
+                "version_id": record.version_id,
+                "policy_id": record.policy_id,
+                "version": record.version,
+                "change_summary": record.change_summary,
+                "created_by": record.created_by,
+                "created_at": record.created_at.isoformat() if record.created_at else None,
+                "is_active": record.is_active,
+                "content": json.loads(record.content_snapshot),
+            }
+
+    @staticmethod
+    def rollback_version(version_id: str) -> Optional[str]:
+        """
+        Phase 7-2: 回滚策略到指定版本。
+
+        将指定版本的内容恢复到策略主表，并创建新版本快照记录这次回滚。
+        注意：本方法在单个事务内完成策略恢复+版本记录，版本ID从本方法内生成。
+        """
+        with get_db_session() as db:
+            from app.domains.policy.models import Policy, PolicyVersion
+
+            version_record = db.query(PolicyVersion).filter(
+                PolicyVersion.version_id == version_id
+            ).first()
+            if not version_record:
+                return None
+
+            policy = db.query(Policy).filter(
+                Policy.policy_id == version_record.policy_id
+            ).first()
+            if not policy:
+                return None
+
+            # 获取当前最新版本号，准备创建新版本记录
+            latest = db.query(PolicyVersion).filter(
+                PolicyVersion.policy_id == version_record.policy_id
+            ).order_by(PolicyVersion.version.desc()).first()
+            next_version = (latest.version + 1) if latest else 1
+
+            # 恢复策略内容
+            content = json.loads(version_record.content_snapshot)
+            policy.name = content.get("name", policy.name)
+            policy.description = content.get("description")
+            policy.trigger_source = content.get("trigger_source")
+            policy.trigger_type = content.get("trigger_type")
+            policy.condition = json.dumps(content["condition"]) if content.get("condition") else None
+            policy.scope = json.dumps(content["scope"]) if content.get("scope") else None
+            policy.risk_level = content.get("risk_level", policy.risk_level)
+            policy.require_approval = content.get("require_approval", 0)
+            policy.actions = json.dumps(content["actions"]) if content.get("actions") else None
+            policy.verification = json.dumps(content["verification"]) if content.get("verification") else None
+            policy.version = version_record.version
+            policy.status = "published"
+
+            # 在同一事务内创建新版本快照（记录这次回滚）
+            import uuid as _uuid
+            new_version_id = f"pv-{_uuid.uuid4().hex[:16]}"
+            new_pv = PolicyVersion(
+                version_id=new_version_id,
+                policy_id=policy.policy_id,
+                version=next_version,
+                content_snapshot=json.dumps(PolicyService._policy_to_dict(policy)),
+                change_summary=f"回滚到版本 {version_record.version}",
+                created_by="system",
+                is_active=False,
+            )
+            db.add(new_pv)
+
+            # 将旧版本标记为非激活
+            db.query(PolicyVersion).filter(
+                PolicyVersion.policy_id == policy.policy_id,
+                PolicyVersion.version < next_version,
+            ).update({"is_active": False})
+
+            db.commit()
+            return new_version_id

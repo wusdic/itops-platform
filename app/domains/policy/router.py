@@ -240,3 +240,67 @@ def explain_policy_match(
             "explanations": explanations,
         }
     }
+
+
+# ==================== Phase 7-2: 策略版本管理 ====================
+
+class CreateVersionRequest(BaseModel):
+    change_summary: Optional[str] = ""
+    created_by: Optional[str] = "system"
+
+
+@router.post("/{policy_id}/versions", summary="创建策略版本快照")
+def create_policy_version(
+    policy_id: str,
+    req: CreateVersionRequest = CreateVersionRequest(),
+):
+    """
+    Phase 7-2: 为策略创建一个新版本快照。
+
+    发布策略前调用，保存当前策略内容为快照。
+    """
+    version_id = PolicyService.create_version(policy_id, req.change_summary, req.created_by or "system")
+    if not version_id:
+        raise HTTPException(status_code=404, detail=f"策略 {policy_id} 不存在")
+    return {"code": 0, "message": "success", "data": {"version_id": version_id}}
+
+
+@router.get("/{policy_id}/versions", summary="列出策略版本历史")
+def list_policy_versions(policy_id: str):
+    """
+    Phase 7-2: 列出策略的所有版本历史。
+    """
+    versions = PolicyService.list_versions(policy_id)
+    return {"code": 0, "message": "success", "data": {"policy_id": policy_id, "versions": versions}}
+
+
+@router.get("/versions/{version_id}", summary="获取指定版本详情")
+def get_policy_version(version_id: str):
+    """
+    Phase 7-2: 获取指定版本的完整快照内容。
+    """
+    version = PolicyService.get_version(version_id)
+    if not version:
+        raise HTTPException(status_code=404, detail=f"版本 {version_id} 不存在")
+    return {"code": 0, "message": "success", "data": version}
+
+
+@router.post("/versions/{version_id}/rollback", summary="回滚策略到指定版本")
+def rollback_policy_version(version_id: str):
+    """
+    Phase 7-2: 将策略回滚到指定版本。
+
+    将指定版本的快照内容恢复到策略主表，并在版本历史中记录这次回滚操作。
+    """
+    new_version_id = PolicyService.rollback_version(version_id)
+    if not new_version_id:
+        raise HTTPException(status_code=404, detail=f"版本 {version_id} 不存在或回滚失败")
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "rollback_from": version_id,
+            "new_version_id": new_version_id,
+            "message": f"成功回滚到版本 {version_id}，新版本快照ID: {new_version_id}",
+        }
+    }
