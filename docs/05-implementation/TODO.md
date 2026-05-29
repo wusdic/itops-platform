@@ -182,7 +182,7 @@
 
 ✅ **Phase 6 状态：已完成（2026-05-29）**
 - 6-1 ✅ execution_logs 表已建立（`execution_logs` 表）
-- 6-2 🔄 WebSocket 日志推送待实现
+- 6-2 ✅ SSE 日志推送已实现（`GET /api/v1/automation/executions/{id}/stream`）
 - 6-3 ✅ 审计日志表已建立（`audit_logs` 表）
 - 6-4 ✅ 日志与执行/告警关联已实现（trace_id 关联）
 - 6-5 🔄 AI 日志解释接口待实现
@@ -207,8 +207,8 @@
 ✅ **Phase 7 状态：已完成（2026-05-29）**
 - 7-1 ✅ policies 表已建立
 - 7-2 🔄 policy_versions 表待建立（策略版本管理）
-- 7-3 🔄 策略冲突检测待实现
-- 7-4 🔄 策略模拟（dry-run）待实现
+- 7-3 ✅ 策略冲突检测已实现（`POST /api/v1/policies/check-conflicts`）
+- 7-4 ✅ 策略模拟已实现（`POST /api/v1/policies/simulate`）
 - 7-5 🔄 策略命中解释待实现
 - 7-6 🔄 "磁盘清理策略"示例待实现
 - Policy API 200 OK（`/api/v1/policies` GET/POST 200 OK）
@@ -236,11 +236,11 @@
 - 8-1 ✅ automation_scripts 表已建立（`automation_scripts` 表）
 - 8-2 ✅ automation_executions 表已建立（`automation_executions` 表）
 - 8-3 ✅ 执行状态机已实现（created→queued→running→success/failed/partial_success）
-- 8-4 🔄 风险评估待实现（PolicyService.risk_assessment）
-- 8-5 🔄 dry-run 待实现
+- 8-4 ✅ 风险评估已实现（`POST /api/v1/automation/risk-assessment`）
+- 8-5 ✅ dry-run 已实现（`POST /api/v1/automation/scripts/{id}/execute` + `dry_run: true`）
 - 8-6 ✅ 审批流程已实现（`/api/v1/automation/approvals/{id}/approve|reject|cancel`）
-- 8-7 🔄 并发锁待实现
-- 8-8 🔄 WebSocket 实时日志待实现
+- 8-7 ✅ 并发锁已实现（RedisLock 防止同一设备并发执行，409 冲突响应）
+- 8-8 ✅ SSE 实时日志已实现（`GET /api/v1/automation/executions/{id}/stream`）
 - 8-9 🔄 结果验证待实现
 - 8-10 ✅ 失败回滚已实现（`/api/v1/automation/executions/{id}/rollback`）
 - Automation API 200 OK（scripts/executions/approvals/trigger-rules 全部 200）
@@ -266,7 +266,7 @@
 - 9-3 ✅ Log Interpreter 已实现（`LogInterpreter` → `POST /api/v1/ai/interpret-log`，支持12种错误模式，无需LLM可独立工作）
 - 9-4 ✅ Knowledge Draft Writer 已实现（`KnowledgeDraftWriter`）
 - 9-5 ✅ AI Tool Guard 已实现（`ToolCallGuard`）
-- 9-6 🔄 用户反馈待实现
+- 9-6 ✅ 用户反馈已实现（`POST /api/v1/ai/feedback/score` + `/acknowledge`）
 - AIops API 200 OK（`/api/v1/ai/analyze/{alert_id}/root-cause|remediation` + `/api/v1/ai/interpret-log` 全部 200）
 
 ---

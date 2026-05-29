@@ -85,6 +85,7 @@ class ExecuteScriptRequest(BaseModel):
     """执行脚本请求"""
     params: Optional[Dict[str, Any]] = Field({}, description="执行参数")
     target_device_ids: Optional[List[int]] = Field([], description="目标设备ID列表")
+    dry_run: bool = Field(False, description="是否dry-run模式（仅模拟，不实际执行）")
 
 
 class ScriptResponse(BaseModel):
@@ -292,6 +293,45 @@ async def execute_script(
         raise HTTPException(status_code=404, detail=f"Script {script_id} not found")
 
     execution_id = str(uuid.uuid4())
+
+    # Dry-run 模式：仅返回预计执行信息，不实际执行
+    if request.dry_run:
+        logger.info(f"Dry-run script {script_id}, execution_id: {execution_id}")
+        return {
+            "code": 0,
+            "message": "success",
+            "data": {
+                "execution_id": execution_id,
+                "status": "dry_run",
+                "dry_run": True,
+                "script_id": script_id,
+                "script_name": script.name,
+                "target_devices": request.target_device_ids,
+                "trigger_type": "manual",
+                "triggered_by": current_user.username,
+                "estimated_impact": {
+                    "risk_level": script.risk_level or "medium",
+                    "affected_devices": len(request.target_device_ids) if request.target_device_ids else 1,
+                    "estimated_duration_ms": 1000,
+                },
+                "note": "Dry-run completed. No actual execution performed.",
+            }
+        }
+
+    # Phase 8-7: 并发锁 — 同一设备同时只能有一个执行任务
+    from app.common.redis_client import RedisLock
+    if request.target_device_ids:
+        lock = RedisLock()
+        for device_id in request.target_device_ids:
+            lock_key = f"device_execution:{device_id}"
+            try:
+                with lock.acquire(lock_key, expire=300, wait_timeout=0):
+                    pass  # 锁获取成功，继续
+            except TimeoutError:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Device {device_id} is currently executing another task. Please try again later."
+                )
 
     # 创建执行记录
     execution = AutomationExecution(
@@ -742,6 +782,31 @@ async def create_approval_request(
         "approval_id": result["id"],
         "required_level": required_level,
     }}
+
+
+class RiskAssessmentRequest(BaseModel):
+    params: Optional[Dict[str, Any]] = Field(default=None, description="执行参数")
+    target_device_ids: Optional[List[str]] = Field(default=None, description="目标设备ID列表")
+
+
+@router.post("/scripts/{script_id}/risk-assessment", summary="风险评估")
+async def assess_script_risk(
+    script_id: str,
+    request: RiskAssessmentRequest = RiskAssessmentRequest(),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Phase 8-4: 评估脚本执行风险，返回危险命令、影响面、警告和建议"""
+    from modules.business.automation.execution_service import ExecutionService
+    exec_service = ExecutionService(db)
+    result = exec_service.assess_risk(
+        script_id=script_id,
+        params=request.params,
+        target_device_ids=request.target_device_ids,
+    )
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return {"code": 0, "message": "success", "data": result}
 
 
 @router.get("/approvals/pending", summary="获取待我审批的列表")
@@ -1578,3 +1643,66 @@ def _push_fault_case_to_knowledge(event: TriggerEventRequest, execution: Automat
         )
     except Exception:
         pass
+
+
+# ============================================================================
+# SSE Streaming — Phase 6-2: WebSocket/SSE 实时日志推送
+# ============================================================================
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse, JSONResponse
+from sqlalchemy.orm import Session
+import json
+import asyncio
+import queue
+
+from api.dependencies import get_db
+from modules.foundation.db_models.automation import AutomationExecution
+from api.routes.automation import router as automation_router
+
+# SSE router
+sse_router = APIRouter()
+
+# 全局订阅管理器（per-execution 订阅队列）
+_execution_subscribers: dict[int, queue.Queue] = {}
+
+
+def publish_execution_log(execution_id: int, event_type: str, data: dict):
+    """供 ExecutionService 内部调用，向 SSE 订阅者推送日志"""
+    if execution_id in _execution_subscribers:
+        try:
+            _execution_subscribers[execution_id].put_nowait({"event": event_type, "data": data})
+        except Exception:
+            pass
+
+
+async def event_stream(execution_id: int):
+    """SSE generator: 将订阅队列中的事件 yield 为 SSE 格式"""
+    q = _execution_subscribers.setdefault(execution_id, queue.Queue(maxsize=100))
+    yield f"event: connected\ndata: {json.dumps({'execution_id': execution_id, 'status': 'subscribed'})}\n\n"
+    while True:
+        try:
+            event = q.get(timeout=5)
+            if event is None:
+                break
+            yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
+        except queue.Empty:
+            yield f"event: heartbeat\ndata: {json.dumps({'ts': asyncio.get_event_loop().time()})}\n\n"
+
+
+@sse_router.get("/executions/{execution_id}/stream", summary="SSE 实时日志流")
+def stream_execution_logs(execution_id: int, db: Session = Depends(get_db)):
+    """SSE 端点：订阅指定 execution_id 的实时执行日志"""
+    execution = db.query(AutomationExecution).filter(
+        AutomationExecution.id == execution_id
+    ).first()
+    if not execution:
+        return JSONResponse(status_code=404, content={"detail": f"Execution {execution_id} not found"})
+    return StreamingResponse(
+        event_stream(execution_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    )
+
+
+# 注册 SSE router 到 automation_router
+automation_router.include_router(sse_router)

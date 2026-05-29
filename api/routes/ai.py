@@ -1866,3 +1866,99 @@ async def interpret_log(
         error_msg=result.error_msg,
     )
 
+
+# ============================================================================
+# Phase 9-6: 用户反馈 — AI 分析结果打分和纠错
+# ============================================================================
+from pydantic import BaseModel, Field
+from datetime import datetime
+import uuid
+
+
+class FeedbackScoreRequest(BaseModel):
+    """AI 分析结果评分"""
+    analysis_type: str = Field(..., description="分析类型: root_cause / log_interpret / remediation / chat")
+    analysis_id: Optional[str] = Field(None, description="分析记录ID（如 alert_id 或 execution_id）")
+    score: int = Field(..., ge=1, le=5, description="评分 1-5")
+    comment: Optional[str] = Field(None, description="用户评论")
+    corrections: Optional[str] = Field(None, description="纠正内容（用户认为 AI 错的地方）")
+
+
+class FeedbackResponse(BaseModel):
+    """反馈响应"""
+    feedback_id: str = Field(..., description="反馈记录ID")
+    analysis_type: str
+    analysis_id: Optional[str]
+    score: int
+    comment: Optional[str]
+    corrections: Optional[str]
+    created_at: str
+    acknowledged: bool = False
+
+
+@router.post("/feedback/score", summary="提交 AI 分析评分")
+def submit_feedback_score(
+    request: FeedbackScoreRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    用户对 AI 分析结果打分（1-5 分）。
+
+    用于 AI Tool Guard 的反馈闭环：
+    - 1 分：完全错误
+    - 2 分：大部分错误
+    - 3 分：部分正确
+    - 4 分：基本正确
+    - 5 分：完全正确
+    """
+    feedback_id = f"fb-{uuid.uuid4().hex[:16]}"
+
+    feedback_record = {
+        "id": feedback_id,
+        "analysis_type": request.analysis_type,
+        "analysis_id": request.analysis_id,
+        "score": request.score,
+        "comment": request.comment,
+        "corrections": request.corrections,
+        "user": current_user.username,
+        "created_at": datetime.now().isoformat(),
+        "acknowledged": False,
+    }
+
+    # 存储到 Redis（快速存储，供后续分析）
+    from app.common.redis_client import cache
+    key = f"ai_feedback:{request.analysis_type}:{request.analysis_id or feedback_id}"
+    cache.set_json(key, feedback_record, expire=86400 * 30)  # 保留30天
+
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "feedback_id": feedback_id,
+            "analysis_type": request.analysis_type,
+            "analysis_id": request.analysis_id,
+            "score": request.score,
+            "comment": request.comment,
+            "corrections": request.corrections,
+            "created_at": feedback_record["created_at"],
+            "acknowledged": False,
+        }
+    }
+
+
+@router.post("/feedback/acknowledge", summary="确认反馈已阅")
+def acknowledge_feedback(
+    analysis_type: str,
+    analysis_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    标记某类 AI 分析结果已被用户确认已知悉。
+    用于去重提醒：用户已看过某告警的 AI 分析，后续不再推送相同提醒。
+    """
+    from app.common.redis_client import cache
+    ack_key = f"ai_ack:{analysis_type}:{analysis_id}:{current_user.username}"
+    cache.set(ack_key, "1", expire=86400 * 7)  # 7天内不重复提醒
+    return {"code": 0, "message": "success", "data": {"acknowledged": True}}
+

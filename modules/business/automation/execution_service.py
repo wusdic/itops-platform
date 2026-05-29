@@ -702,6 +702,92 @@ class ExecutionService:
         
         return risk_level, required_approval_level, None if needs_block else None
 
+    def assess_risk(
+        self,
+        script_id: str,
+        params: Optional[Dict[str, Any]] = None,
+        target_device_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Phase 8-4: 增强版风险评估 — 返回完整影响分析
+
+        Returns:
+            {
+                risk_level, approval_required, approval_level,
+                dangerous_commands_found: [...],
+                impact_scope: { device_count, device_ips: [...] },
+                warnings: [...],
+                recommendations: [...]
+            }
+        """
+        script = self.db.query(AutomationScript).filter(
+            AutomationScript.id == script_id
+        ).first()
+
+        if not script:
+            return {"error": "SCRIPT_NOT_FOUND"}
+
+        # 基础风险
+        risk_level = script.risk_level or "medium"
+        required_approval = self.HIGH_RISK_APPROVAL_LEVEL.get(risk_level, 0)
+
+        # 危险命令扫描
+        dangerous_found = []
+        import re
+        content_lower = (script.content or "").lower()
+        for keyword in ScriptService.DANGEROUS_KEYWORDS:
+            if re.search(keyword, content_lower, re.IGNORECASE):
+                dangerous_found.append(keyword)
+
+        # 升级判断
+        if dangerous_found and risk_level in ["low", "medium"]:
+            risk_level = "critical"
+            required_approval = 3
+
+        # 影响面：设备数（暂用 target_device_ids 长度）
+        device_count = len(target_device_ids) if target_device_ids else 0
+
+        # 警告和建议
+        warnings = []
+        recommendations = []
+
+        if "rm -rf" in dangerous_found or "fdisk" in dangerous_found:
+            warnings.append("检测到数据销毁命令，可能导致数据永久丢失")
+            recommendations.append("建议先在测试环境执行，确认影响后再生产执行")
+
+        if "shutdown" in dangerous_found or "reboot" in dangerous_found:
+            warnings.append("检测到系统关机/重启命令，将导致服务中断")
+            recommendations.append("确认是否在维护窗口期内执行，通知相关人员")
+
+        if "chmod 777" in dangerous_found or "chmod -R 777" in dangerous_found:
+            warnings.append("检测到777权限设置，存在安全风险")
+            recommendations.append("建议使用最小权限原则，如 755 或 644")
+
+        if "wget" in dangerous_found or "curl" in dangerous_found:
+            warnings.append("检测到远程下载命令，可能执行任意代码")
+            recommendations.append("确认下载来源可信，建议使用本地脚本")
+
+        if device_count > 10:
+            warnings.append(f"即将在 {device_count} 台设备上执行，风险较高")
+
+        if required_approval > 0:
+            recommendations.append(f"需要 {required_approval} 级审批后方可执行")
+
+        return {
+            "script_id": script_id,
+            "script_name": script.name,
+            "risk_level": risk_level,
+            "approval_required": required_approval > 0,
+            "approval_level": required_approval,
+            "dangerous_commands_found": dangerous_found,
+            "impact_scope": {
+                "device_count": device_count,
+                "device_ips": [],  # 后续可扩展查设备IP
+            },
+            "warnings": warnings,
+            "recommendations": recommendations,
+        }
+
     # ==================== 执行统计 ====================
 
     def get_statistics(
