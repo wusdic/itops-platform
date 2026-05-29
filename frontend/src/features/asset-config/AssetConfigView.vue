@@ -421,12 +421,12 @@ async function loadStats() {
   try {
     const [assetRes, credRes, configRes] = await Promise.all([
       assetConfig.assets.getStats().catch(() => null),
-      assetConfig.credentials.getSummary().catch(() => null),
-      assetConfig.configs.getSummary().catch(() => null)
+      assetConfig.credentials.getList({ page: 1, page_size: 1 }).catch(() => null),
+      assetConfig.configs.getList({ page: 1, page_size: 1 }).catch(() => null)
     ])
-    stats.asset_total = assetRes?.total || assetRes?.asset_count || 0
-    stats.cred_total = credRes?.total || 0
-    stats.config_total = configRes?.total || 0
+    stats.asset_total = assetRes?.total_devices || assetRes?.total || 0
+    stats.cred_total = credRes?.data?.total || credRes?.total || 0
+    stats.config_total = configRes?.data?.total || configRes?.total || 0
   } catch (e) {
     console.error('loadStats failed:', e)
   }

@@ -12,7 +12,7 @@ export const assetConfig = {
     create: (data) => request.post('/assets/', data),
     update: (id, data) => request.put(`/assets/${id}`, data),
     delete: (id) => request.delete(`/assets/${id}`),
-    getStats: () => request.get('/assets/stats/'),
+    getStats: () => request.get('/assets/stats'),
     batchDelete: (ids) => request.post('/assets/batch-delete', { ids }),
   },
 
@@ -23,7 +23,6 @@ export const assetConfig = {
     create: (data) => request.post('/credentials', data),
     update: (id, data) => request.put(`/credentials/${id}`, data),
     delete: (id) => request.delete(`/credentials/${id}`),
-    getSummary: () => request.get('/credentials/summary/'),
     test: (id) => request.post(`/credentials/${id}/test`),
   },
 
@@ -34,7 +33,6 @@ export const assetConfig = {
     create: (data) => request.post('/configs/', data),
     update: (id, data) => request.put(`/configs/${id}`, data),
     delete: (id) => request.delete(`/configs/${id}`),
-    getSummary: () => request.get('/configs/summary/'),
   },
 
   // ===== 资产关联关系 =====
