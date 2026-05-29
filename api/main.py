@@ -41,6 +41,14 @@ from app.domains.collector.router import router as collector_router
 from app.domains.config.router import router as config_router
 from app.domains.alert.router import router as alert_router
 from app.domains.strategy.router import router as strategy_router
+from app.domains.state.router import router as state_router
+from app.domains.event.router import router as event_router
+from app.domains.log.router import router as log_router
+from app.domains.policy.router import router as policy_router
+from app.domains.aiops.router import router as aiops_router
+from app.domains.ticket.router import router as ticket_router
+from app.domains.knowledge.router import router as knowledge_router
+from app.domains.governance.router import router as governance_router
 from api.dependencies import get_settings
 from api.middleware.logging import LoggingMiddleware
 from api.middleware.error_handler import ErrorHandlerMiddleware
@@ -296,6 +304,54 @@ def create_app() -> FastAPI:
         strategy_router,
         prefix="/api/v1",
         tags=["策略中心"],
+    )
+
+    app.include_router(
+        state_router,
+        prefix="/api/v1",
+        tags=["状态中心"],
+    )
+
+    app.include_router(
+        event_router,
+        prefix="/api/v1",
+        tags=["事件中心"],
+    )
+
+    app.include_router(
+        log_router,
+        prefix="/api/v1",
+        tags=["日志中心"],
+    )
+
+    app.include_router(
+        policy_router,
+        prefix="/api/v1",
+        tags=["策略中心"],
+    )
+
+    app.include_router(
+        aiops_router,
+        prefix="/api/v1",
+        tags=["AIops"],
+    )
+
+    app.include_router(
+        ticket_router,
+        prefix="/api/v1",
+        tags=["工单中心"],
+    )
+
+    app.include_router(
+        knowledge_router,
+        prefix="/api/v1",
+        tags=["知识中心"],
+    )
+
+    app.include_router(
+        governance_router,
+        prefix="/api/v1",
+        tags=["治理中心"],
     )
 
     app.include_router(
