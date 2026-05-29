@@ -78,6 +78,14 @@
 
 **验收**：asset/device 不再双主线维护；旧 device API 不再直接操作旧模型。
 
+✅ **Phase 2 状态：核心完成（2026-05-29）**
+- 2-1 ✅ assets 主表及关联表已建立（9个关联表）
+- 2-2 ✅ 资产 CRUD API 完整（`/api/v1/assets/` GET/POST 200 OK）
+- 2-3 ✅ 资产关系 API 已注册（`/assets/{id}/relations`）
+- 2-4 🔄 device_api.py 仍直接查 Device（旧设备管理代码），大规模迁移待后续
+- 2-5~2-7 🔄 涉及大批量前端迁移，属后续工作
+- app/domains/asset/ 完整实现（models/schemas/service/router），新架构已就位
+
 ---
 
 ## 阶段3：配置与凭证中心
