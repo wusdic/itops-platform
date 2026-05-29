@@ -513,21 +513,29 @@ async def update_device(
 @router.delete("/device/{device_id}", summary="删除设备")
 async def delete_device(
     device_id: int,
+    force: bool = Query(False, description="强制删除（高危操作）"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """删除设备（软删除）"""
+    """删除设备（force=False 软删除[退役]；force=True 硬删除）"""
     db_device = db.query(Device).filter(Device.id == device_id).first()
-    
+
     if not db_device:
         raise HTTPException(status_code=404, detail="设备不存在")
-    
-    # 软删除：设置为退役状态
-    db_device.status = DBDeviceStatus.DECOMMISSIONED
-    db_device.updated_at = datetime.now()
+
+    if force:
+        # 硬删除：彻底删除设备及其关联数据
+        db.delete(db_device)
+        logger.warning(f"[HIGH-RISK] Force-deleted device {device_id} by {current_user.username}")
+    else:
+        # 软删除：设置为退役状态
+        db_device.status = DBDeviceStatus.DECOMMISSIONED
+        db_device.updated_at = datetime.now()
+        logger.info(f"Decommissioned device {device_id} by {current_user.username}")
+
     db.commit()
-    
-    return {"status": "success", "message": "设备已退役"}
+    action = "force-deleted" if force else "decommissioned"
+    return {"status": "success", "message": f"设备已{action}"}
 
 
 @router.post("/device/{device_id}/maintain", summary="设置设备维护状态")

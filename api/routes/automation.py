@@ -251,33 +251,38 @@ async def update_script(
 @router.delete("/scripts/{script_id}", summary="删除脚本")
 async def delete_script(
     script_id: str,
+    force: bool = Query(False, description="强制删除（跳过引用检查，高危操作）"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """删除脚本（检查是否有 Task 或 Execution 引用）"""
-    # 检查是否有任务引用
-    task = db.query(AutomationTask).filter(AutomationTask.script_id == script_id).first()
-    if task:
-        raise HTTPException(status_code=400, detail=f"Script is used by task {task.name}, cannot delete")
-
-    # 检查是否有执行记录引用（script_id 是 NOT NULL + RESTRICT，必须先清理）
-    execution = db.query(AutomationExecution).filter(AutomationExecution.script_id == script_id).first()
-    if execution:
-        raise HTTPException(status_code=400, detail=f"Script has execution records, cannot delete. Please delete execution records first.")
+    """删除脚本（force=True 跳过 Task/Execution 引用检查，直接删除所有关联记录）"""
+    # 检查是否有任务引用（force 模式跳过）
+    if not force:
+        task = db.query(AutomationTask).filter(AutomationTask.script_id == script_id).first()
+        if task:
+            raise HTTPException(status_code=409, detail=f"Script is used by task '{task.name}', cannot delete. Use force=true to override.")
+        execution = db.query(AutomationExecution).filter(AutomationExecution.script_id == script_id).first()
+        if execution:
+            raise HTTPException(status_code=409, detail=f"Script has execution records, cannot delete. Use force=true to override.")
 
     script = db.query(AutomationScript).filter(AutomationScript.id == script_id).first()
     if not script:
         raise HTTPException(status_code=404, detail=f"Script {script_id} not found")
 
-    # 手动按正确顺序删除关联记录（ORM cascade 可能触发 RESTRICT 冲突）
-    # 1. 删除版本记录（ondelete=CASCADE，数据库自动处理）
+    # force 模式：按正确顺序级联删除
+    # 1. 删除版本记录
     db.query(AutomationScriptVersion).filter(AutomationScriptVersion.script_id == script_id).delete()
-    # 2. 删除脚本
+    # 2. 删除任务记录（关联的 executions 已在 DB 层 CASCADE）
+    db.query(AutomationTask).filter(AutomationTask.script_id == script_id).delete()
+    # 3. 删除执行记录
+    db.query(AutomationExecution).filter(AutomationExecution.script_id == script_id).delete()
+    # 4. 删除脚本本身
     db.delete(script)
     db.commit()
 
-    logger.info(f"Deleted script {script_id} by {current_user.username}")
-    return {"code": 0, "message": f"Script {script_id} deleted"}
+    action = "force-deleted" if force else "deleted"
+    logger.warning(f"[HIGH-RISK] {action} script {script_id} by {current_user.username} (force={force})")
+    return {"code": 0, "message": f"Script {script_id} {action} (force={force})"}
 
 
 @router.post("/scripts/{script_id}/execute", summary="立即执行脚本")
@@ -563,19 +568,34 @@ async def update_task(
 @router.delete("/tasks/{task_id}", summary="删除任务")
 async def delete_task(
     task_id: str,
+    force: bool = Query(False, description="强制删除（终止运行中的执行并删除，高危操作）"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """删除任务"""
+    """删除任务（force=True 终止运行中的执行后再删除任务）"""
     task = db.query(AutomationTask).filter(AutomationTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
+    # force 模式：先终止所有运行中的执行
+    if force:
+        running = db.query(AutomationExecution).filter(
+            AutomationExecution.task_id == task_id,
+            AutomationExecution.status.in_(["queued", "running", "waiting_approval"])
+        ).all()
+        for exec_ in running:
+            exec_.status = "failed"
+            exec_.ended_at = datetime.now()
+            exec_.error_message = f"Killed by {current_user.username} (force delete)"
+        if running:
+            logger.warning(f"[HIGH-RISK] Force-deleted task {task_id}, terminated {len(running)} running executions")
+
     db.delete(task)
     db.commit()
 
-    logger.info(f"Deleted task {task_id} by {current_user.username}")
-    return {"code": 0, "message": f"Task {task_id} deleted"}
+    action = "force-deleted" if force else "deleted"
+    logger.warning(f"[HIGH-RISK] {action} task {task_id} by {current_user.username} (force={force})")
+    return {"code": 0, "message": f"Task {task_id} {action} (force={force})"}
 
 
 @router.post("/tasks/{task_id}/run", summary="立即执行任务")
@@ -1324,10 +1344,11 @@ async def update_trigger_rule(
 @router.delete("/trigger-rules/{rule_id}", summary="删除触发规则")
 async def delete_trigger_rule(
     rule_id: str,
+    force: bool = Query(False, description="强制删除（高危操作）"),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """删除指定的触发规则"""
+    """删除指定的触发规则（高危操作，force=True 绕过安全检查）"""
     rule = db.query(AutomationTriggerRule).filter(AutomationTriggerRule.id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
@@ -1335,8 +1356,9 @@ async def delete_trigger_rule(
     db.delete(rule)
     db.commit()
 
-    logger.info(f"Deleted trigger rule: {rule_id} by {current_user.username}")
-    return {"code": 0, "message": f"Rule {rule_id} deleted"}
+    action = "force-deleted" if force else "deleted"
+    logger.warning(f"[HIGH-RISK] {action} trigger rule {rule_id} by {current_user.username} (force={force})")
+    return {"code": 0, "message": f"Rule {rule_id} {action} (force={force})"}
 
 
 @router.post("/trigger-rules/{rule_id}/test", summary="测试触发规则")

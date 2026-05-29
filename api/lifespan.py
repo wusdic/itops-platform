@@ -5,6 +5,7 @@
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, List
 
@@ -54,6 +55,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         init_config_hot_reload({})
     except Exception as e:
         logger.warning(f"Config hot reload initialization skipped: {e}")
+
+    # 初始化 OpenTelemetry（可选，OTEL_ENDPOINT 环境变量配置 OTLP 收集器）
+    try:
+        from app.common.instrumentation import init_telemetry
+        otlp_endpoint = os.getenv("OTEL_ENDPOINT")
+        init_telemetry(
+            service_name="itops-api",
+            otlp_endpoint=otlp_endpoint,
+        )
+    except Exception as e:
+        logger.warning(f"OpenTelemetry initialization skipped: {e}")
 
     # 启动后台任务
     import asyncio as _asyncio_alt

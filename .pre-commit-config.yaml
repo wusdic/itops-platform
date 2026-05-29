@@ -1,0 +1,82 @@
+# Pre-commit hooks for ITOPS Platform
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ruff linter (Python)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        name: ruff-check
+        description: Run ruff linter
+        entry: ruff check
+        language: system
+        types: [python]
+        pass_filenames: true
+      - id: ruff-format
+        name: ruff-format
+        description: Run ruff formatter
+        entry: ruff format
+        language: system
+        types: [python]
+        pass_filenames: true
+
+  # Secret scanning (detect secrets committed to repo)
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        name: detect-secrets
+        description: Scan for committed secrets
+        entry: detect-secrets scan
+        language: system
+        types: [python, yaml, json, toml, shell, markdown]
+
+  # Check for merge conflict markers
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+        name: check-merge-conflict
+        description: Check for leftover merge conflict markers
+        entry: check-merge-conflict
+        language: system
+        types: [python, yaml, json, toml, shell, markdown, vue, javascript, typescript]
+
+  # Ensure files don't contain private keys or tokens
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-private-key
+
+  # Validate TOML files
+  - repo: https://github.com/accurics/terrascan
+    rev: v1.19.1
+    hooks:
+      - id: terrascan
+
+  # End-of-file-fixer (ensure files end with newline)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+
+  # Trim trailing whitespace
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: ['--markdown-linebreak-ext=md']
+        types: [python, yaml, json, toml, shell, markdown, vue, javascript, typescript]
+
+  # Check AST for Python files (syntax errors)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-ast
+        name: check-ast
+        description: Check Python files for syntax errors
+        language: system
+        types: [python]
+        pass_filenames: true

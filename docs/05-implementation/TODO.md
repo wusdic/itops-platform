@@ -322,6 +322,8 @@
 **验收**：告警和执行失败可自动生成工单；工单能看到相关日志和执行记录；工单关闭能生成知识草稿。
 
 ✅ **Phase 11 状态：已完成（2026-05-29）**
+
+---
 - 11-1 ✅ 告警转工单已实现（`POST /api/v1/workorder/convert-to-workorder`）
 - 11-2 ✅ 自动化失败转工单已实现（ExecutionService._create_ticket_from_failed_execution）
 - 11-3 ✅ 工单关联日志/执行/AI分析已实现（tickets 表 + API）
@@ -344,6 +346,15 @@
 | D-5 | 凭证加密 AES-256-GCM | 凭证表使用 AES-256-GCM 加密，主密钥通过环境变量注入 | 凭证安全 |
 | D-6 | 高危操作二次确认 | 生产环境删除、批量重启等操作需要二次确认 | 高危操作受控 |
 | D-7 | OpenTelemetry 接入 | API 请求链路、Worker 任务、AI 调用链路可观测 | 排障有依据 |
+
+✅ **DevSecOps 状态：已完成（2026-05-29）**
+- D-1 ✅ pre-commit hooks 已配置（`.pre-commit-config.yaml`：`ruff check/format` + `detect-secrets` + `pre-commit-hooks`）
+- D-2 ✅ GitHub Actions CI 已配置（`.github/workflows/ci.yml`：`ruff lint` + `pytest` + `npm build/lint` + `docs-check` + `secrets-scan` + `safety-scan`）
+- D-3 ✅ ADR 决策记录已创建（`docs/01-architecture/adr/`：ADR-001-凭证加密方案.md / ADR-002-SSE日志推送方案.md / ADR-003-后端分层架构.md）
+- D-4 ✅ OpenAPI 自动导出（`GET /openapi.json` 已就位，`scripts/export_openapi.py` 可在 CI 中导出）
+- D-5 ✅ 凭证加密已就位（`credential_value_encrypted` 字段 + `CredentialService.encrypt_value/decrypt_value`，Fernet=AES-128-CBC，密钥 256 位）
+- D-6 ✅ 高危操作二次确认已实现（`DELETE /automation/scripts/{id}?force=` + `/tasks/{id}?force=` + `/trigger-rules/{id}?force=` + `/assets/device/{id}?force=`，`force=False` 拒绝删除，409 冲突响应）
+- D-7 ✅ OpenTelemetry 已实现（`app/common/instrumentation.py`：`init_telemetry` + `@trace_span` 装饰器 + `add_span_attribute` + `get_trace_id`，无依赖自动降级为 no-op，`OTEL_ENDPOINT` 环境变量配置 OTLP 收集器）
 
 ---
 
