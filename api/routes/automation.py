@@ -10,6 +10,7 @@
 - 保持 trigger-rules 和 rollback 相关 API 兼容
 """
 
+import asyncio
 import logging
 import uuid
 import json
@@ -302,6 +303,36 @@ async def execute_script(
     # Dry-run 模式：仅返回预计执行信息，不实际执行
     if request.dry_run:
         logger.info(f"Dry-run script {script_id}, execution_id: {execution_id}")
+        # 保存 dry-run 执行记录（供 SSE stream 查询）
+        dry_run_exec = AutomationExecution(
+            id=execution_id,
+            task_id=None,
+            script_id=script_id,
+            trigger_type="manual",
+            trigger_params=request.params,
+            status="dry_run",
+            started_at=datetime.now(),
+            target_devices=request.target_device_ids,
+            triggered_by=current_user.username,
+        )
+        db.add(dry_run_exec)
+        db.commit()
+        # 向 SSE 订阅者推送事件（dry-run 立即完成）
+        _now = datetime.now().isoformat()
+        publish_execution_log(execution_id, "execution_start", {
+            "execution_id": execution_id, "status": "dry_run", "timestamp": _now
+        })
+        publish_execution_log(execution_id, "dry_run_complete", {
+            "execution_id": execution_id, "timestamp": _now,
+            "estimated_impact": {
+                "risk_level": script.risk_level or "medium",
+                "affected_devices": len(request.target_device_ids) if request.target_device_ids else 1,
+            }
+        })
+        publish_execution_log(execution_id, "execution_complete", {
+            "execution_id": execution_id, "status": "dry_run",
+            "exit_code": 0, "timestamp": _now
+        })
         return {
             "code": 0,
             "message": "success",
@@ -1706,34 +1737,107 @@ from api.routes.automation import router as automation_router
 sse_router = APIRouter()
 
 # 全局订阅管理器（per-execution 订阅队列）
-_execution_subscribers: dict[int, queue.Queue] = {}
+# Key 使用 str 类型以支持 UUID 格式的 execution_id
+_execution_subscribers: dict[str, asyncio.Queue] = {}
 
 
-def publish_execution_log(execution_id: int, event_type: str, data: dict):
-    """供 ExecutionService 内部调用，向 SSE 订阅者推送日志"""
-    if execution_id in _execution_subscribers:
+def _persist_execution_event(execution_id: str, event_type: str, data: dict, stream: str = "info"):
+    """将执行事件持久化到 DB（同步函数，通过线程调用）"""
+    try:
+        from modules.foundation.db_models import AutomationExecutionLog
+        from modules.foundation.db_models.base import _db_manager
+        session = _db_manager.get_session()
         try:
-            _execution_subscribers[execution_id].put_nowait({"event": event_type, "data": data})
+            log = AutomationExecutionLog(
+                execution_id=execution_id,
+                stream=stream,
+                content=json.dumps({"type": event_type, **data}),
+                timestamp=datetime.now()
+            )
+            session.add(log)
+            session.commit()
         except Exception:
-            pass
+            session.rollback()
+            raise
+        finally:
+            session.close()
+    except Exception:
+        pass
 
 
-async def event_stream(execution_id: int):
-    """SSE generator: 将订阅队列中的事件 yield 为 SSE 格式"""
-    q = _execution_subscribers.setdefault(execution_id, queue.Queue(maxsize=100))
+def publish_execution_log(execution_id: str, event_type: str, data: dict, stream: str = "info"):
+    """向 SSE 订阅队列推送事件，并持久化到 DB（实时+历史双重保证）"""
+    import threading
+    # 1. 持久化到 DB（异步任务，不阻塞）
+    t = threading.Thread(target=_persist_execution_event, args=(execution_id, event_type, data, stream))
+    t.start()
+    # 2. 推送到实时队列（供当前在线订阅者）
+    # 使用 setdefault 确保 queue 存在（即使订阅者尚未连接，事件也不会丢失）
+    q = _execution_subscribers.setdefault(execution_id, asyncio.Queue(maxsize=100))
+    try:
+        # asyncio.Queue.put_nowait 是线程安全的（从任意线程调用均安全）
+        q.put_nowait({"event": event_type, "data": data})
+    except Exception:
+        pass
+
+
+def _get_execution_logs_from_db(execution_id: str) -> list:
+    """从 DB 读取指定 execution 的所有历史日志"""
+    try:
+        from modules.foundation.db_models import AutomationExecutionLog
+        from modules.foundation.db_models.base import _db_manager
+        session = _db_manager.get_session()
+        try:
+            logs = session.query(AutomationExecutionLog).filter(
+                AutomationExecutionLog.execution_id == execution_id
+            ).order_by(AutomationExecutionLog.timestamp.asc()).all()
+            return [
+                {
+                    "id": log.id,
+                    "execution_id": log.execution_id,
+                    "stream": log.stream,
+                    "content": log.content,
+                    "timestamp": log.timestamp.isoformat() if log.timestamp else None
+                }
+                for log in logs
+            ]
+        finally:
+            session.close()
+    except Exception:
+        return []
+
+
+async def event_stream(execution_id: str):
+    """SSE generator: 先回放 DB 历史日志，再订阅实时队列"""
+    loop = asyncio.get_event_loop()
+
+    # Step 1: 回放 DB 中已存在的日志（让晚到的订阅者也能看到完整历史）
+    try:
+        existing_logs = await loop.run_in_executor(None, lambda: _get_execution_logs_from_db(execution_id))
+        for log_entry in existing_logs:
+            yield f"event: log\ndata: {json.dumps(log_entry)}\n\n"
+    except Exception:
+        pass
+
+    # Step 2: 订阅实时队列
+    q = _execution_subscribers.setdefault(execution_id, asyncio.Queue(maxsize=100))
+    await asyncio.sleep(0)  # yield control before entering loop
     yield f"event: connected\ndata: {json.dumps({'execution_id': execution_id, 'status': 'subscribed'})}\n\n"
+
     while True:
         try:
-            event = q.get(timeout=5)
+            event = await asyncio.wait_for(q.get(), timeout=5)
             if event is None:
                 break
             yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
-        except queue.Empty:
+        except asyncio.TimeoutError:
             yield f"event: heartbeat\ndata: {json.dumps({'ts': asyncio.get_event_loop().time()})}\n\n"
+        except Exception:
+            break
 
 
 @sse_router.get("/executions/{execution_id}/stream", summary="SSE 实时日志流")
-def stream_execution_logs(execution_id: int, db: Session = Depends(get_db)):
+def stream_execution_logs(execution_id: str, db: Session = Depends(get_db)):
     """SSE 端点：订阅指定 execution_id 的实时执行日志"""
     execution = db.query(AutomationExecution).filter(
         AutomationExecution.id == execution_id

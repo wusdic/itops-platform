@@ -52,6 +52,26 @@ class ExecutionService:
         "high": 2,     # 需要2级审批
     }
 
+    DANGEROUS_KEYWORDS = [
+        r"rm\s+-rf\s+/",          # 递归删除根目录
+        r"rm\s+-rf\s+/\*\s",      # 递归删除根目录下所有文件
+        r":\(\)\{.*:\|:.*&\}/",    # Fork炸弹
+        r"dd\s+if=.*of=/dev/sd",   # 直接写磁盘
+        r"fdisk\s+",                # 磁盘分区
+        r"mkfs\s+",                # 格式化
+        r"shutdown\s+-h\s+now",    # 立即关机
+        r"shutdown\s+-r\s+now",    # 立即重启
+        r"reboot\s+",              # 重启
+        r"init\s+0",               # 关机
+        r"init\s+6",               # 重启
+        r"halt\s+",                # 停止
+        r"poweroff\s+",            # 关机
+        r">\s*/etc/passwd",        # 清空密码文件
+        r">\s*/etc/shadow",        # 清空影子文件
+        r"chmod\s+-R\s+000",       # 递归移除所有权限
+        r"chown\s+-R\s+0:0",       # 递归改为root所有权
+    ]
+
     def __init__(self, db_session: Optional[Session] = None):
         """
         初始化执行服务
@@ -735,7 +755,7 @@ class ExecutionService:
         dangerous_found = []
         import re
         content_lower = (script.content or "").lower()
-        for keyword in ScriptService.DANGEROUS_KEYWORDS:
+        for keyword in self.DANGEROUS_KEYWORDS:
             if re.search(keyword, content_lower, re.IGNORECASE):
                 dangerous_found.append(keyword)
 
