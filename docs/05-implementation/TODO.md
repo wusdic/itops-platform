@@ -287,7 +287,7 @@
 🔄 **Phase 10 状态：进行中（2026-05-29）**
 - 10-1 ✅ features/ 目录已建立（command-center, asset-config, monitoring-event 等）
 - 10-2 ✅ 资产与配置台已完成（/asset-config 页面，集成 assets/credentials/configs API）
-- 10-3 🔄 监控与事件台待完成
+- 10-3 ✅ 监控与事件台已完成（/monitoring-event 页面，集成 alerts/events/metrics/rules API）
 - 10-4 🔄 故障处置台待完成（核心竞争页面）
 - 10-5 🔄 自动化编排台待完成
 - 10-6 🔄 运维指挥台待完成
