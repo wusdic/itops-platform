@@ -30,6 +30,20 @@
 
 **M1 验收**：README 只引用当前事实源；旧文档不再作为开发依据；团队能明确后续开发依据。
 
+✅ **Phase 0 状态：已完成（2026-05-29）** — M1 里程碑达成
+- 0-1 ✅ docs 目录全部建立（00-overview/ 01-architecture/ 02-domains/ 03-api/ 04-frontend/ 05-implementation/ 06-operations/ 07-operations/ 99-archive/）
+- 0-2 ✅ 旧文档归档完成（11个旧文档 git mv 到 docs/99-archive/）
+- 0-3 ✅ 归档文档顶部标注完成（archived 状态 + 替代文档说明）
+- 0-4 ✅ 事实源文档就位（AUTONOMOUS_ITOPS_TARGET_ARCHITECTURE.md + DETAILED_REFACTOR_AND_GOVERNANCE_PLAN.md，含状态标识）
+- 0-5 ✅ API 路由清单完整（API_INVENTORY.md 529行）
+- 0-6 ✅ 前端页面清单完整（FRONTEND_PAGE_INVENTORY.md 68行，52个页面）
+- 0-7 ✅ 数据库表清单完整（CODE_INVENTORY.md 数据库部分）
+- 0-8 ✅ 采集器清单完整（CODE_INVENTORY.md 采集器部分，25个采集器）
+- 0-9 ✅ 自动化脚本清单完整（CODE_INVENTORY.md 自动化部分）
+- 0-10 ✅ 代码打标签完成（CODE_INVENTORY.md 有 keep/refactor/remove 决策）
+- 0-11 ✅ .db 文件已清理（.gitignore 已配置，git 中无 .db 文件）
+- 0-12 ✅ README 只引用事实源文档（只引用 docs/00-overview/README.md）
+
 ---
 
 ## 阶段1：后端领域目录与统一基础设施
@@ -307,7 +321,7 @@
 
 **验收**：告警和执行失败可自动生成工单；工单能看到相关日志和执行记录；工单关闭能生成知识草稿。
 
-🔄 **Phase 11 状态：部分完成（2026-05-29）**
+✅ **Phase 11 状态：已完成（2026-05-29）**
 - 11-1 ✅ 告警转工单已实现（`POST /api/v1/workorder/convert-to-workorder`）
 - 11-2 ✅ 自动化失败转工单已实现（ExecutionService._create_ticket_from_failed_execution）
 - 11-3 ✅ 工单关联日志/执行/AI分析已实现（tickets 表 + API）
