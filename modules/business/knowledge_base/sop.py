@@ -94,7 +94,7 @@ class SOPKnowledgeBase:
             review_status=ReviewStatus.PENDING,
             related_cases=related_cases,
             related_sops=related_sops,
-            metadata=metadata,
+            extra_data=metadata,
             **kwargs
         )
         

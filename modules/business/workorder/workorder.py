@@ -320,7 +320,7 @@ class WorkOrderCore:
             return None
         
         allowed_fields = [
-            'title', 'description', 'priority', 'device_id', 'device_name',
+            'title', 'description', 'priority', 'status', 'device_id', 'device_name',
             'device_ip', 'business_id', 'business_name', 'impact', 'urgency',
             'expected_start', 'expected_end', 'assignee', 'assignee_email',
             'change_type', 'change_impact', 'rollback_plan', 'test_plan',

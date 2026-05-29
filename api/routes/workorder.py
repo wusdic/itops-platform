@@ -1434,11 +1434,18 @@ async def resolve_workorder(
 ):
     """解决工单"""
     core = _build_workorder_core(db)
-    success = core.resolve(workorder_id, resolution, current_user.username, root_cause, improvement)
-    
-    if not success:
+    workorder = core.update(
+        workorder_id,
+        operator=current_user.username,
+        status=WorkOrderStatus.RESOLVED,
+        resolution=resolution,
+        root_cause=root_cause,
+        improvement=improvement,
+    )
+
+    if not workorder:
         raise HTTPException(status_code=404, detail="工单不存在")
-    
+
     return {"status": "success", "message": "工单已解决"}
 
 
@@ -1582,21 +1589,23 @@ async def generate_knowledge_from_workorder(
     将已解决的工单转化为知识文档草稿（SOP文档）。
     生成的文档默认状态为 DRAFT，需经审核后才可发布。
     """
-    # 获取工单
-    wo = db.query(WorkOrder).filter(WorkOrder.id == workorder_id).first()
-    if not wo:
-        raise HTTPException(status_code=404, detail="工单不存在")
+    import traceback
+    try:
+        # 获取工单
+        wo = db.query(WorkOrder).filter(WorkOrder.id == workorder_id).first()
+        if not wo:
+            raise HTTPException(status_code=404, detail="工单不存在")
 
-    # 获取工单关联的设备信息
-    device_info = ""
-    if wo.device_name or wo.device_ip:
-        device_info = f"\n\n**关联设备**: {wo.device_name or ''} ({wo.device_ip or 'N/A'})"
+        # 获取工单关联的设备信息
+        device_info = ""
+        if wo.device_name or wo.device_ip:
+            device_info = f"\n\n**关联设备**: {wo.device_name or ''} ({wo.device_ip or 'N/A'})"
 
-    # 根据模板决定内容
-    template = request.content_template if request and request.content_template else "full"
+        # 根据模板决定内容
+        template = request.content_template if (request and hasattr(request, 'content_template') and request.content_template) else "full"
 
-    if template == "summary":
-        content = f"""# {wo.title}
+        if template == "summary":
+            content = f"""# {wo.title}
 
 ## 问题概述
 {wo.description or '无描述'}
@@ -1607,26 +1616,20 @@ async def generate_knowledge_from_workorder(
 ## 标签
 {wo.tags or ''}
 """
-    elif template == "root_cause":
-        content = f"""# {wo.title}
+        elif template == "root_cause":
+            content = f"""# {wo.title}
 
 ## 问题描述
-{wo.description or '无描述'}
+{wo.description or '无描述'}{device_info}
 
 ## 根因分析
-{wo.root_cause or '无根因记录'}
+{wo.root_cause or '未填写'}
 
 ## 解决方案
 {wo.resolution or '无解决方案记录'}
-
-## 改进措施
-{wo.improvement or '无改进措施'}
-
-## 标签
-{wo.tags or ''}
 """
-    else:  # full
-        content = f"""# {wo.title}
+        else:  # full
+            content = f"""# {wo.title}
 
 ## 问题描述
 {wo.description or '无描述'}{device_info}
@@ -1647,29 +1650,32 @@ async def generate_knowledge_from_workorder(
 - 关联标签: {wo.tags or '无'}
 """
 
-    # 使用 SOPService 创建知识文档草稿
-    try:
-        from modules.business.knowledge_base.sop import SOPService
-        sop_service = SOPService(db)
+        # 使用 SOPKnowledgeBase 创建知识文档草稿
+        from modules.business.knowledge_base.sop import SOPKnowledgeBase
+        sop_service = SOPKnowledgeBase(db)
+        tags_str = request.tags if (request and hasattr(request, 'tags') and request.tags) else ''
+        tags_list = [t.strip() for t in tags_str.split(',')] if tags_str else []
         doc = sop_service.create(
             title=f"[工单#{wo.id}] {wo.title}",
             content=content,
             author=current_user.username,
-            category_id=request.category_id if request else None,
-            tags=request.tags.split(',') if request and request.tags else None,
+            category_id=request.category_id if (request and hasattr(request, 'category_id') and request.category_id) else None,
+            tags=tags_list if tags_list else None,
             metadata={
                 "source_workorder_id": wo.id,
                 "source_type": "workorder",
             }
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"创建知识文档失败: {str(e)}")
 
-    return {
-        "status": "success",
-        "message": "知识文档草稿已创建",
-        "document_id": doc.id,
-        "doc_no": doc.doc_no,
-        "title": doc.title,
-        "review_status": doc.review_status.value if doc.review_status else "pending",
-    }
+        return {
+            "status": "success",
+            "message": "知识文档草稿已创建",
+            "document_id": doc.id,
+            "doc_no": doc.doc_no,
+            "title": doc.title,
+            "review_status": doc.review_status.value if hasattr(doc.review_status, 'value') else str(doc.review_status),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建知识文档失败: {type(e).__name__}: {str(e)}\n{traceback.format_exc()}")

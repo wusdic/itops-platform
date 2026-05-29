@@ -712,8 +712,8 @@ class DeviceManager:
             return DeviceMetrics(
                 device_name=device_name,
                 device_ip=device_ip,
-                device_type=device_config.get('type'),
-                vendor=device_config.get('vendor'),
+                device_type=device_config.get('type', ''),
+                vendor=device_config.get('vendor', ''),
                 timestamp=datetime.now(),
                 status=DeviceStatus.ONLINE,
                 metrics=metrics_data,

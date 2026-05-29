@@ -1462,6 +1462,7 @@ async def analyze_root_cause(
         request = RootCauseAnalyzeRequest()
     
     # get根因analysis器
+    from modules.business.ai_copilot.root_cause import get_root_cause_analyzer
     analyzer = get_root_cause_analyzer()
     
     # 尝试getLLMclient(如果可用)
@@ -1474,28 +1475,40 @@ async def analyze_root_cause(
         pass  # LLM不可用h使用无LLM模式
     
     # 执行analysis
-    result = await analyzer.analyze(
-        alert_id=alert_id,
-        db=db,
-        include_llm=request.include_llm,
-        include_history=request.include_history,
-        include_cases=request.include_cases
-    )
+    try:
+        result = await analyzer.analyze(
+            alert_id=alert_id,
+            db=db,
+            include_llm=request.include_llm,
+            include_history=request.include_history,
+            include_cases=request.include_cases
+        )
+    except Exception as e:
+        import traceback, sys
+        detail = f"AI analysis failed: {type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+        print(f"FATAL: {detail}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=detail)
     
     # 返回结果
-    return RootCauseAnalyzeResponse(
-        alert_id=result.alert_id,
-        success=result.success,
-        root_cause=result.root_cause,
-        confidence=result.confidence,
-        possible_causes=result.possible_causes,
-        related_alerts=result.related_alerts,
-        analysis_steps=result.analysis_steps,
-        evidence=result.evidence,
-        recommendations=result.recommendations,
-        metadata=result.metadata,
-        error=result.error if not result.success else None
-    )
+    try:
+        return RootCauseAnalyzeResponse(
+            alert_id=result.alert_id,
+            success=result.success,
+            root_cause=result.root_cause,
+            confidence=result.confidence,
+            possible_causes=result.possible_causes,
+            related_alerts=result.related_alerts,
+            analysis_steps=result.analysis_steps,
+            evidence=result.evidence,
+            recommendations=result.recommendations,
+            metadata=result.metadata,
+            error=result.error if not result.success else None
+        )
+    except Exception as e:
+        import traceback, sys
+        detail = f"Response construction failed: {type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+        print(f"FATAL: {detail}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=detail)
 
 
 # ============== C3: alert处置(Remediation)接口 ==============
