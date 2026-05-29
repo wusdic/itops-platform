@@ -245,8 +245,7 @@ class CollectorRegistry:
             "total_tasks": total_tasks,
             "running_tasks": running_tasks,
             "pending_tasks": pending_tasks,
-            "completed_tasks_today": completed_tasks, "failed_tasks_today": failed_tasks,
-            "failed_tasks": failed_tasks,
+            "completed_tasks": completed_tasks, "failed_tasks": failed_tasks,
             "protocol_distribution": protocol_dist
         }
 
