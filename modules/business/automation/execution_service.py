@@ -355,6 +355,10 @@ class ExecutionService:
 
             self.db.commit()
 
+        # Phase 11-2: 自动化失败转工单
+        if not success:
+            self._create_ticket_from_failed_execution(execution, error_message)
+
         # 记录完成日志
         status_str = "SUCCESS" if success else "FAILED"
         self._add_log(execution_id, "info", f"Execution {status_str} (duration: {duration_ms}ms)")
@@ -566,6 +570,80 @@ class ExecutionService:
             result = result.replace(f"${{{key}}}", str(value))
             result = result.replace(f"{{{{{key}}}}}", str(value))
         return result
+
+    def _create_ticket_from_failed_execution(
+        self, execution: AutomationExecution, error_message: Optional[str]
+    ):
+        """Phase 11-2: 自动化执行失败时自动创建工单"""
+        try:
+            # 避免循环导入：延迟导入 workorder 相关模块
+            from modules.business.workorder.workorder_manager import WorkOrderManager
+            from modules.business.workorder.models import WorkOrder, WorkOrderPriority, WorkOrderStatus, OrderType
+
+            ticket_manager = WorkOrderManager(self.db)
+
+            # 构建工单标题和描述
+            script_name = execution.script_name or "未知剧本"
+            trigger = execution.trigger_type or "unknown"
+            error_msg = error_message or "执行失败，无详细错误信息"
+
+            title = f"[自动化执行失败] {script_name} ({trigger}触发)"
+            description = f"""## 自动化执行失败
+
+**执行ID**: {execution.id}
+**剧本名称**: {script_name}
+**触发方式**: {trigger}
+**执行时间**: {execution.started_at or execution.created_at}
+**执行人**: {execution.triggered_by or "system"}
+
+### 错误信息
+```
+{error_msg}
+```
+
+### 建议
+1. 检查脚本内容和参数是否正确
+2. 确认目标设备可达性
+3. 检查执行权限和凭证是否有效
+
+---
+*此工单由自动化执行失败自动创建*
+"""
+            priority_map = {
+                "low": WorkOrderPriority.LOW,
+                "medium": WorkOrderPriority.MEDIUM,
+                "high": WorkOrderPriority.HIGH,
+            }
+
+            # 查找关联的任务获取优先级
+            priority = WorkOrderPriority.MEDIUM
+            if execution.task_id:
+                from modules.business.automation.models import AutomationTask
+                task = self.db.query(AutomationTask).filter(
+                    AutomationTask.id == execution.task_id
+                ).first()
+                if task and task.risk_level:
+                    priority = priority_map.get(task.risk_level, WorkOrderPriority.MEDIUM)
+
+            # 创建工单
+            wo = ticket_manager.create(
+                title=title,
+                order_type=OrderType.TECHNICAL_ISSUE,
+                creator="system",
+                description=description,
+                priority=priority,
+                assignee=None,  # 不指定，自动流转
+                device_id=None,
+                device_name=None,
+                device_ip=None,
+                expected_end=None,
+                impact=None,
+                tags=["automation", "execution_failed", "auto-created"],
+                attachments=None,
+            )
+            logger.info(f"自动创建工单 {wo.id} 用于失败执行 {execution.id}")
+        except Exception as e:
+            logger.error(f"自动创建工单失败: {e}")
 
     def _execution_to_dict(
         self,
