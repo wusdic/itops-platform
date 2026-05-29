@@ -31,6 +31,12 @@ const routes = [
         component: () => import('@/features/monitoring-event/MonitoringEventView.vue'),
         meta: { title: '监控与事件台', parent: '监控中心' }
       },
+      {
+        path: 'incident-response',
+        name: 'IncidentResponse',
+        component: () => import('@/features/incident-response/IncidentResponseView.vue'),
+        meta: { title: '故障处置台', parent: '监控中心' }
+      },
       // 监控中心
       {
         path: 'monitoring/devices',

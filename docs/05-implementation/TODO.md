@@ -288,7 +288,7 @@
 - 10-1 ✅ features/ 目录已建立（command-center, asset-config, monitoring-event 等）
 - 10-2 ✅ 资产与配置台已完成（/asset-config 页面，集成 assets/credentials/configs API）
 - 10-3 ✅ 监控与事件台已完成（/monitoring-event 页面，集成 alerts/events/metrics/rules API）
-- 10-4 🔄 故障处置台待完成（核心竞争页面）
+- 10-4 ✅ 故障处置台已完成（/incident-response 页面，4栏布局：时间线+证据+AI推荐+日志，AI分析调用 /ai/analyze）
 - 10-5 🔄 自动化编排台待完成
 - 10-6 🔄 运维指挥台待完成
 
