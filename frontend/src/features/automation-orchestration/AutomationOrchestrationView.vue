@@ -1,663 +1,791 @@
 <template>
-  <div class="auto-orch">
-    <!-- 顶部：标题+统计卡片 -->
-    <div class="header-bar">
-      <div>
-        <h2 class="page-title">自动化编排台</h2>
-        <p class="page-subtitle">脚本库 · 任务管理 · 执行控制 · 审批中心</p>
-      </div>
-      <div class="header-stats">
-        <el-statistic title="脚本总数" :value="stats.scripts" />
-        <el-statistic title="任务总数" :value="stats.tasks" />
-        <el-statistic title="执行总数" :value="stats.executions" />
-        <el-statistic title="今日执行" :value="stats.todayExecutions" />
-      </div>
-    </div>
+  <div class="automation-page">
+    <!-- 顶部统计 -->
+    <el-row :gutter="16" class="stats-row">
+      <el-col :span="6">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-icon scripts"><el-icon><Document /></el-icon></div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.scripts }}</div>
+            <div class="stat-label">剧本库</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-icon tasks"><el-icon><Clock /></el-icon></div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.tasks }}</div>
+            <div class="stat-label">定时任务</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-icon executions"><el-icon><VideoPlay /></el-icon></div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.executions }}</div>
+            <div class="stat-label">执行记录</div>
+          </div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover" class="stat-card">
+          <div class="stat-icon approvals"><el-icon><WarningFilled /></el-icon></div>
+          <div class="stat-info">
+            <div class="stat-value">{{ stats.approvals }}</div>
+            <div class="stat-label">待审批</div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
 
-    <!-- 主Tab区 -->
-    <el-tabs v-model="activeTab" class="main-tabs">
-      <!-- Tab1: 脚本库 -->
-      <el-tab-pane label="脚本库" name="scripts">
-        <div class="tab-toolbar">
-          <el-input v-model="scriptKeyword" placeholder="搜索脚本名称/标签" style="width:260px" clearable @change="loadScripts">
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
-          <el-select v-model="scriptTypeFilter" placeholder="脚本类型" clearable style="width:140px" @change="loadScripts">
-            <el-option label="Shell" value="shell" />
-            <el-option label="Python" value="python" />
-            <el-option label="Ansible" value="ansible" />
-          </el-select>
-          <el-select v-model="riskFilter" placeholder="风险等级" clearable style="width:140px" @change="loadScripts">
-            <el-option label="低风险" value="low" />
-            <el-option label="中风险" value="medium" />
-            <el-option label="高风险" value="high" />
-          </el-select>
-          <el-button type="primary" :icon="Plus" @click="showScriptDialog = true">新建脚本</el-button>
-        </div>
-        <el-table :data="scriptList" stripe v-loading="scriptLoading" @row-click="selectScript">
-          <el-table-column prop="name" label="脚本名称" min-width="140">
-            <template #default="{row}">
-              <el-link type="primary" :underline="false">{{ row.name }}</el-link>
-              <el-tag v-if="row.risk_level === 'high'" type="danger" size="small" style="margin-left:6px">高风险</el-tag>
-              <el-tag v-else-if="row.risk_level === 'medium'" type="warning" size="small" style="margin-left:6px">中风险</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="script_type" label="类型" width="100" />
-          <el-table-column prop="risk_level" label="风险" width="80">
-            <template #default="{row}">
-              <el-tag :type="riskTagType(row.risk_level)" size="small">{{ row.risk_level }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="source" label="来源" width="80" />
-          <el-table-column prop="created_at" label="创建时间" width="160" />
-          <el-table-column label="操作" width="200" fixed="right">
-            <template #default="{row}">
-              <el-button size="small" type="primary" @click.stop="runScript(row)">执行</el-button>
-              <el-button size="small" @click.stop="viewScriptDetail(row)">详情</el-button>
-              <el-button size="small" type="danger" plain @click.stop="deleteScript(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination
-          v-model:current-page="scriptPage"
-          v-model:page-size="scriptPageSize"
-          :total="scriptTotal"
-          :page-sizes="[10,20,50]"
-          layout="total,sizes,prev,pager,next"
-          style="margin-top:12px"
-          @size-change="loadScripts"
-          @current-change="loadScripts"
-        />
-      </el-tab-pane>
+    <!-- 主内容 -->
+    <el-card class="main-card">
+      <el-tabs v-model="activeTab" class="main-tabs">
+        <!-- 剧本库 -->
+        <el-tab-pane label="剧本库" name="scripts">
+          <div class="tab-toolbar">
+            <el-button type="primary" @click="showScriptDialog = true">
+              <el-icon><Plus /></el-icon> 新建剧本
+            </el-button>
+          </div>
+          <el-table :data="scripts" v-loading="loading.scripts" stripe class="main-table">
+            <el-table-column prop="name" label="剧本名称" min-width="160">
+              <template #default="{ row }">
+                <el-link type="primary" @click="viewScript(row)">{{ row.name }}</el-link>
+              </template>
+            </el-table-column>
+            <el-table-column prop="script_type" label="类型" width="100">
+              <template #default="{ row }">
+                <el-tag size="small">{{ row.script_type }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="risk_level" label="风险等级" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" :type="riskTagType(row.risk_level)">{{ row.risk_level }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="source" label="来源" width="80" />
+            <el-table-column prop="created_by" label="创建人" width="100" />
+            <el-table-column prop="updated_at" label="更新时间" width="180" />
+            <el-table-column label="操作" width="200" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" @click="runScript(row)">执行</el-button>
+                <el-button size="small" @click="editScript(row)">编辑</el-button>
+                <el-button size="small" type="danger" @click="deleteScript(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-pagination
+            class="table-pagination"
+            :total="pagination.scripts.total"
+            :page-size="pagination.scripts.page_size"
+            :current-page="pagination.scripts.page"
+            layout="total, prev, pager, next"
+            @current-change="p => loadScripts(p)"
+          />
+        </el-tab-pane>
 
-      <!-- Tab2: 任务管理 -->
-      <el-tab-pane label="任务管理" name="tasks">
-        <div class="tab-toolbar">
-          <el-input v-model="taskKeyword" placeholder="搜索任务名称" style="width:260px" clearable @change="loadTasks">
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
-          <el-select v-model="triggerFilter" placeholder="触发类型" clearable style="width:140px" @change="loadTasks">
-            <el-option label="Cron" value="cron" />
-            <el-option label="Manual" value="manual" />
-            <el-option label="Event" value="event" />
-          </el-select>
-          <el-button type="primary" :icon="Plus" @click="showTaskDialog = true">新建任务</el-button>
-        </div>
-        <el-table :data="taskList" stripe v-loading="taskLoading">
-          <el-table-column prop="name" label="任务名称" min-width="160">
-            <template #default="{row}">
-              <el-link type="primary" :underline="false">{{ row.name }}</el-link>
-            </template>
-          </el-table-column>
-          <el-table-column prop="script_name" label="关联脚本" min-width="120" />
-          <el-table-column prop="trigger_type" label="触发类型" width="100">
-            <template #default="{row}">
-              <el-tag size="small">{{ row.trigger_type }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="trigger_config" label="触发配置" min-width="160">
-            <template #default="{row}">
-              <span v-if="row.trigger_type === 'cron' && row.trigger_config">{{ row.trigger_config.cron || row.trigger_config.schedule }}</span>
-              <span v-else>—</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="enabled" label="状态" width="80">
-            <template #default="{row}">
-              <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="220" fixed="right">
-            <template #default="{row}">
-              <el-button size="small" type="success" @click="runTask(row)">立即执行</el-button>
-              <el-button size="small" @click="viewTaskDetail(row)">详情</el-button>
-              <el-button size="small" type="danger" plain @click="deleteTask(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination
-          v-model:current-page="taskPage"
-          v-model:page-size="taskPageSize"
-          :total="taskTotal"
-          :page-sizes="[10,20,50]"
-          layout="total,sizes,prev,pager,next"
-          style="margin-top:12px"
-          @size-change="loadTasks"
-          @current-change="loadTasks"
-        />
-      </el-tab-pane>
+        <!-- 任务管理 -->
+        <el-tab-pane label="任务管理" name="tasks">
+          <div class="tab-toolbar">
+            <el-button type="primary" @click="showTaskDialog = true">
+              <el-icon><Plus /></el-icon> 新建任务
+            </el-button>
+          </div>
+          <el-table :data="tasks" v-loading="loading.tasks" stripe class="main-table">
+            <el-table-column prop="name" label="任务名称" min-width="160">
+              <template #default="{ row }">
+                <el-link type="primary" @click="viewTask(row)">{{ row.name }}</el-link>
+              </template>
+            </el-table-column>
+            <el-table-column prop="trigger_type" label="触发方式" width="100">
+              <template #default="{ row }">
+                <el-tag size="small">{{ row.trigger_type }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="cron_expression" label="Cron" width="120" />
+            <el-table-column prop="target_script" label="关联剧本" min-width="140" />
+            <el-table-column prop="status" label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag size="small" :type="taskStatusType(row.status)">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="last_run" label="上次执行" width="180" />
+            <el-table-column label="操作" width="160" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" @click="runTask(row)">立即执行</el-button>
+                <el-button size="small" type="danger" @click="deleteTask(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
 
-      <!-- Tab3: 执行历史 -->
-      <el-tab-pane label="执行历史" name="executions">
-        <div class="tab-toolbar">
-          <el-input v-model="execKeyword" placeholder="搜索任务/脚本名称" style="width:260px" clearable @change="loadExecutions">
-            <template #prefix><el-icon><Search /></el-icon></template>
-          </el-input>
-          <el-select v-model="execStatusFilter" placeholder="执行状态" clearable style="width:140px" @change="loadExecutions">
-            <el-option label="成功" value="success" />
-            <el-option label="失败" value="failed" />
-            <el-option label="运行中" value="running" />
-            <el-option label="待审批" value="pending_approval" />
-          </el-select>
-          <el-button :icon="Refresh" @click="loadExecutions">刷新</el-button>
-        </div>
-        <el-table :data="execList" stripe v-loading="execLoading">
-          <el-table-column prop="script_name" label="脚本" min-width="120" />
-          <el-table-column prop="task_name" label="任务" min-width="120">
-            <template #default="{row}">
-              {{ row.task_name || '—' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="trigger_type" label="触发" width="90" />
-          <el-table-column prop="status" label="状态" width="120">
-            <template #default="{row}">
-              <el-tag :type="execStatusTagType(row.status)" size="small">{{ row.status }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="started_at" label="开始时间" width="160" />
-          <el-table-column prop="finished_at" label="结束时间" width="160">
-            <template #default="{row}">
-              {{ row.finished_at || '—' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="triggered_by" label="触发人" width="100" />
-          <el-table-column label="操作" width="180" fixed="right">
-            <template #default="{row}">
-              <el-button size="small" @click="viewExecDetail(row)">详情</el-button>
-              <el-button v-if="row.status === 'pending_approval'" size="small" type="warning" @click="approveExec(row)">审批</el-button>
-              <el-button size="small" @click="viewExecLogs(row)">日志</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-pagination
-          v-model:current-page="execPage"
-          v-model:page-size="execPageSize"
-          :total="execTotal"
-          :page-sizes="[10,20,50]"
-          layout="total,sizes,prev,pager,next"
-          style="margin-top:12px"
-          @size-change="loadExecutions"
-          @current-change="loadExecutions"
-        />
-      </el-tab-pane>
+        <!-- 执行历史 -->
+        <el-tab-pane label="执行历史" name="executions">
+          <div class="tab-toolbar">
+            <el-select v-model="execFilter.status" placeholder="状态筛选" clearable style="width:140px;margin-right:8px" @change="loadExecutions()">
+              <el-option label="全部" value="" />
+              <el-option label="成功" value="success" />
+              <el-option label="失败" value="failed" />
+              <el-option label="运行中" value="running" />
+              <el-option label="待审批" value="waiting_approval" />
+            </el-select>
+            <el-date-picker
+              v-model="execFilter.date_range"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              style="width:240px;margin-right:8px"
+              @change="loadExecutions()"
+            />
+            <el-button @click="execFilter={};loadExecutions()">重置</el-button>
+          </div>
+          <el-table :data="executions" v-loading="loading.executions" stripe class="main-table">
+            <el-table-column prop="id" label="执行ID" width="220">
+              <template #default="{ row }">
+                <el-link type="primary" @click="viewExecution(row)">{{ row.id.substring(0,8) }}...</el-link>
+              </template>
+            </el-table-column>
+            <el-table-column prop="name" label="剧本名称" min-width="140" />
+            <el-table-column prop="trigger_type" label="触发方式" width="100" />
+            <el-table-column prop="status" label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag size="small" :type="execStatusType(row.status)">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="started_at" label="开始时间" width="180" />
+            <el-table-column prop="finished_at" label="结束时间" width="180" />
+            <el-table-column prop="duration" label="耗时" width="90">
+              <template #default="{ row }">
+                <span v-if="row.duration">{{ row.duration }}s</span>
+                <span v-else>—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" @click="viewExecution(row)">详情</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-pagination
+            class="table-pagination"
+            :total="pagination.executions.total"
+            :page-size="pagination.executions.page_size"
+            :current-page="pagination.executions.page"
+            layout="total, prev, pager, next"
+            @current-change="p => loadExecutions(p)"
+          />
+        </el-tab-pane>
 
-      <!-- Tab4: 执行详情（侧滑/对话框） -->
-    </el-tabs>
+        <!-- 审批中心 -->
+        <el-tab-pane label="审批中心" name="approvals">
+          <div class="tab-toolbar">
+            <el-select v-model="approvalFilter.status" placeholder="状态筛选" clearable style="width:160px;margin-right:8px" @change="loadApprovals()">
+              <el-option label="全部" value="" />
+              <el-option label="待审批" value="pending" />
+              <el-option label="已批准" value="approved" />
+              <el-option label="已拒绝" value="rejected" />
+            </el-select>
+          </div>
+          <el-table :data="approvals" v-loading="loading.approvals" stripe class="main-table">
+            <el-table-column prop="id" label="审批ID" width="220">
+              <template #default="{ row }">
+                <el-link type="primary" @click="viewApproval(row)">{{ row.id.substring(0,8) }}...</el-link>
+              </template>
+            </el-table-column>
+            <el-table-column prop="name" label="执行名称" min-width="160" />
+            <el-table-column prop="requester" label="申请人" width="120" />
+            <el-table-column prop="risk_level" label="风险等级" width="100">
+              <template #default="{ row }">
+                <el-tag size="small" :type="riskTagType(row.risk_level)">{{ row.risk_level }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="110">
+              <template #default="{ row }">
+                <el-tag size="small" :type="approvalStatusType(row.status)">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="created_at" label="申请时间" width="180" />
+            <el-table-column label="操作" width="180" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" type="success" @click="approve(row)" :disabled="row.status !== 'pending'">批准</el-button>
+                <el-button size="small" type="danger" @click="reject(row)" :disabled="row.status !== 'pending'">拒绝</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-pagination
+            class="table-pagination"
+            :total="pagination.approvals.total"
+            :page-size="pagination.approvals.page_size"
+            :current-page="pagination.approvals.page"
+            layout="total, prev, pager, next"
+            @current-change="p => loadApprovals(p)"
+          />
+        </el-tab-pane>
+      </el-tabs>
+    </el-card>
 
     <!-- 脚本详情抽屉 -->
-    <el-drawer v-model="scriptDrawer" :title="selectedScript?.name || '脚本详情'" size="600px">
+    <el-drawer v-model="scriptDrawer" :title="selectedScript?.name" size="600px">
       <template v-if="selectedScript">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="脚本ID">{{ selectedScript.id }}</el-descriptions-item>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="剧本名称">{{ selectedScript.name }}</el-descriptions-item>
           <el-descriptions-item label="类型">{{ selectedScript.script_type }}</el-descriptions-item>
           <el-descriptions-item label="风险等级">
-            <el-tag :type="riskTagType(selectedScript.risk_level)">{{ selectedScript.risk_level }}</el-tag>
+            <el-tag size="small" :type="riskTagType(selectedScript.risk_level)">{{ selectedScript.risk_level }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="来源">{{ selectedScript.source }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间" :span="2">{{ selectedScript.created_at }}</el-descriptions-item>
-          <el-descriptions-item label="描述" :span="2">{{ selectedScript.description || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="创建人">{{ selectedScript.created_by }}</el-descriptions-item>
+          <el-descriptions-item label="标签">{{ selectedScript.tags?.join(', ') || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ selectedScript.created_at }}</el-descriptions-item>
+          <el-descriptions-item label="更新时间">{{ selectedScript.updated_at }}</el-descriptions-item>
         </el-descriptions>
-        <div style="margin-top:16px">
-          <div style="font-weight:600;margin-bottom:8px">脚本内容</div>
-          <el-input v-if="selectedScript.content" type="textarea" :model-value="selectedScript.content" :rows="12" readonly />
-          <span v-else>—</span>
-        </div>
-        <div style="margin-top:16px" v-if="selectedScript.params_schema?.length">
-          <div style="font-weight:600;margin-bottom:8px">参数定义</div>
-          <el-tag v-for="p in selectedScript.params_schema" :key="p.name" style="margin-right:6px;margin-bottom:6px">{{ p.name }}: {{ p.type || 'string' }}</el-tag>
+        <el-divider />
+        <h4>脚本内容</h4>
+        <pre class="script-content">{{ selectedScript.content }}</pre>
+        <div class="drawer-actions">
+          <el-button type="primary" @click="runScript(selectedScript)">执行此剧本</el-button>
         </div>
       </template>
     </el-drawer>
 
     <!-- 执行详情抽屉 -->
-    <el-drawer v-model="execDrawer" title="执行详情" size="600px">
-      <template v-if="selectedExec">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="执行ID" :span="2">{{ selectedExec.id }}</el-descriptions-item>
-          <el-descriptions-item label="脚本">{{ selectedExec.script_name }}</el-descriptions-item>
-          <el-descriptions-item label="任务">{{ selectedExec.task_name || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="触发类型">{{ selectedExec.trigger_type }}</el-descriptions-item>
+    <el-drawer v-model="executionDrawer" title="执行详情" size="650px">
+      <template v-if="selectedExecution">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="执行ID">{{ selectedExecution.id }}</el-descriptions-item>
+          <el-descriptions-item label="剧本名称">{{ selectedExecution.name || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="触发方式">{{ selectedExecution.trigger_type || '—' }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="execStatusTagType(selectedExec.status)">{{ selectedExec.status }}</el-tag>
+            <el-tag :type="execStatusType(selectedExecution.status)">{{ selectedExecution.status }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="开始时间">{{ selectedExec.started_at }}</el-descriptions-item>
-          <el-descriptions-item label="结束时间">{{ selectedExec.finished_at || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="触发人">{{ selectedExec.triggered_by || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="执行时长" :span="2">
-            {{ selectedExec.duration ? selectedExec.duration + 's' : '—' }}
-          </el-descriptions-item>
+          <el-descriptions-item label="开始时间">{{ selectedExecution.started_at || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="结束时间">{{ selectedExecution.finished_at || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="耗时">{{ selectedExecution.duration ? selectedExecution.duration + 's' : '—' }}</el-descriptions-item>
+          <el-descriptions-item label="执行人">{{ selectedExecution.executed_by || '—' }}</el-descriptions-item>
         </el-descriptions>
-        <div style="margin-top:16px">
-          <div style="font-weight:600;margin-bottom:8px">执行结果摘要</div>
-          <code v-if="selectedExec.result_summary">{{ selectedExec.result_summary }}</code>
-          <span v-else>—</span>
-        </div>
-        <div v-if="selectedExec.error_message" style="margin-top:12px">
-          <div style="font-weight:600;margin-bottom:8px;color:#f56c6c">错误信息</div>
-          <el-alert type="error" :closable="false">{{ selectedExec.error_message }}</el-alert>
+        <el-divider />
+        <h4>执行参数</h4>
+        <pre class="script-content">{{ JSON.stringify(selectedExecution.parameters || {}, null, 2) }}</pre>
+        <el-divider />
+        <h4>执行日志</h4>
+        <div class="log-container" ref="logContainer">
+          <pre class="log-content">{{ executionLogs || '暂无日志' }}</pre>
         </div>
       </template>
     </el-drawer>
 
-    <!-- 执行日志抽屉 -->
-    <el-drawer v-model="logsDrawer" title="执行日志" size="700px">
-      <div v-loading="logsLoading">
-        <el-button :icon="Refresh" size="small" @click="loadExecLogs" style="margin-bottom:12px">刷新</el-button>
-        <el-input v-model="logFilter" placeholder="过滤日志内容" style="margin-bottom:12px" clearable />
-        <div class="log-viewer">
-          <pre v-for="(line,idx) in filteredLogs" :key="idx" class="log-line">{{ line }}</pre>
-          <span v-if="execLogs.length === 0" style="color:#999">暂无日志</span>
-        </div>
-      </div>
-    </el-drawer>
-
-    <!-- 脚本执行对话框 -->
-    <el-dialog v-model="runScriptDialog" title="执行脚本" width="520px">
-      <el-form label-width="100px">
-        <el-form-item label="脚本">{{ selectedScript?.name }}</el-form-item>
-        <el-form-item label="风险等级">
-          <el-tag :type="riskTagType(selectedScript?.risk_level)">{{ selectedScript?.risk_level }}</el-tag>
+    <!-- 新建/编辑剧本对话框 -->
+    <el-dialog v-model="showScriptDialog" :title="editingScript ? '编辑剧本' : '新建剧本'" width="600px">
+      <el-form :model="scriptForm" label-width="100px">
+        <el-form-item label="剧本名称" required>
+          <el-input v-model="scriptForm.name" placeholder="请输入剧本名称" />
         </el-form-item>
-        <el-form-item label="执行说明">
-          <el-alert v-if="selectedScript?.risk_level === 'high'" type="warning" :closable="false">
-            高风险脚本，审批通过后方可执行
-          </el-alert>
-          <el-alert v-else type="info" :closable="false">
-            执行后可在执行历史中查看结果和日志
-          </el-alert>
+        <el-form-item label="类型">
+          <el-select v-model="scriptForm.script_type" style="width:100%">
+            <el-option label="Shell" value="shell" />
+            <el-option label="Python" value="python" />
+            <el-option label="PowerShell" value="powershell" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="风险等级">
+          <el-select v-model="scriptForm.risk_level" style="width:100%">
+            <el-option label="低风险" value="low" />
+            <el-option label="中风险" value="medium" />
+            <el-option label="高风险" value="high" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="scriptForm.description" type="textarea" :rows="2" />
+        </el-form-item>
+        <el-form-item label="脚本内容" required>
+          <el-input v-model="scriptForm.content" type="textarea" :rows="10" placeholder="#!/bin/bash&#10;echo 'Hello'" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="runScriptDialog = false">取消</el-button>
-        <el-button type="primary" :loading="runLoading" @click="confirmRunScript">确认执行</el-button>
+        <el-button @click="showScriptDialog = false">取消</el-button>
+        <el-button type="primary" @click="submitScript" :loading="submitting">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新建任务对话框 -->
+    <el-dialog v-model="showTaskDialog" title="新建任务" width="600px">
+      <el-form :model="taskForm" label-width="100px">
+        <el-form-item label="任务名称" required>
+          <el-input v-model="taskForm.name" placeholder="请输入任务名称" />
+        </el-form-item>
+        <el-form-item label="触发方式">
+          <el-select v-model="taskForm.trigger_type" style="width:100%">
+            <el-option label="Cron" value="cron" />
+            <el-option label="Interval" value="interval" />
+            <el-option label="手动" value="manual" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Cron表达式" v-if="taskForm.trigger_type === 'cron'">
+          <el-input v-model="taskForm.cron_expression" placeholder="0 2 * * *" />
+        </el-form-item>
+        <el-form-item label="关联剧本" required>
+          <el-select v-model="taskForm.target_script_id" placeholder="请选择剧本" style="width:100%">
+            <el-option v-for="s in scripts" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showTaskDialog = false">取消</el-button>
+        <el-button type="primary" @click="submitTask" :loading="submitting">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 执行剧本对话框 -->
+    <el-dialog v-model="showRunDialog" title="执行剧本" width="500px">
+      <template v-if="runningScript">
+        <p style="margin-bottom:16px">
+          即将执行：<strong>{{ runningScript.name }}</strong>
+          <el-tag size="small" :type="riskTagType(runningScript.risk_level)" style="margin-left:8px">{{ runningScript.risk_level }}</el-tag>
+        </p>
+        <el-alert v-if="runningScript.risk_level === 'high'" type="warning" :closable="false">
+          高风险操作，确认要执行吗？
+        </el-alert>
+      </template>
+      <template #footer>
+        <el-button @click="showRunDialog = false">取消</el-button>
+        <el-button type="primary" @click="confirmRunScript" :loading="running">确认执行</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, Refresh } from '@element-plus/icons-vue'
+import { Document, Clock, VideoPlay, WarningFilled, Plus } from '@element-plus/icons-vue'
 
-const request = window.axios || window.axios
-
-// Tab状态
 const activeTab = ref('scripts')
+const token = localStorage.getItem('token') || localStorage.getItem('access_token') || ''
 
-// 统计数据
-const stats = ref({ scripts: 0, tasks: 0, executions: 0, todayExecutions: 0 })
+// Stats
+const stats = reactive({ scripts: 0, tasks: 0, executions: 0, approvals: 0 })
 
-// 脚本相关
-const scriptList = ref([])
-const scriptLoading = ref(false)
-const scriptKeyword = ref('')
-const scriptTypeFilter = ref('')
-const riskFilter = ref('')
-const scriptPage = ref(1)
-const scriptPageSize = ref(10)
-const scriptTotal = ref(0)
+// Loading states
+const loading = reactive({ scripts: false, tasks: false, executions: false, approvals: false })
+const submitting = ref(false)
+const running = ref(false)
 
-// 任务相关
-const taskList = ref([])
-const taskLoading = ref(false)
-const taskKeyword = ref('')
-const triggerFilter = ref('')
-const taskPage = ref(1)
-const taskPageSize = ref(10)
-const taskTotal = ref(0)
+// Data
+const scripts = ref([])
+const tasks = ref([])
+const executions = ref([])
+const approvals = ref([])
 
-// 执行相关
-const execList = ref([])
-const execLoading = ref(false)
-const execKeyword = ref('')
-const execStatusFilter = ref('')
-const execPage = ref(1)
-const execPageSize = ref(10)
-const execTotal = ref(0)
-
-// 弹窗/Drawer状态
-const scriptDrawer = ref(false)
-const selectedScript = ref(null)
-const execDrawer = ref(false)
-const selectedExec = ref(null)
-const logsDrawer = ref(false)
-const execLogs = ref([])
-const logsLoading = ref(false)
-const logFilter = ref('')
-const showScriptDialog = ref(false)
-const showTaskDialog = ref(false)
-const runScriptDialog = ref(false)
-const runLoading = ref(false)
-
-const filteredLogs = computed(() => {
-  if (!logFilter.value) return execLogs.value
-  return execLogs.value.filter(l => l.toLowerCase().includes(logFilter.value.toLowerCase()))
+// Pagination
+const pagination = reactive({
+  scripts: { page: 1, page_size: 10, total: 0 },
+  executions: { page: 1, page_size: 10, total: 0 },
+  approvals: { page: 1, page_size: 10, total: 0 }
 })
 
-// 加载统计数据
+// Filters
+const execFilter = reactive({ status: '', date_range: null })
+const approvalFilter = reactive({ status: '' })
+
+// Drawer/Modal states
+const scriptDrawer = ref(false)
+const executionDrawer = ref(false)
+const selectedScript = ref(null)
+const selectedExecution = ref(null)
+const executionLogs = ref('')
+
+// Form dialogs
+const showScriptDialog = ref(false)
+const showTaskDialog = ref(false)
+const showRunDialog = ref(false)
+const editingScript = ref(null)
+const runningScript = ref(null)
+
+const scriptForm = reactive({ name: '', script_type: 'shell', risk_level: 'medium', description: '', content: '' })
+const taskForm = reactive({ name: '', trigger_type: 'cron', cron_expression: '', target_script_id: '' })
+
+// Log container ref
+const logContainer = ref(null)
+
+// API helpers
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...(options.headers || {})
+    }
+  })
+  if (!res.ok) {
+    if (res.status === 401) ElMessage.error('未授权，请重新登录')
+    else ElMessage.error(`请求失败: ${res.status}`)
+    return null
+  }
+  const raw = await res.json()
+  return raw.data !== undefined ? raw.data : raw
+}
+
+// Load functions
 async function loadStats() {
-  try {
-    const token = localStorage.getItem('token')
-    const headers = { Authorization: `Bearer ${token}` }
-    const [scriptsRes, tasksRes, execsRes] = await Promise.all([
-      fetch('/api/v1/automation/scripts?page=1&page_size=1', { headers }),
-      fetch('/api/v1/automation/tasks?page=1&page_size=1', { headers }),
-      fetch('/api/v1/automation/executions?page=1&page_size=1', { headers })
-    ])
-    const scriptsData = scriptsRes.ok ? (await scriptsRes.json()).data : {}
-    const tasksData = tasksRes.ok ? (await tasksRes.json()).data : {}
-    const execsData = execsRes.ok ? (await execsRes.json()).data : {}
-
-    stats.value.scripts = scriptsData.total || 0
-    stats.value.tasks = tasksData.total || 0
-    stats.value.executions = execsData.total || 0
-
-    // 今日执行
-    const today = new Date().toISOString().split('T')[0]
-    const todayRes = await fetch(`/api/v1/automation/executions?page=1&page_size=1&started_at=${today}`, { headers })
-    if (todayRes.ok) {
-      const d = (await todayRes.json()).data || {}
-      stats.value.todayExecutions = d.total || 0
-    }
-  } catch (e) {
-    console.error('loadStats failed', e)
-  }
+  const [sc, tk, ex, ap] = await Promise.all([
+    apiFetch('http://localhost:8000/api/v1/automation/scripts?page=1&page_size=1'),
+    apiFetch('http://localhost:8000/api/v1/automation/tasks?page=1&page_size=1'),
+    apiFetch('http://localhost:8000/api/v1/automation/executions?page=1&page_size=1'),
+    apiFetch('http://localhost:8000/api/v1/automation/approvals?page=1&page_size=1')
+  ])
+  if (sc) stats.scripts = sc.total || 0
+  if (tk) stats.tasks = tk.total || 0
+  if (ex) stats.executions = ex.total || 0
+  if (ap) stats.approvals = ap.total || 0
 }
 
-// 加载脚本列表
-async function loadScripts() {
-  scriptLoading.value = true
+async function loadScripts(page = 1) {
+  loading.scripts = true
   try {
-    const token = localStorage.getItem('token')
-    const params = new URLSearchParams({
-      page: scriptPage.value,
-      page_size: scriptPageSize.value
-    })
-    if (scriptKeyword.value) params.append('keyword', scriptKeyword.value)
-    if (scriptTypeFilter.value) params.append('script_type', scriptTypeFilter.value)
-    if (riskFilter.value) params.append('risk_level', riskFilter.value)
-
-    const res = await fetch(`/api/v1/automation/scripts?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error('load scripts failed')
-    const data = (await res.json()).data || {}
-    scriptList.value = data.items || []
-    scriptTotal.value = data.total || 0
-  } catch (e) {
-    ElMessage.error('加载脚本列表失败')
+    const data = await apiFetch(`http://localhost:8000/api/v1/automation/scripts?page=${page}&page_size=${pagination.scripts.page_size}`)
+    scripts.value = data?.items || []
+    pagination.scripts.total = data?.total || 0
+    pagination.scripts.page = page
   } finally {
-    scriptLoading.value = false
+    loading.scripts = false
   }
 }
 
-// 加载任务列表
 async function loadTasks() {
-  taskLoading.value = true
+  loading.tasks = true
   try {
-    const token = localStorage.getItem('token')
-    const params = new URLSearchParams({
-      page: taskPage.value,
-      page_size: taskPageSize.value
-    })
-    if (taskKeyword.value) params.append('keyword', taskKeyword.value)
-    if (triggerFilter.value) params.append('trigger_type', triggerFilter.value)
-
-    const res = await fetch(`/api/v1/automation/tasks?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error('load tasks failed')
-    const data = (await res.json()).data || {}
-    taskList.value = data.items || []
-    taskTotal.value = data.total || 0
-  } catch (e) {
-    ElMessage.error('加载任务列表失败')
+    const data = await apiFetch('http://localhost:8000/api/v1/automation/tasks?page=1&page_size=100')
+    tasks.value = data?.items || []
+    pagination.tasks.total = data?.total || 0
   } finally {
-    taskLoading.value = false
+    loading.tasks = false
   }
 }
 
-// 加载执行历史
-async function loadExecutions() {
-  execLoading.value = true
+async function loadExecutions(page = 1) {
+  loading.executions = true
   try {
-    const token = localStorage.getItem('token')
-    const params = new URLSearchParams({
-      page: execPage.value,
-      page_size: execPageSize.value
-    })
-    if (execKeyword.value) params.append('keyword', execKeyword.value)
-    if (execStatusFilter.value) params.append('status', execStatusFilter.value)
-
-    const res = await fetch(`/api/v1/automation/executions?${params}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error('load executions failed')
-    const data = (await res.json()).data || {}
-    execList.value = data.items || []
-    execTotal.value = data.total || 0
-  } catch (e) {
-    ElMessage.error('加载执行历史失败')
+    let url = `http://localhost:8000/api/v1/automation/executions?page=${page}&page_size=${pagination.executions.page_size}`
+    if (execFilter.status) url += `&status=${execFilter.status}`
+    const data = await apiFetch(url)
+    executions.value = data?.items || []
+    pagination.executions.total = data?.total || 0
+    pagination.executions.page = page
   } finally {
-    execLoading.value = false
+    loading.executions = false
   }
 }
 
-// 执行脚本
-function runScript(row) {
-  selectedScript.value = row
-  runScriptDialog.value = true
-}
-
-async function confirmRunScript() {
-  runLoading.value = true
+async function loadApprovals(page = 1) {
+  loading.approvals = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/automation/scripts/${selectedScript.value.id}/execute`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.detail || '执行失败')
-    }
-    ElMessage.success('脚本已提交执行，请到执行历史中查看')
-    runScriptDialog.value = false
-    loadExecutions()
-  } catch (e) {
-    ElMessage.error('执行失败: ' + e.message)
+    let url = `http://localhost:8000/api/v1/automation/approvals?page=${page}&page_size=${pagination.approvals.page_size}`
+    if (approvalFilter.status) url += `&status=${approvalFilter.status}`
+    const data = await apiFetch(url)
+    approvals.value = data?.items || []
+    pagination.approvals.total = data?.total || 0
+    pagination.approvals.page = page
   } finally {
-    runLoading.value = false
+    loading.approvals = false
   }
 }
 
-// 立即执行任务
-async function runTask(row) {
-  try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/automation/tasks/${row.id}/run`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error('执行失败')
-    ElMessage.success('任务已触发执行')
-    loadExecutions()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-// 查看详情
-function viewScriptDetail(row) {
+// Actions
+function viewScript(row) {
   selectedScript.value = row
   scriptDrawer.value = true
 }
 
-function viewTaskDetail(row) {
-  ElMessage.info('任务详情: ' + row.name)
+function editScript(row) {
+  editingScript.value = row
+  Object.assign(scriptForm, { name: row.name, script_type: row.script_type, risk_level: row.risk_level, description: row.description || '', content: row.content || '' })
+  showScriptDialog.value = true
 }
 
-function viewExecDetail(row) {
-  selectedExec.value = row
-  execDrawer.value = true
-}
-
-// 加载执行日志
-async function viewExecLogs(row) {
-  logsDrawer.value = true
-  execLogs.value = []
-  logsLoading.value = true
-  try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/automation/executions/${row.id}/logs`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error()
-    const data = await res.json()
-    const logs = data.data?.logs || data.logs || (typeof data === 'string' ? data : '')
-    execLogs.value = Array.isArray(logs) ? logs : String(logs).split('\n').filter(Boolean)
-  } catch (e) {
-    execLogs.value = ['日志加载失败']
-  } finally {
-    logsLoading.value = false
-  }
-}
-
-async function loadExecLogs() {
-  if (selectedExec.value) await viewExecLogs(selectedExec.value)
-}
-
-// 审批
-async function approveExec(row) {
-  try {
-    await ElMessageBox.confirm('确认通过此执行的审批？', '审批确认', { type: 'warning' })
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/automation/executions/${row.id}/approval`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved: true })
-    })
-    if (!res.ok) throw new Error('审批失败')
-    ElMessage.success('审批已通过')
-    loadExecutions()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '审批操作失败')
-  }
-}
-
-// 删除脚本
 async function deleteScript(row) {
   try {
-    await ElMessageBox.confirm(`确认删除脚本「${row.name}」？`, '删除确认', { type: 'warning' })
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/automation/scripts/${row.id}`, {
+    await ElMessageBox.confirm(`确定删除剧本「${row.name}」吗？`, '删除确认', { type: 'warning' })
+    const res = await fetch(`http://localhost:8000/api/v1/automation/scripts/${row.id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { 'Authorization': `Bearer ${token}` }
     })
-    if (!res.ok) throw new Error('删除失败')
-    ElMessage.success('删除成功')
-    loadScripts()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
+    if (res.ok) {
+      ElMessage.success('删除成功')
+      loadScripts()
+      loadStats()
+    } else {
+      ElMessage.error('删除失败')
+    }
+  } catch (e) {}
+}
+
+function runScript(row) {
+  runningScript.value = row
+  showRunDialog.value = true
+}
+
+async function confirmRunScript() {
+  if (!runningScript.value) return
+  running.value = true
+  try {
+    const res = await fetch('http://localhost:8000/api/v1/automation/executions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script_id: runningScript.value.id })
+    })
+    if (res.ok) {
+      ElMessage.success('执行已启动')
+      showRunDialog.value = false
+      loadExecutions()
+      loadStats()
+    } else {
+      ElMessage.error('执行启动失败')
+    }
+  } finally {
+    running.value = false
   }
 }
 
-// 删除任务
+async function submitScript() {
+  if (!scriptForm.name || !scriptForm.content) {
+    ElMessage.warning('请填写剧本名称和内容')
+    return
+  }
+  submitting.value = true
+  try {
+    const method = editingScript.value ? 'PUT' : 'POST'
+    const url = editingScript.value
+      ? `http://localhost:8000/api/v1/automation/scripts/${editingScript.value.id}`
+      : 'http://localhost:8000/api/v1/automation/scripts'
+    const res = await fetch(url, {
+      method,
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(scriptForm)
+    })
+    if (res.ok) {
+      ElMessage.success(editingScript.value ? '更新成功' : '创建成功')
+      showScriptDialog.value = false
+      editingScript.value = null
+      Object.assign(scriptForm, { name: '', script_type: 'shell', risk_level: 'medium', description: '', content: '' })
+      loadScripts()
+      loadStats()
+    } else {
+      ElMessage.error('保存失败')
+    }
+  } finally {
+    submitting.value = false
+  }
+}
+
+function viewTask(row) {
+  // Simple info display
+  ElMessage.info(`任务: ${row.name}`)
+}
+
 async function deleteTask(row) {
   try {
-    await ElMessageBox.confirm(`确认删除任务「${row.name}」？`, '删除确认', { type: 'warning' })
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/v1/automation/tasks/${row.id}`, {
+    await ElMessageBox.confirm(`确定删除任务「${row.name}」吗？`, '删除确认', { type: 'warning' })
+    const res = await fetch(`http://localhost:8000/api/v1/automation/tasks/${row.id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { 'Authorization': `Bearer ${token}` }
     })
-    if (!res.ok) throw new Error('删除失败')
-    ElMessage.success('删除成功')
-    loadTasks()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
+    if (res.ok) {
+      ElMessage.success('删除成功')
+      loadTasks()
+      loadStats()
+    } else {
+      ElMessage.error('删除失败')
+    }
+  } catch (e) {}
+}
+
+async function runTask(row) {
+  try {
+    const res = await fetch('http://localhost:8000/api/v1/automation/executions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: row.id })
+    })
+    if (res.ok) {
+      ElMessage.success('任务已触发')
+      loadExecutions()
+    } else {
+      ElMessage.error('触发失败')
+    }
+  } catch (e) {}
+}
+
+async function viewExecution(row) {
+  selectedExecution.value = row
+  executionLogs.value = '加载中...'
+  executionDrawer.value = true
+  // Fetch logs
+  const data = await apiFetch(`http://localhost:8000/api/v1/logs/executions/${row.id}`)
+  executionLogs.value = data?.logs || data?.stdout || data?.output || '暂无日志'
+}
+
+async function viewApproval(row) {
+  ElMessage.info(`审批: ${row.name}`)
+}
+
+async function approve(row) {
+  try {
+    await ElMessageBox.confirm(`批准执行「${row.name}」？`, '审批确认', { type: 'success' })
+    const res = await fetch(`http://localhost:8000/api/v1/automation/approvals/${row.id}/approve`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (res.ok) {
+      ElMessage.success('已批准')
+      loadApprovals()
+      loadStats()
+    } else {
+      ElMessage.error('批准失败')
+    }
+  } catch (e) {}
+}
+
+async function reject(row) {
+  try {
+    await ElMessageBox.confirm(`拒绝执行「${row.name}」？`, '审批确认', { type: 'warning' })
+    const res = await fetch(`http://localhost:8000/api/v1/automation/approvals/${row.id}/reject`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (res.ok) {
+      ElMessage.success('已拒绝')
+      loadApprovals()
+      loadStats()
+    } else {
+      ElMessage.error('拒绝失败')
+    }
+  } catch (e) {}
+}
+
+async function submitTask() {
+  if (!taskForm.name || !taskForm.target_script_id) {
+    ElMessage.warning('请填写任务名称和选择剧本')
+    return
+  }
+  submitting.value = true
+  try {
+    const res = await fetch('http://localhost:8000/api/v1/automation/tasks', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskForm)
+    })
+    if (res.ok) {
+      ElMessage.success('创建成功')
+      showTaskDialog.value = false
+      Object.assign(taskForm, { name: '', trigger_type: 'cron', cron_expression: '', target_script_id: '' })
+      loadTasks()
+      loadStats()
+    } else {
+      ElMessage.error('创建失败')
+    }
+  } finally {
+    submitting.value = false
   }
 }
 
-// 选中脚本
-function selectScript(row) {
-  viewScriptDetail(row)
-}
-
-// 辅助函数
+// Tag type helpers
 function riskTagType(level) {
   const map = { low: 'success', medium: 'warning', high: 'danger' }
   return map[level] || 'info'
 }
-
-function execStatusTagType(status) {
-  const map = { success: 'success', failed: 'danger', running: 'primary', pending_approval: 'warning', pending: 'info' }
+function taskStatusType(status) {
+  const map = { idle: 'info', running: 'primary', disabled: 'danger' }
   return map[status] || 'info'
+}
+function execStatusType(status) {
+  const map = { success: 'success', failed: 'danger', running: 'primary', waiting_approval: 'warning', queued: 'info' }
+  return map[status] || 'info'
+}
+function approvalStatusType(status) {
+  const map = { pending: 'warning', approved: 'success', rejected: 'danger' }
+  return map[status] || 'info'
+}
+
+// Tab change
+function handleTabChange(tab) {
+  if (tab === 'scripts' && scripts.value.length === 0) loadScripts()
+  if (tab === 'tasks' && tasks.value.length === 0) loadTasks()
+  if (tab === 'executions' && executions.value.length === 0) loadExecutions()
+  if (tab === 'approvals' && approvals.value.length === 0) loadApprovals()
 }
 
 onMounted(() => {
   loadStats()
   loadScripts()
-  loadTasks()
-  loadExecutions()
 })
 </script>
 
 <style scoped>
-.auto-orch {
+.automation-page {
   padding: 20px;
-  min-height: 100%;
-  background: #f5f7fa;
 }
-.header-bar {
+.stats-row {
+  margin-bottom: 16px;
+}
+.stat-card {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
-  background: #fff;
-  padding: 20px 24px;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+}
+.stat-icon {
+  width: 48px;
+  height: 48px;
   border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-.page-title {
-  margin: 0 0 4px;
-  font-size: 20px;
-  font-weight: 600;
-}
-.page-subtitle {
-  margin: 0;
-  color: #909399;
-  font-size: 13px;
-}
-.header-stats {
   display: flex;
-  gap: 32px;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #fff;
 }
-.main-tabs {
-  background: #fff;
-  padding: 16px 20px;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
+.stat-icon.scripts { background: linear-gradient(135deg, #667eea, #764ba2); }
+.stat-icon.tasks { background: linear-gradient(135deg, #f093fb, #f5576c); }
+.stat-icon.executions { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.stat-icon.approvals { background: linear-gradient(135deg, #fa709a, #fee140); }
+.stat-info { flex: 1; }
+.stat-value { font-size: 28px; font-weight: 700; line-height: 1; }
+.stat-label { font-size: 13px; color: #909399; margin-top: 4px; }
+.main-card { margin-top: 0; }
+.main-tabs { padding: 0 4px; }
 .tab-toolbar {
   display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
   align-items: center;
+  margin-bottom: 12px;
 }
-.log-viewer {
+.main-table { margin-top: 8px; }
+.table-pagination { margin-top: 16px; justify-content: flex-end; }
+.script-content {
   background: #1e1e1e;
   color: #d4d4d4;
-  padding: 12px;
+  padding: 16px;
   border-radius: 6px;
-  max-height: 500px;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 300px;
   overflow-y: auto;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
 }
-.log-line {
-  margin: 2px 0;
-  line-height: 1.5;
+.log-container {
+  background: #1e1e1e;
+  border-radius: 6px;
+  max-height: 400px;
+  overflow-y: auto;
 }
+.log-content {
+  color: #d4d4d4;
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+.drawer-actions { margin-top: 16px; text-align: right; }
 </style>
