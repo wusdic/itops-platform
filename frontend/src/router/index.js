@@ -37,6 +37,12 @@ const routes = [
         component: () => import('@/features/incident-response/IncidentResponseView.vue'),
         meta: { title: '故障处置台', parent: '监控中心' }
       },
+      {
+        path: 'automation-orchestration',
+        name: 'AutomationOrchestration',
+        component: () => import('@/features/automation-orchestration/AutomationOrchestrationView.vue'),
+        meta: { title: '自动化编排台', parent: '自动化' }
+      },
       // 监控中心
       {
         path: 'monitoring/devices',
