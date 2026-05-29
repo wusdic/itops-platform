@@ -1556,3 +1556,120 @@ async def convert_alert_to_workorder(
         "workorder_id": wo.id,
         "alert_id": alert.id,
     }
+
+
+# ============== 工单转知识接口 =============
+
+class GenerateKnowledgeRequest(BaseModel):
+    """工单转知识请求"""
+    doc_type: str = Field("sop", description="知识类型: sop（默认SOP文档）")
+    category_id: Optional[int] = Field(None, description="分类ID")
+    tags: Optional[str] = Field(None, description="标签，逗号分隔")
+    content_template: Optional[str] = Field(
+        None,
+        description="内容模板: full（完整，包含所有字段）、summary（仅包含解决步骤）、root_cause（包含根因分析）"
+    )
+
+
+@router.post("/tickets/{workorder_id}/generate-knowledge", summary="工单转知识")
+async def generate_knowledge_from_workorder(
+    workorder_id: int,
+    request: GenerateKnowledgeRequest = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    将已解决的工单转化为知识文档草稿（SOP文档）。
+    生成的文档默认状态为 DRAFT，需经审核后才可发布。
+    """
+    # 获取工单
+    wo = db.query(WorkOrder).filter(WorkOrder.id == workorder_id).first()
+    if not wo:
+        raise HTTPException(status_code=404, detail="工单不存在")
+
+    # 获取工单关联的设备信息
+    device_info = ""
+    if wo.device_name or wo.device_ip:
+        device_info = f"\n\n**关联设备**: {wo.device_name or ''} ({wo.device_ip or 'N/A'})"
+
+    # 根据模板决定内容
+    template = request.content_template if request and request.content_template else "full"
+
+    if template == "summary":
+        content = f"""# {wo.title}
+
+## 问题概述
+{wo.description or '无描述'}
+
+## 解决步骤
+{wo.resolution or '无解决方案记录'}
+
+## 标签
+{wo.tags or ''}
+"""
+    elif template == "root_cause":
+        content = f"""# {wo.title}
+
+## 问题描述
+{wo.description or '无描述'}
+
+## 根因分析
+{wo.root_cause or '无根因记录'}
+
+## 解决方案
+{wo.resolution or '无解决方案记录'}
+
+## 改进措施
+{wo.improvement or '无改进措施'}
+
+## 标签
+{wo.tags or ''}
+"""
+    else:  # full
+        content = f"""# {wo.title}
+
+## 问题描述
+{wo.description or '无描述'}{device_info}
+
+## 根因分析
+{wo.root_cause or '未填写'}
+
+## 解决方案
+{wo.resolution or '无解决方案记录'}
+
+## 改进措施
+{wo.improvement or '无改进措施'}
+
+## 工单信息
+- 工单ID: {wo.id}
+- 优先级: {wo.priority}
+- 创建时间: {wo.created_at}
+- 关联标签: {wo.tags or '无'}
+"""
+
+    # 使用 SOPService 创建知识文档草稿
+    try:
+        from modules.business.knowledge_base.sop import SOPService
+        sop_service = SOPService(db)
+        doc = sop_service.create(
+            title=f"[工单#{wo.id}] {wo.title}",
+            content=content,
+            author=current_user.username,
+            category_id=request.category_id if request else None,
+            tags=request.tags.split(',') if request and request.tags else None,
+            metadata={
+                "source_workorder_id": wo.id,
+                "source_type": "workorder",
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建知识文档失败: {str(e)}")
+
+    return {
+        "status": "success",
+        "message": "知识文档草稿已创建",
+        "document_id": doc.id,
+        "doc_no": doc.doc_no,
+        "title": doc.title,
+        "review_status": doc.review_status.value if doc.review_status else "pending",
+    }
