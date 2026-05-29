@@ -47,7 +47,6 @@ from app.domains.log.router import router as log_router
 from app.domains.policy.router import router as policy_router
 from app.domains.aiops.router import router as aiops_router
 from app.domains.ticket.router import router as ticket_router
-from app.domains.knowledge.router import router as knowledge_router
 from app.domains.governance.router import router as governance_router
 from api.dependencies import get_settings
 from api.middleware.logging import LoggingMiddleware
