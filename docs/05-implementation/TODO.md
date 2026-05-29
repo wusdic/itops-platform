@@ -263,11 +263,11 @@
 ✅ **Phase 9 状态：已完成（2026-05-29）**
 - 9-1 ✅ Context Builder 已实现（`AIContextBuilder`）
 - 9-2 ✅ Root Cause Analyzer 已实现（`RootCauseAnalyzer` → `/api/v1/ai/analyze/{alert_id}/root-cause`）
-- 9-3 🔄 Log Interpreter 待实现
+- 9-3 ✅ Log Interpreter 已实现（`LogInterpreter` → `POST /api/v1/ai/interpret-log`，支持12种错误模式，无需LLM可独立工作）
 - 9-4 ✅ Knowledge Draft Writer 已实现（`KnowledgeDraftWriter`）
 - 9-5 ✅ AI Tool Guard 已实现（`ToolCallGuard`）
 - 9-6 🔄 用户反馈待实现
-- AIops API 200 OK（`/api/v1/ai/analyze/{alert_id}/root-cause|remediation` + `/api/v1/aiops/analysis/history` 全部 200）
+- AIops API 200 OK（`/api/v1/ai/analyze/{alert_id}/root-cause|remediation` + `/api/v1/ai/interpret-log` 全部 200）
 
 ---
 
