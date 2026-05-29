@@ -210,7 +210,7 @@
 - 7-3 ✅ 策略冲突检测已实现（`POST /api/v1/policies/check-conflicts`）
 - 7-4 ✅ 策略模拟已实现（`POST /api/v1/policies/simulate`）
 - 7-5 ✅ 策略命中解释已实现（`POST /api/v1/policies/match/{trigger_type}/explain`）
-- 7-6 🔄 "磁盘清理策略"示例待实现
+- 7-6 ✅ "磁盘清理策略"示例已实现（`disk-cleanup` 脚本 + `磁盘使用率过高自动清理` 策略 + 版本快照，触发条件: disk_usage>90%，验证: disk_usage<80%）
 - Policy API 200 OK（`/api/v1/policies` GET/POST 200 OK）
 
 ---
