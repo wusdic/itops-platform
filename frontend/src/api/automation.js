@@ -47,7 +47,8 @@ export const automation = {
 
   // ========== 审批请求 ==========
   approvals: {
-    getList: (params) => request.get('/automation/approvals', { params }),
+    // 注意：后端无 GET /automation/approvals，只有 GET /automation/approvals/pending
+    getList: (params) => request.get('/automation/approvals/pending', { params }),
     getPending: (params) => request.get('/automation/approvals/pending', { params }),
     getById: (id) => request.get(`/automation/approvals/${id}`),
     approve: (id, data) => request.post(`/automation/approvals/${id}/approve`, data),

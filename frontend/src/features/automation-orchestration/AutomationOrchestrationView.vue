@@ -525,7 +525,7 @@ async function confirmRunScript() {
   if (!runningScript.value) return
   running.value = true
   try {
-    const ok = await apiWrap(automation.executions.create({ script_id: runningScript.value.id }))
+    const ok = await apiWrap(automation.scripts.execute(runningScript.value.id, {}))
     if (ok !== null) {
       ElMessage.success('执行已启动')
       showRunDialog.value = false
@@ -582,7 +582,7 @@ async function deleteTask(row) {
 
 async function runTask(row) {
   try {
-    const ok = await apiWrap(automation.executions.create({ task_id: row.id }))
+    const ok = await apiWrap(automation.tasks.run(row.id, {}))
     if (ok !== null) {
       ElMessage.success('任务已触发')
       loadExecutions()

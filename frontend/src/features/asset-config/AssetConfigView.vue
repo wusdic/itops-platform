@@ -493,6 +493,7 @@ function onTabChange(tab) {
 // ========== 保存操作 ==========
 async function saveAsset() {
   if (!assetForm.name) { ElMessage.warning('请填写资产名称'); return }
+  if (!assetForm.asset_type) { ElMessage.warning('请选择资产类型'); return }
   assetSaving.value = true
   try {
     if (editingAsset.value) {

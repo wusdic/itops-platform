@@ -58,11 +58,21 @@
           <template #title>仪表盘</template>
         </el-menu-item>
 
+        <!-- Phase 10 运维闭环入口 -->
+        <el-menu-item index="/command-center">
+          <el-icon><Odometer /></el-icon>
+          <template #title>运维驾驶台</template>
+        </el-menu-item>
+
         <el-sub-menu index="monitoring">
           <template #title>
             <el-icon><Monitor /></el-icon>
             <span>监控中心</span>
           </template>
+          <!-- Phase 10 新页面 -->
+          <el-menu-item index="/monitoring-event">监控与事件台</el-menu-item>
+          <el-menu-item index="/incident-response">故障处置台</el-menu-item>
+          <!-- 保留日常运维旧页面 -->
           <el-menu-item index="/monitoring/devices">设备监控</el-menu-item>
           <el-menu-item index="/discovery/scan">设备扫描</el-menu-item>
           <el-menu-item index="/monitoring/alerts">告警管理</el-menu-item>
@@ -104,11 +114,20 @@
             <el-icon><Lightning /></el-icon>
             <span>自动化</span>
           </template>
+          <!-- Phase 10 新页面 -->
+          <el-menu-item index="/automation-orchestration">自动化编排台</el-menu-item>
+          <!-- 保留日常运维旧页面 -->
           <el-menu-item index="/automation/script">脚本管理</el-menu-item>
           <el-menu-item index="/automation/task">任务调度</el-menu-item>
           <el-menu-item index="/automation/evaluate">指标评估</el-menu-item>
           <el-menu-item index="/automation/execute">执行记录</el-menu-item>
         </el-sub-menu>
+
+        <!-- Phase 10 资产配置入口 -->
+        <el-menu-item index="/asset-config">
+          <el-icon><Document /></el-icon>
+          <template #title>资产与配置</template>
+        </el-menu-item>
 
         <el-sub-menu index="backup">
           <template #title>
