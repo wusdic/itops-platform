@@ -29,6 +29,7 @@ const automation = {
   executions: {
     getList: (params) => request.get('/automation/executions', { params }),
     getById: (id) => request.get(`/automation/executions/${id}`),
+    create: (data) => request.post('/automation/executions', data),
     getLogs: (id, params) => request.get(`/automation/executions/${id}/logs`, { params }),
     getSnapshot: (id) => request.get(`/automation/executions/${id}/snapshot`),
     rollback: (id) => request.post(`/automation/executions/${id}/rollback`)
@@ -42,6 +43,17 @@ const automation = {
     update: (id, data) => request.put(`/automation/trigger-rules/${id}`, data),
     delete: (id) => request.delete(`/automation/trigger-rules/${id}`),
     test: (id) => request.post(`/automation/trigger-rules/${id}/test`)
+  },
+
+  // ========== 审批请求 ==========
+  approvals: {
+    getList: (params) => request.get('/automation/approvals', { params }),
+    getPending: (params) => request.get('/automation/approvals/pending', { params }),
+    getById: (id) => request.get(`/automation/approvals/${id}`),
+    approve: (id, data) => request.post(`/automation/approvals/${id}/approve`, data),
+    reject: (id, data) => request.post(`/automation/approvals/${id}/reject`, data),
+    cancel: (id) => request.post(`/automation/approvals/${id}/cancel`),
+    getExecutionApproval: (executionId) => request.get(`/automation/executions/${executionId}/approval`)
   },
 
   // ========== 回滚历史 ==========

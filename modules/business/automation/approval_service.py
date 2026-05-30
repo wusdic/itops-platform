@@ -94,10 +94,15 @@ def get_approval_table_definition():
     return AutomationApprovalRequest
 
 
-# 延迟获取模型类
+# 延迟获取模型类（带缓存）
+_approval_model_cache = None
+
 def get_approval_model():
-    """获取审批模型类（延迟加载）"""
-    return get_approval_table_definition()
+    """获取审批模型类（延迟加载，缓存结果）"""
+    global _approval_model_cache
+    if _approval_model_cache is None:
+        _approval_model_cache = get_approval_table_definition()
+    return _approval_model_cache
 
 
 class ApprovalService:

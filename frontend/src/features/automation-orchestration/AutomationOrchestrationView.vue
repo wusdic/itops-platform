@@ -362,9 +362,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Clock, VideoPlay, WarningFilled, Plus } from '@element-plus/icons-vue'
+import automation from '@/api/automation'
 
 const activeTab = ref('scripts')
-const token = localStorage.getItem('token') || localStorage.getItem('access_token') || ''
 
 // Stats
 const stats = reactive({ scripts: 0, tasks: 0, executions: 0, approvals: 0 })
@@ -411,32 +411,29 @@ const taskForm = reactive({ name: '', trigger_type: 'cron', cron_expression: '',
 // Log container ref
 const logContainer = ref(null)
 
-// API helpers
-async function apiFetch(url, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      ...(options.headers || {})
-    }
-  })
-  if (!res.ok) {
-    if (res.status === 401) ElMessage.error('未授权，请重新登录')
-    else ElMessage.error(`请求失败: ${res.status}`)
+// API wrapper using automation module
+async function apiWrap(promise) {
+  try {
+    const res = await promise
+    if (res === null || res === undefined) return null
+    // handle wrapped {code, data} response
+    if (res && res.data !== undefined) return res.data
+    return res
+  } catch (e) {
+    if (e.response && e.response.status === 401) ElMessage.error('未授权，请重新登录')
+    else if (e.response) ElMessage.error(`请求失败: ${e.response.status}`)
+    else ElMessage.error(`请求失败: ${e.message}`)
     return null
   }
-  const raw = await res.json()
-  return raw.data !== undefined ? raw.data : raw
 }
 
 // Load functions
 async function loadStats() {
   const [sc, tk, ex, ap] = await Promise.all([
-    apiFetch('http://localhost:8000/api/v1/automation/scripts?page=1&page_size=1'),
-    apiFetch('http://localhost:8000/api/v1/automation/tasks?page=1&page_size=1'),
-    apiFetch('http://localhost:8000/api/v1/automation/executions?page=1&page_size=1'),
-    apiFetch('http://localhost:8000/api/v1/automation/approvals?page=1&page_size=1')
+    apiWrap(automation.scripts.getList({ page: 1, page_size: 1 })),
+    apiWrap(automation.tasks.getList({ page: 1, page_size: 1 })),
+    apiWrap(automation.executions.getList({ page: 1, page_size: 1 })),
+    apiWrap(automation.approvals.getList({ page: 1, page_size: 1 }))
   ])
   if (sc) stats.scripts = sc.total || 0
   if (tk) stats.tasks = tk.total || 0
@@ -447,7 +444,7 @@ async function loadStats() {
 async function loadScripts(page = 1) {
   loading.scripts = true
   try {
-    const data = await apiFetch(`http://localhost:8000/api/v1/automation/scripts?page=${page}&page_size=${pagination.scripts.page_size}`)
+    const data = await apiWrap(automation.scripts.getList({ page, page_size: pagination.scripts.page_size }))
     scripts.value = data?.items || []
     pagination.scripts.total = data?.total || 0
     pagination.scripts.page = page
@@ -459,7 +456,7 @@ async function loadScripts(page = 1) {
 async function loadTasks() {
   loading.tasks = true
   try {
-    const data = await apiFetch('http://localhost:8000/api/v1/automation/tasks?page=1&page_size=100')
+    const data = await apiWrap(automation.tasks.getList({ page: 1, page_size: 100 }))
     tasks.value = data?.items || []
     pagination.tasks.total = data?.total || 0
   } finally {
@@ -470,9 +467,9 @@ async function loadTasks() {
 async function loadExecutions(page = 1) {
   loading.executions = true
   try {
-    let url = `http://localhost:8000/api/v1/automation/executions?page=${page}&page_size=${pagination.executions.page_size}`
-    if (execFilter.status) url += `&status=${execFilter.status}`
-    const data = await apiFetch(url)
+    const params = { page, page_size: pagination.executions.page_size }
+    if (execFilter.status) params.status = execFilter.status
+    const data = await apiWrap(automation.executions.getList(params))
     executions.value = data?.items || []
     pagination.executions.total = data?.total || 0
     pagination.executions.page = page
@@ -484,9 +481,9 @@ async function loadExecutions(page = 1) {
 async function loadApprovals(page = 1) {
   loading.approvals = true
   try {
-    let url = `http://localhost:8000/api/v1/automation/approvals?page=${page}&page_size=${pagination.approvals.page_size}`
-    if (approvalFilter.status) url += `&status=${approvalFilter.status}`
-    const data = await apiFetch(url)
+    const params = { page, page_size: pagination.approvals.page_size }
+    if (approvalFilter.status) params.status = approvalFilter.status
+    const data = await apiWrap(automation.approvals.getList(params))
     approvals.value = data?.items || []
     pagination.approvals.total = data?.total || 0
     pagination.approvals.page = page
@@ -510,16 +507,11 @@ function editScript(row) {
 async function deleteScript(row) {
   try {
     await ElMessageBox.confirm(`确定删除剧本「${row.name}」吗？`, '删除确认', { type: 'warning' })
-    const res = await fetch(`http://localhost:8000/api/v1/automation/scripts/${row.id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
+    const ok = await apiWrap(automation.scripts.delete(row.id))
+    if (ok !== null) {
       ElMessage.success('删除成功')
       loadScripts()
       loadStats()
-    } else {
-      ElMessage.error('删除失败')
     }
   } catch (e) {}
 }
@@ -533,18 +525,12 @@ async function confirmRunScript() {
   if (!runningScript.value) return
   running.value = true
   try {
-    const res = await fetch('http://localhost:8000/api/v1/automation/executions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ script_id: runningScript.value.id })
-    })
-    if (res.ok) {
+    const ok = await apiWrap(automation.executions.create({ script_id: runningScript.value.id }))
+    if (ok !== null) {
       ElMessage.success('执行已启动')
       showRunDialog.value = false
       loadExecutions()
       loadStats()
-    } else {
-      ElMessage.error('执行启动失败')
     }
   } finally {
     running.value = false
@@ -558,24 +544,19 @@ async function submitScript() {
   }
   submitting.value = true
   try {
-    const method = editingScript.value ? 'PUT' : 'POST'
-    const url = editingScript.value
-      ? `http://localhost:8000/api/v1/automation/scripts/${editingScript.value.id}`
-      : 'http://localhost:8000/api/v1/automation/scripts'
-    const res = await fetch(url, {
-      method,
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(scriptForm)
-    })
-    if (res.ok) {
+    let ok
+    if (editingScript.value) {
+      ok = await apiWrap(automation.scripts.update(editingScript.value.id, scriptForm))
+    } else {
+      ok = await apiWrap(automation.scripts.create(scriptForm))
+    }
+    if (ok !== null) {
       ElMessage.success(editingScript.value ? '更新成功' : '创建成功')
       showScriptDialog.value = false
       editingScript.value = null
       Object.assign(scriptForm, { name: '', script_type: 'shell', risk_level: 'medium', description: '', content: '' })
       loadScripts()
       loadStats()
-    } else {
-      ElMessage.error('保存失败')
     }
   } finally {
     submitting.value = false
@@ -590,32 +571,21 @@ function viewTask(row) {
 async function deleteTask(row) {
   try {
     await ElMessageBox.confirm(`确定删除任务「${row.name}」吗？`, '删除确认', { type: 'warning' })
-    const res = await fetch(`http://localhost:8000/api/v1/automation/tasks/${row.id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
+    const ok = await apiWrap(automation.tasks.delete(row.id))
+    if (ok !== null) {
       ElMessage.success('删除成功')
       loadTasks()
       loadStats()
-    } else {
-      ElMessage.error('删除失败')
     }
   } catch (e) {}
 }
 
 async function runTask(row) {
   try {
-    const res = await fetch('http://localhost:8000/api/v1/automation/executions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: row.id })
-    })
-    if (res.ok) {
+    const ok = await apiWrap(automation.executions.create({ task_id: row.id }))
+    if (ok !== null) {
       ElMessage.success('任务已触发')
       loadExecutions()
-    } else {
-      ElMessage.error('触发失败')
     }
   } catch (e) {}
 }
@@ -624,8 +594,8 @@ async function viewExecution(row) {
   selectedExecution.value = row
   executionLogs.value = '加载中...'
   executionDrawer.value = true
-  // Fetch logs
-  const data = await apiFetch(`http://localhost:8000/api/v1/logs/executions/${row.id}`)
+  // Use correct API path: /automation/executions/{id}/logs
+  const data = await apiWrap(automation.executions.getLogs(row.id))
   executionLogs.value = data?.logs || data?.stdout || data?.output || '暂无日志'
 }
 
@@ -636,16 +606,11 @@ async function viewApproval(row) {
 async function approve(row) {
   try {
     await ElMessageBox.confirm(`批准执行「${row.name}」？`, '审批确认', { type: 'success' })
-    const res = await fetch(`http://localhost:8000/api/v1/automation/approvals/${row.id}/approve`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
+    const ok = await apiWrap(automation.approvals.approve(row.id))
+    if (ok !== null) {
       ElMessage.success('已批准')
       loadApprovals()
       loadStats()
-    } else {
-      ElMessage.error('批准失败')
     }
   } catch (e) {}
 }
@@ -653,16 +618,11 @@ async function approve(row) {
 async function reject(row) {
   try {
     await ElMessageBox.confirm(`拒绝执行「${row.name}」？`, '审批确认', { type: 'warning' })
-    const res = await fetch(`http://localhost:8000/api/v1/automation/approvals/${row.id}/reject`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
+    const ok = await apiWrap(automation.approvals.reject(row.id))
+    if (ok !== null) {
       ElMessage.success('已拒绝')
       loadApprovals()
       loadStats()
-    } else {
-      ElMessage.error('拒绝失败')
     }
   } catch (e) {}
 }
@@ -674,19 +634,13 @@ async function submitTask() {
   }
   submitting.value = true
   try {
-    const res = await fetch('http://localhost:8000/api/v1/automation/tasks', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(taskForm)
-    })
-    if (res.ok) {
+    const ok = await apiWrap(automation.tasks.create(taskForm))
+    if (ok !== null) {
       ElMessage.success('创建成功')
       showTaskDialog.value = false
       Object.assign(taskForm, { name: '', trigger_type: 'cron', cron_expression: '', target_script_id: '' })
       loadTasks()
       loadStats()
-    } else {
-      ElMessage.error('创建失败')
     }
   } finally {
     submitting.value = false
