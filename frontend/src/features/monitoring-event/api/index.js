@@ -11,6 +11,7 @@ export const monitoringEvent = {
     acknowledge: (id, data) => request.put(`/monitoring/alerts/${id}/acknowledge`, data),
     resolve: (id, data) => request.put(`/monitoring/alerts/${id}/resolve`, data),
     close: (id, data) => request.put(`/monitoring/alerts/${id}/close`, data),
+    transfer: (id, data) => request.post(`/monitoring/alerts/${id}/transfer`, data),
     getStatistics: () => request.get('/monitoring/alerts/statistics'),
     getRules: () => request.get('/monitoring/rules'),
   },

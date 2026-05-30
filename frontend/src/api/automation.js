@@ -3,7 +3,7 @@ import request from './request'
 /**
  * 自动化 API
  */
-const automation = {
+export const automation = {
   // ========== 脚本 ==========
   scripts: {
     getList: (params) => request.get('/automation/scripts', { params }),

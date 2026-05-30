@@ -231,6 +231,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
+import { assets } from '@/api/assets'
+import { automation } from '@/api/automation'
+import { alerts } from '@/api/monitoring'
+import { ai } from '@/api/ai'
 
 // 加载状态
 const alertsLoading = ref(false)
@@ -282,32 +286,25 @@ async function refreshAll() {
 // 加载概览统计
 async function loadOverview() {
   try {
-    const token = localStorage.getItem('token')
-    const headers = { Authorization: `Bearer ${token}` }
-
     // 设备统计
-    const devRes = await fetch('/api/v1/device/devices?page=1&page_size=1', { headers })
-    if (devRes.ok) {
-      const d = await devRes.json()
-      const devData = d.data || d
-      overview.value.devices = devData.total || 0
+    const devRes = await assets.getList({ page: 1, page_size: 1 })
+    if (devRes?.data) {
+      overview.value.devices = devRes.data.total || 0
     }
 
-    // 告警统计 - 直接返回 {total, critical, warning, info, active}
-    const alertRes = await fetch('/api/v1/monitoring/alerts/statistics', { headers })
-    if (alertRes.ok) {
-      const d = await alertRes.json()
-      const alertData = d.data || d
+    // 告警统计
+    const alertRes = await alerts.getStatistics()
+    if (alertRes?.data) {
+      const alertData = alertRes.data.data || alertRes.data
       overview.value.alerts = alertData.total || 0
       overview.value.critical = alertData.critical || 0
       overview.value.warning = alertData.warning || 0
     }
 
     // 运行中任务
-    const execRes = await fetch('/api/v1/automation/executions?page=1&page_size=100', { headers })
-    if (execRes.ok) {
-      const d = await execRes.json()
-      const execData = d.data || d
+    const execRes = await automation.executions.getList({ page: 1, page_size: 100 })
+    if (execRes?.data) {
+      const execData = execRes.data.data || execRes.data
       const items = execData.items || []
       overview.value.running = items.filter(e => e.status === 'running').length
       overview.value.todayExecutions = items.filter(e => {
@@ -324,14 +321,11 @@ async function loadOverview() {
 async function loadCriticalAlerts() {
   alertsLoading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/monitoring/alerts?page=1&page_size=10', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error()
-    const raw = await res.json()
-    const data = raw.data || raw
-    criticalAlerts.value = (data.items || []).filter(a => a.level === 'critical')
+    const res = await alerts.getList({ page: 1, page_size: 10 })
+    if (res?.data) {
+      const data = res.data.data || res.data
+      criticalAlerts.value = (data.items || []).filter(a => a.level === 'critical')
+    }
   } catch (e) {
     console.error('loadCriticalAlerts failed', e)
   } finally {
@@ -343,31 +337,27 @@ async function loadCriticalAlerts() {
 async function loadBizImpact() {
   bizLoading.value = true
   try {
-    // 获取所有告警，按设备聚合
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/monitoring/alerts?page=1&page_size=100', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error()
-    const raw = await res.json()
-    const data = raw.data || raw
-    const alerts = data.items || []
+    const res = await alerts.getList({ page: 1, page_size: 100 })
+    if (res?.data) {
+      const data = res.data.data || res.data
+      const alerts = data.items || []
 
-    // 按 device_name 聚合
-    const map = {}
-    alerts.forEach(a => {
-      const key = a.device_name || a.device_ip || '未知设备'
-      if (!map[key]) map[key] = { name: key, alert_count: 0, status: 'healthy' }
-      if (a.status !== 'resolved') {
-        map[key].alert_count++
-        map[key].status = 'degraded'
-      }
-    })
+      // 按 device_name 聚合
+      const map = {}
+      alerts.forEach(a => {
+        const key = a.device_name || a.device_ip || '未知设备'
+        if (!map[key]) map[key] = { name: key, alert_count: 0, status: 'healthy' }
+        if (a.status !== 'resolved') {
+          map[key].alert_count++
+          map[key].status = 'degraded'
+        }
+      })
 
-    bizImpact.value = Object.values(map)
-      .sort((a, b) => b.alert_count - a.alert_count)
-      .slice(0, 8)
-      .map(item => ({ ...item, uptime: item.status === 'healthy' ? '100%' : (100 - Math.min(item.alert_count * 5, 30)) + '%' }))
+      bizImpact.value = Object.values(map)
+        .sort((a, b) => b.alert_count - a.alert_count)
+        .slice(0, 8)
+        .map(item => ({ ...item, uptime: item.status === 'healthy' ? '100%' : (100 - Math.min(item.alert_count * 5, 30)) + '%' }))
+    }
   } catch (e) {
     console.error('loadBizImpact failed', e)
   } finally {
@@ -379,14 +369,11 @@ async function loadBizImpact() {
 async function loadRunningTasks() {
   tasksLoading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/automation/executions?page=1&page_size=50', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error()
-    const raw = await res.json()
-    const data = raw.data || raw
-    runningTasks.value = (data.items || []).filter(e => e.status === 'running')
+    const res = await automation.executions.getList({ page: 1, page_size: 50 })
+    if (res?.data) {
+      const data = res.data.data || res.data
+      runningTasks.value = (data.items || []).filter(e => e.status === 'running')
+    }
   } catch (e) {
     console.error('loadRunningTasks failed', e)
   } finally {
@@ -398,14 +385,11 @@ async function loadRunningTasks() {
 async function loadAlertTimeline() {
   timelineLoading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/monitoring/alerts?page=1&page_size=20', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error()
-    const raw = await res.json()
-    const data = raw.data || raw
-    alertTimeline.value = data.items || []
+    const res = await alerts.getList({ page: 1, page_size: 20 })
+    if (res?.data) {
+      const data = res.data.data || res.data
+      alertTimeline.value = data.items || []
+    }
   } catch (e) {
     console.error('loadAlertTimeline failed', e)
   } finally {
@@ -417,14 +401,7 @@ async function loadAlertTimeline() {
 async function loadAISummary() {
   aiLoading.value = true
   try {
-    const token = localStorage.getItem('token')
-
-    // 尝试从最近的 AI 分析历史获取建议
-    const res = await fetch('/api/v1/aiops/analysis/history?page=1&page_size=3', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) throw new Error()
-    const raw = await res.json()
+    const raw = await ai.getAnalyzeHistory({ page: 1, page_size: 3 })
     const items = raw.data?.items || raw.items || []
 
     if (items.length) {

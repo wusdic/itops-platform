@@ -180,31 +180,7 @@ const routes = [
         component: () => import('@/views/ai/analyze.vue'),
         meta: { title: '智能分析', parent: 'AI助手' }
       },
-      // 自动化
-      {
-        path: 'automation/script',
-        name: 'AutomationScript',
-        component: () => import('@/views/automation/script.vue'),
-        meta: { title: '脚本管理', parent: '自动化' }
-      },
-      {
-        path: 'automation/task',
-        name: 'AutomationTask',
-        component: () => import('@/views/automation/task.vue'),
-        meta: { title: '任务调度', parent: '自动化' }
-      },
-      {
-        path: 'automation/evaluate',
-        name: 'AutomationEvaluate',
-        component: () => import('@/views/automation/evaluate.vue'),
-        meta: { title: '指标评估', parent: '自动化' }
-      },
-      {
-        path: 'automation/execute',
-        name: 'AutomationExecute',
-        component: () => import('@/views/automation/execute.vue'),
-        meta: { title: '执行记录', parent: '自动化' }
-      },
+      // 自动化 — 已迁移至 /automation-orchestration (features/automation-orchestration)
       // 备份管理
       {
         path: 'backup/list',

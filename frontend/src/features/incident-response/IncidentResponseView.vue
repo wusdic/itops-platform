@@ -233,6 +233,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { monitoringEvent } from '@/features/monitoring-event/api'
+import { ai } from '@/api/ai'
 import { Refresh, Loading, MagicStick, WarningFilled } from '@element-plus/icons-vue'
 
 // 状态
@@ -352,26 +353,20 @@ const runAIAnalysis = async () => {
   aiLoading.value = true
   aiResult.value = null
   try {
-    // 调用统一分析接口 POST /ai/analyze
-    const res = await fetch(`/api/v1/ai/analyze`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('token') || ''
-      },
-      body: JSON.stringify({
-        target_type: 'alert',
-        target_id: selectedAlertId.value,
-        analysis_type: 'root_cause'
-      })
+    const data = await ai.analyze({
+      target_type: 'alert',
+      target_id: selectedAlertId.value,
+      analysis_type: 'root_cause'
     })
-    if (res.ok) {
-      const data = await res.json()
-      aiResult.value = data.data || data
-      ElMessage.success('AI 分析完成')
-    } else {
-      ElMessage.error('AI 分析失败: ' + res.status)
+    // 统一响应格式
+    aiResult.value = {
+      summary: data.summary || data.result_summary || '',
+      impact: data.impact || '',
+      probable_causes: (data.root_causes || data.probable_causes || []).map(c => ({ cause: typeof c === 'string' ? c : c.cause, confidence: c.confidence || data.confidence || 0.8 })),
+      recommended_actions: (data.recommended_actions || []).map(a => ({ priority: 'medium', action: typeof a === 'string' ? a : a.action })),
+      verification_plan: data.verification_plan || ''
     }
+    ElMessage.success('AI 分析完成')
   } catch (e) {
     // 如果 AI 接口不可用，模拟结果
     aiResult.value = {
@@ -425,18 +420,8 @@ const resolveAlert = async () => {
 // 转工单
 const transferToWorkorder = async () => {
   try {
-    const res = await fetch(`/api/v1/monitoring/alerts/${selectedAlertId.value}/transfer`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('token') || ''
-      }
-    })
-    if (res.ok) {
-      ElMessage.success('已转工单')
-    } else {
-      ElMessage.error('转工单失败')
-    }
+    await monitoringEvent.alerts.transfer(selectedAlertId.value, { assignee: 'admin', reason: '转工单处理' })
+    ElMessage.success('已转工单')
   } catch (e) {
     ElMessage.error('转工单失败')
   }
